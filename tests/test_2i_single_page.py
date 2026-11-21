@@ -179,3 +179,22 @@ def test_protected_line_tracks_insertion_and_deletion_above_it(laptop):
     page.keyboard.press("Delete")
     assert page.input_value("#soloTextarea") == "A\nB locked\nC"
     assert sorted(page.evaluate("[...lockedLines]")) == [1]
+
+
+def test_from_disk_tablet_typewriter_keys_change_the_saved_manuscript():
+    with sync_api.sync_playwright() as p:
+        browser, page, errors = _open(p, viewport={"width": 820, "height": 1180}, has_touch=True)
+        try:
+            page.evaluate("twoiSetPresentation('typewriter')")
+            console = page.frame_locator("#twoiTypewriterConsole")
+            console.get_by_role("button", name="Key A", exact=True).tap(timeout=5000)
+            page.wait_for_function("soloTextarea.value === 'a' && committed.join('') === 'a'")
+            assert console.locator("[data-typewriter-paper]").inner_text() == "a"
+            assert console.locator(".pc-console-image").evaluate("img => img.naturalWidth > 0")
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            page.reload()
+            page.wait_for_function("typeof initializing !== 'undefined' && !initializing")
+            assert page.locator("#soloTextarea").input_value() == "a"
+            assert errors == []
+        finally:
+            browser.close()
