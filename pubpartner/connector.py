@@ -26,7 +26,7 @@ from .prompt_assembler import assemble_prompt
 
 def serve(cartridge: Cartridge, transport: str = "stdio", port: int = 8768) -> None:
     server = FastMCP(
-        "PubPartner", host="127.0.0.1", port=port, stateless_http=True,
+        "PubPartner", host="127.0.0.1", port=port, stateless_http=True, json_response=True,
         instructions=(
             "When the user activates this cartridge, call pp_brief for character "
             "and relevant memory before replying. The user can set it aside at any time."

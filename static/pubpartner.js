@@ -276,8 +276,8 @@
     if (x.provider === 'ollama') {
       cfg.host = x.host;
       cfg.temperature = 0.72;
-      cfg.max_tokens = 512;
-      cfg.timeout = 60;
+      cfg.max_tokens = x.model === "smollm2:360m-instruct-q4_K_M" ? 128 : 512;
+      cfg.timeout = 180;
     } else if (x.provider === 'openai_compatible') {
       cfg.base_url = x.host;
       cfg.require_api_key = false;
@@ -1392,6 +1392,7 @@
   let lookupNumber = 0;
   let found = [];
   let planModels = [];
+  let localChoices = [];
   const callback = new URLSearchParams(location.search);
   const hasCallback = callback.has('state') && (callback.has('code') || callback.has('error'));
   if (hasCallback) history.replaceState(null, '', location.pathname + '#connections');
@@ -1399,12 +1400,13 @@
   async function inspectConnection() {
     const sequence = ++lookupNumber;
     const provider = $('connectProvider').value;
-    for (const id of ['connectionModelRow','connectionAccountRow','connectionKeyRow','applyConnection','connectAccount','disconnectAccount']) $(id).hidden = true;
+    for (const id of ['claudeHandoff','claudePreview','localChoiceRow','rescanLocal','startOllama','installOllama','localStarter','setupClaude','connectionModelRow','connectionAccountRow','connectionKeyRow','applyConnection','connectAccount','disconnectAccount']) $(id).hidden = true;
     $('connectionKey').value = '';
     $('connectionModel').value = '';
     $('connectionModels').replaceChildren();
     $('connectionStatus').textContent = 'Checking this host…';
     found = [];
+    $('claudeBrief').value = '';
     try {
       if (provider === 'chatgpt_plan') {
         const account = await api('/api/pubpartner/chatgpt/account');
@@ -1426,8 +1428,34 @@
         }
         return;
       }
-      if (provider === 'local' || provider === 'openai_compatible') {
-        $('connectionStatus').textContent = provider === 'local' ? (localProvider ? 'Found the launcher model: ' + localProvider.model : 'Use Ollama and scan this host for installed models.') : 'Set the model and endpoint in Friend Setup.';
+      if (provider === 'claude_web') {
+        $('claudeHandoff').hidden = false;
+        $('connectionStatus').textContent = 'Use your usual Claude sign-in. Preview the cartridge, then paste it into a Claude chat.';
+        return;
+      }
+      if (provider === 'claude_desktop') {
+        $('connectionStatus').textContent = 'Chat in Claude Desktop on the same computer. Claude can read the cartridge you share while Local MCP is running.';
+        $('setupClaude').hidden = false;
+        return;
+      }
+      if (provider === 'local') {
+        const result = await api('/api/pubpartner/providers/local-discovery');
+        if (sequence !== lookupNumber) return;
+        localChoices = result.choices;
+        $('localChoice').replaceChildren(...localChoices.map((item, i) => new Option(item.model, String(i))));
+        $('localChoiceRow').hidden = $('applyConnection').hidden = !localChoices.length;
+        $('rescanLocal').hidden = false;
+        $('localStarter').hidden = !!localChoices.length || !result.ollama;
+        $('startOllama').hidden = !result.can_start;
+        $('installOllama').hidden = !!localChoices.length || result.ollama || result.can_start;
+        $('connectionStatus').textContent = localChoices.length ? 'Found on this computer. No account required.' :
+          result.ollama ? 'Ollama is running. Download a starter model once to chat offline.' :
+          result.can_start ? 'Ollama is installed on this computer. Start it to look for your models.' :
+          'Install Ollama on the computer running PubPartner, then choose Check again.';
+        return;
+      }
+      if (provider === 'openai_compatible') {
+        $('connectionStatus').textContent = 'Set the model and endpoint in Friend Setup.';
         $('applyConnection').hidden = false;
         return;
       }
@@ -1471,6 +1499,75 @@
       button.disabled = !state.running && !ready;
     } catch (e) { $('connectorInfo').textContent = e.message; }
   }
+  async function prepareClaude() {
+    const sequence = lookupNumber;
+    try {
+      const {brief} = await api('/api/pubpartner/connector/brief');
+      if (sequence !== lookupNumber) return;
+      $('claudeBrief').value = brief;
+      $('claudePreview').hidden = false;
+    } catch (error) {
+      if (sequence !== lookupNumber) return;
+      $('connectionStatus').textContent = error.message;
+      if (error.status === 409) {
+        $('connectorCartridge').closest('details').open = true;
+        $('connectorCartridge').focus();
+      }
+    }
+  }
+  $('prepareClaude').onclick = prepareClaude;
+  $('copyClaude').onclick = async () => {
+    try {
+      await navigator.clipboard.writeText($('claudeBrief').value);
+      $('connectionStatus').textContent = 'Copied. Open Claude and paste into a new chat.';
+    } catch {
+      $('claudeBrief').focus();
+      $('claudeBrief').select();
+      $('connectionStatus').textContent = 'Cartridge text selected. Use Copy, then open Claude and paste.';
+    }
+  };
+  $('rescanLocal').onclick = inspectConnection;
+  async function localAction(button, endpoint, message) {
+    const sequence = lookupNumber;
+    button.disabled = true;
+    $('connectionStatus').textContent = message;
+    try {
+      await api('/api/pubpartner/providers/' + endpoint, {method:'POST'});
+      if (sequence === lookupNumber) await inspectConnection();
+    } catch (error) {
+      if (sequence === lookupNumber) $('connectionStatus').textContent = error.message;
+    } finally { button.disabled = false; }
+  };
+  $('localStarter').onclick = () => localAction($('localStarter'), 'local-starter', 'Downloading the starter model to this computer…');
+  $('startOllama').onclick = () => localAction($('startOllama'), 'local-start', 'Starting Ollama on this computer…');
+  async function setupClaude() {
+    const button = $('setupClaude');
+    button.disabled = true;
+    try {
+      const state = await api('/api/pubpartner/connector');
+      if (!state.cartridge_configured) {
+        $('connectorCartridge').closest('details').open = true;
+        $('connectionStatus').textContent = 'Choose your cartridge ZIP below to continue setup.';
+        $('connectorCartridge').focus();
+        return;
+      }
+      await api('/api/pubpartner/connector', {method:'POST', body:JSON.stringify({route:'http'})});
+      await refreshConnector();
+      const a = document.createElement('a');
+      a.href = '/api/pubpartner/connector/claude-desktop.mcpb';
+      a.download = 'PubPartner.mcpb';
+      // Reach requires an owner token on API routes, including file downloads.
+      const response = await fetch(a.href, {headers:{Authorization:'Bearer ' + authState.token}});
+      if (!response.ok) throw Error('Could not download the Claude Desktop extension.');
+      const url = URL.createObjectURL(await response.blob());
+      a.href = url;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      $('connectionStatus').textContent = 'Open PubPartner.mcpb in Claude Desktop on this computer and approve installation. Ask Claude to use your PubPartner cartridge. Stop Local MCP here to disconnect.';
+    } catch (error) { $('connectionStatus').textContent = error.message; }
+    finally { button.disabled = false; }
+  }
+  $('setupClaude').onclick = setupClaude;
   $('connectorCartridge').onchange = async () => {
     const file = $('connectorCartridge').files[0];
     if (!file) return;
@@ -1478,6 +1575,8 @@
       if (file.size > 8*1024*1024) throw Error('Choose a cartridge under 8 MiB.');
       await api('/api/pubpartner/connector/cartridge',{method:'PUT',headers:{'Content-Type':'application/zip'},body:file});
       await refreshConnector();
+      if ($('connectProvider').value === 'claude_desktop') await setupClaude();
+      if ($('connectProvider').value === 'claude_web') await prepareClaude();
     } catch (e) { $('connectorInfo').textContent = e.message; }
     finally { $('connectorCartridge').value = ''; }
   };
@@ -1502,6 +1601,7 @@
   connectionDialog.addEventListener('close', () => {
     ++lookupNumber;
     $('connectionKey').value = '';
+    $('claudeBrief').value = '';
     $('connectionError').hidden = true;
     $('connectionError').textContent = '';
   });
@@ -1522,7 +1622,9 @@
     try {
       let provider = $('connectProvider').value;
       const local = provider === 'local';
-      if (local) provider = localProvider?.provider || 'ollama';
+      const localChoice = local ? localChoices[Number($('localChoice').value)] : null;
+      if (local && !localChoice) throw Error('Check for installed models first.');
+      if (local) provider = localChoice.provider;
       const advanced = provider === 'openai_compatible' && !local;
       const model = $('connectionModel').value.trim();
       if (!local && !advanced && !model) throw Error('Enter the model ID.');
@@ -1538,15 +1640,16 @@
       $('provider').value = provider;
       $('provider').dispatchEvent(new Event('change'));
       if (!local && !advanced) $('modelName').value = model;
-      if (local && localProvider) {
-        $('modelName').value = localProvider.model;
-        $('providerHost').value = localProvider.base_url;
+      if (local) {
+        $('modelName').value = localChoice.model;
+        $('providerHost').value = localChoice.base_url;
+        $('knowledgeMode').value = 'off';
       }
       await refreshProviderCredentials(false);
       if (!local && !advanced && provider !== 'chatgpt_plan') $('providerCredential').value = credential;
       $('allowFallback').checked = false;
       connectionDialog.close();
-      if (advanced || (local && !localProvider)) { focusPanel('setup'); if (local) await scanModels(); }
+      if (advanced) focusPanel('setup');
       else toast('Selected ' + $('provider').selectedOptions[0].text + ' for this conversation.');
     } catch (e) { $('connectionStatus').textContent = e.message; }
     finally { action.disabled = false; }

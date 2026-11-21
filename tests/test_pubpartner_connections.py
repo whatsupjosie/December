@@ -129,6 +129,26 @@ def test_connection_screen_and_saved_key(reach, tmp_path):
         from concurrent.futures import ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=1) as worker:
             worker.submit(asyncio.run, get_brief()).result(timeout=25)
+        page.locator("#connectProvider").select_option("claude_web")
+        page.locator("#prepareClaude").click()
+        page.locator("#claudeBrief").wait_for()
+        assert "# Sample" in page.locator("#claudeBrief").input_value()
+        page.locator("#connectProvider").select_option("claude_desktop")
+        with page.expect_download() as download:
+            page.locator("#setupClaude").click()
+        bundle = tmp_path / "PubPartner.mcpb"
+        download.value.save_as(bundle)
+        with ZipFile(bundle) as extension:
+            extension.extractall(tmp_path / "desktop")
+        async def desktop_brief():
+            from mcp import ClientSession, StdioServerParameters
+            from mcp.client.stdio import stdio_client
+            server = StdioServerParameters(command="node", args=[str(tmp_path / "desktop" / "server.js")])
+            async with stdio_client(server) as (read, write), ClientSession(read, write) as session:
+                await session.initialize()
+                assert "# Sample" in (await session.call_tool("pp_brief", {})).content[0].text
+        with ThreadPoolExecutor(max_workers=1) as worker:
+            worker.submit(asyncio.run, desktop_brief()).result(timeout=25)
         page.locator("#connectorToggle").click()
         page.wait_for_function("document.querySelector('#connectorToggle').textContent === 'Start connector'")
         browser.close()
@@ -325,4 +345,45 @@ def test_cancelled_callback_keeps_retry_control(reach):
         assert urlsplit(page.url).query == ""
         page.get_by_role("button",name="Close connections").click()
         assert page.locator("#connectionError").is_hidden()
+        browser.close()
+
+
+def test_local_discovery_filters_cloud_and_embedding_models(monkeypatch):
+    from modules.pubpartner_local_setup import discover, download_starter, STARTER
+    monkeypatch.delenv("PUBCAST_LOCAL_MODEL_URL", raising=False)
+    original = httpx.AsyncClient
+    def upstream(request):
+        assert request.url.host == "127.0.0.1"
+        if request.url.path == "/api/tags":
+            return httpx.Response(200,json={"models":[{"name":name} for name in ("chat","embed","remote")]})
+        if request.url.path == "/api/pull":
+            assert json.loads(request.content) == {"model":STARTER,"stream":False}
+            return httpx.Response(200,json={"status":"success"})
+        name = json.loads(request.content)["model"]
+        data = {"capabilities":["embedding" if name == "embed" else "completion"]}
+        if name == "remote":
+            data["remote_host"] = "https://example.invalid"
+        return httpx.Response(200,json=data)
+    monkeypatch.setattr(httpx,"AsyncClient",lambda **kw: original(transport=httpx.MockTransport(upstream),**kw))
+    result = asyncio.run(discover())
+    assert [item["model"] for item in result["choices"]] == ["chat"]
+    asyncio.run(download_starter())
+
+
+def test_choose_detected_local_model_without_typing(reach):
+    from playwright.sync_api import sync_playwright
+    base, token = reach
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        page = browser.new_page(viewport={"width":390,"height":844})
+        page.add_init_script("sessionStorage.setItem('pubcast_token',"+json.dumps(token)+")")
+        page.route("**/api/pubpartner/providers/local-discovery", lambda route: route.fulfill(json={
+            "choices":[{"provider":"ollama","model":"my-local-model","base_url":"http://127.0.0.1:11434"}],"ollama":True}))
+        page.goto(base+"/pubpartner#connections")
+        page.locator("#connectProvider").select_option("local")
+        page.locator("#applyConnection").click()
+        assert page.locator("#provider").input_value() == "ollama"
+        assert page.locator("#providerHost").input_value() == "http://127.0.0.1:11434"
+        assert page.locator("#modelName").input_value() == "my-local-model"
+        assert not page.locator("#allowFallback").is_checked()
         browser.close()

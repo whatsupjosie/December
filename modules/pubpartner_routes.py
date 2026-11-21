@@ -973,6 +973,74 @@ async def provider_test(request: Request, identity: Dict[str, Any] = Depends(cur
     }
 
 
+@router.get("/providers/local-discovery")
+async def discover_local_models():
+    from .pubpartner_local_setup import discover
+    return await discover()
+
+
+@router.post("/providers/local-start")
+async def start_local_ollama(request: Request, identity=Depends(current_identity)):
+    _owner_connector(request, identity)
+    try:
+        await request.app.state.pubpartner_local_ollama.start()
+    except (ValueError, OSError) as error:
+        raise HTTPException(409, str(error)) from None
+    return {"ok": True}
+
+
+@router.post("/providers/local-starter")
+async def install_local_starter(request: Request, identity=Depends(current_identity)):
+    import httpx
+    from .pubpartner_local_setup import download_starter
+    _owner_connector(request, identity)
+    try:
+        await download_starter()
+    except (httpx.HTTPError, ValueError):
+        raise HTTPException(409, "Ollama could not finish the download. Check the connection and retry.") from None
+    return {"ok": True}
+
+
+@router.get("/connector/brief")
+async def preview_cartridge_brief(request: Request, identity=Depends(current_identity)):
+    import asyncio
+    import tempfile
+    from zipfile import ZipFile
+    from fastapi.responses import JSONResponse
+    from pubpartner.cartridge import load_cartridge
+    from pubpartner.prompt_assembler import assemble_prompt
+    host = _owner_connector(request, identity)
+    def read_brief():
+        # Only use the owner-selected, previously validated ZIP.
+        with tempfile.TemporaryDirectory() as directory, ZipFile(host.selected) as archive:
+            archive.extractall(directory)
+            root = Path(directory)
+            entries = list(root.iterdir())
+            if len(entries) == 1 and entries[0].is_dir():
+                root = entries[0]
+            with load_cartridge(root) as cartridge:
+                return assemble_prompt(cartridge).text
+    try:
+        brief = await asyncio.to_thread(read_brief)
+    except FileNotFoundError:
+        raise HTTPException(409, "Choose your cartridge ZIP first.") from None
+    return JSONResponse({"brief": brief}, headers={"Cache-Control":"no-store"})
+
+
+@router.get("/connector/claude-desktop.mcpb")
+async def claude_desktop_extension():
+    from io import BytesIO
+    from zipfile import ZipFile
+    from fastapi.responses import Response
+    folder = Path(__file__).resolve().parents[1] / "pubpartner" / "claude_desktop"
+    data = BytesIO()
+    with ZipFile(data, "w") as bundle:
+        for name in ("server.js", "manifest.json"):
+            bundle.write(folder / name, name)
+    return Response(data.getvalue(), media_type="application/octet-stream",
+                    headers={"Content-Disposition": 'attachment; filename="PubPartner.mcpb"'})
+
+
 @router.get("/providers/local-config")
 async def local_model_defaults():
     return {"enabled": bool(os.getenv("PUBCAST_LOCAL_MODEL_URL")), "provider": default_provider()}

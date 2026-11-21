@@ -64,3 +64,25 @@ Model selection controls conversations inside PubPartner. The MCP tool makes
 the owner-selected cartridge available to a client that calls it. Both can
 operate independently. Native app notifications and unsolicited chat delivery
 require a separate host workflow.
+
+### Claude with your existing sign-in
+
+On a phone, select Claude on phone or web. Prepare your cartridge, review the
+text, copy it, and paste it into a new Claude chat. The preview stays on
+the Reach host until you choose to share it. The chat continues in Claude.
+
+On a computer running both Reach and Claude Desktop, select Claude Desktop
+and click Set up Claude Desktop. Choose the intended cartridge ZIP if asked.
+PubPartner starts local MCP and downloads PubPartner.mcpb. Open that file
+in Claude Desktop and approve the extension. Ask Claude to use your PubPartner
+cartridge. This extension contacts only the local connector on port 8768.
+Stop Local MCP to disconnect. The Claude API option still supports replies
+inside the PubPartner desk.
+
+### Finding an offline model
+
+Local AI uses the launcher-configured model or asks the local Ollama service
+for installed chat models. Choose Use connection to apply the detected host
+and model. If Ollama has no local chat model, the host owner can request a
+roughly 270 MB SmolLM2 starter download. A successful download refreshes
+the list. If installed Ollama is stopped, choose Start installed Ollama. Reach starts a loopback service and closes that process when Reach exits. If Ollama is missing, the screen links to the installer.

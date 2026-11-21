@@ -462,3 +462,6 @@ html[data-motion="reduced"] *,html[data-motion="reduced"] *::before,html[data-mo
   .desk { position: relative; inset: auto; }
   .profile-chip { max-width: 100%; }
 }
+
+/* Keep the composer and its send control steady while the user is typing. */
+.conversation:focus-within { animation-play-state: paused; }

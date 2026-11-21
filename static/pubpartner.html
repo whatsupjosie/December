@@ -53,7 +53,7 @@
     <h2 id="connectionsTitle">AI connections</h2>
     <label>Use with PubPartner<select id="connectProvider">
       <option value="chatgpt_plan">ChatGPT account</option><option value="openai">OpenAI API</option>
-      <option value="local">Local AI</option><option value="anthropic">Claude</option>
+      <option value="local">Local AI</option><option value="claude_web">Claude on phone or web · no API key</option><option value="claude_desktop">Claude Desktop · no API key</option><option value="anthropic">Claude API · chat inside PubPartner</option>
       <option value="gemini">Gemini</option><option value="xai">Grok</option>
       <option value="openai_compatible">Other compatible endpoint</option>
     </select></label>
@@ -64,6 +64,20 @@
     </details>
     <p id="connectionError" role="alert" hidden></p>
     <p id="connectionStatus" role="status"></p>
+    <label id="localChoiceRow" hidden>Installed chat model<select id="localChoice"></select></label>
+    <button id="rescanLocal" type="button" hidden>Check again</button>
+    <button id="startOllama" type="button" hidden>Start installed Ollama</button>
+    <button id="localStarter" type="button" hidden>Download small starter model (about 270 MB)</button>
+    <a id="installOllama" href="https://ollama.com/download" target="_blank" rel="noopener" hidden>Get Ollama for this computer</a>
+    <div id="claudeHandoff" hidden>
+      <button id="prepareClaude" type="button">Prepare cartridge for Claude</button>
+      <div id="claudePreview" hidden>
+        <label>Cartridge text to share<textarea id="claudeBrief" readonly rows="4"></textarea></label>
+        <button id="copyClaude" type="button">Copy cartridge text</button>
+        <a href="https://claude.ai/new" target="_blank" rel="noopener noreferrer">Open Claude and paste</a>
+      </div>
+    </div>
+    <button id="setupClaude" type="button" hidden>Set up Claude Desktop</button>
     <label id="connectionAccountRow" hidden>Saved connection<select id="connectionAccount"></select></label>
     <label id="connectionModelRow" hidden>Model<input id="connectionModel" list="connectionModels"><datalist id="connectionModels"></datalist></label>
     <label id="connectionKeyRow" hidden>API key<input id="connectionKey" type="password" autocomplete="off"></label>
