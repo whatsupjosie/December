@@ -66,7 +66,9 @@ def production_server(tmp_path_factory):
 def production_browser():
     with pw.sync_playwright() as p:
         try:
-            browser = p.chromium.launch(args=GL_ARGS)
+            browser = p.chromium.launch(
+                args=GL_ARGS, executable_path=os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE")
+            )
         except pw.Error as exc:
             pytest.skip("Chromium unavailable: " + str(exc).splitlines()[0])
         yield browser
