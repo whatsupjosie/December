@@ -78,7 +78,7 @@ async def test_virtual_peer_skew_jitter_and_explicit_stall( production_server,tm
             page=await hc.new_page();await page.goto(base+'/static/production25d.html')
             await page.wait_for_function("document.documentElement.dataset.production25d==='ready'")
             await page.click('#start');await page.click('#audioOpen')
-            await page.wait_for_function('!!window.PubCastAudioDesk.reservation')
+            await page.wait_for_function("audioInvite.value.includes('room=')")
             room=await page.evaluate('PubCastAudioDesk.reservation.room')
             peer=await gc.new_page();await peer.goto(base+'/static/participant_audio.html?room='+room)
             await peer.evaluate('''()=>{const ctx=new AudioContext(),osc=ctx.createOscillator(),gain=ctx.createGain(),dest=ctx.createMediaStreamDestination();osc.frequency.value=440;gain.gain.value=.12;osc.connect(gain);gain.connect(dest);osc.start();ctx.resume();window.tone={ctx,osc};navigator.mediaDevices.getUserMedia=async()=>dest.stream;}''')
