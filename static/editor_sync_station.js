@@ -354,6 +354,7 @@ document.addEventListener("keydown",e=>{
  if(!$("station-editor")||$("station-editor").classList.contains("hidden"))return;
  if(e.ctrlKey||e.metaKey||e.altKey)return;
  if(["INPUT","TEXTAREA","SELECT"].includes(e.target?.tagName)||e.target?.isContentEditable)return;
+ if(e.target?.closest?.("#director-dock"))return;
  if(e.key.toLowerCase()==="i"){e.preventDefault();ui.markIn.click()}
  if(e.key.toLowerCase()==="o"){e.preventDefault();ui.markOut.click()}
  if(e.code==="Space"||e.key.toLowerCase()==="l"){e.preventDefault();ui.play.click()}
