@@ -11,6 +11,9 @@ import os
 from pathlib import Path
 import shutil
 import sys
+import secrets
+
+import httpx
 
 
 class ConnectorHost:
@@ -19,6 +22,7 @@ class ConnectorHost:
         self.tunnel_record = self.selected.with_name("workspace-tunnel.json")
         self.process = None
         self.route = None
+        self.starting = False
         self.lock = asyncio.Lock()
 
     def source(self):
@@ -120,7 +124,8 @@ class ConnectorHost:
             "tunnel_needs_recovery": self.tunnel_record.exists() and not tunnel_id,
             "tunnel_configured": bool(tunnel_id and
                                       (os.getenv("CONTROL_PLANE_API_KEY") or os.getenv("OPENAI_API_KEY"))),
-            "running": self.process is not None and self.process.returncode is None,
+            "starting": self.starting,
+            "running": not self.starting and self.process is not None and self.process.returncode is None,
             "route": self.route,
             "exit_code": self.process.returncode if self.process else None,
         }
@@ -145,19 +150,48 @@ class ConnectorHost:
                 command = tunnel_command(source, tunnel_id)
             else:
                 raise ValueError("Unknown connector route")
-            self.process = await asyncio.create_subprocess_exec(*command, stdin=asyncio.subprocess.DEVNULL)
+            launch_id = secrets.token_hex(16)
+            self.process = await asyncio.create_subprocess_exec(
+                *command, stdin=asyncio.subprocess.DEVNULL, env={**os.environ, "PUBPARTNER_LAUNCH_ID": launch_id})
             self.route = route
+            if route == "http":
+                self.starting = True
+                try:
+                    async with asyncio.timeout(25), httpx.AsyncClient(timeout=.5, trust_env=False) as client:
+                        while self.process.returncode is None:
+                            try:
+                                response = await client.get("http://127.0.0.1:8768/ready")
+                                if response.status_code == 200 and response.text == launch_id:
+                                    self.starting = False
+                                    return self.status()
+                            except httpx.HTTPError:
+                                pass
+                            await asyncio.sleep(.1)
+                        raise ValueError("Local MCP exited before startup. Check the cartridge and whether port 8768 is in use.")
+                except (asyncio.CancelledError, TimeoutError) as error:
+                    await self._stop_process()
+                    if isinstance(error, TimeoutError):
+                        raise ValueError("Local MCP did not become ready on port 8768.") from None
+                    raise
+                finally:
+                    self.starting = False
             return self.status()
 
     async def stop(self):
         async with self.lock:
-            if self.process and self.process.returncode is None:
+            await self._stop_process()
+            return self.status()
+
+    async def _stop_process(self):
+        if self.process and self.process.returncode is None:
+            try:
                 self.process.terminate()
                 try:
                     await asyncio.wait_for(self.process.wait(), 8)
                 except asyncio.TimeoutError:
                     self.process.kill()
                     await self.process.wait()
-            self.process = None
-            self.route = None
-            return self.status()
+            except ProcessLookupError:
+                pass
+        self.process = None
+        self.route = None

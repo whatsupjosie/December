@@ -102,7 +102,13 @@
 
 
   function setAuthToken(result) {
-    if (authState.token !== (result.access_token || "")) { resetChat(); sessionOpened = false; }
+    if (authState.token !== (result.access_token || "")) {
+      resetChat();
+      sessionOpened = false;
+      ++lookupNumber;
+      if (connectionDialog.open) connectionDialog.close();
+      $('connectionKey').value = $('claudeBrief').value = $('providerApiKey').value = '';
+    }
     authState.token = result.access_token || '';
     authState.user = result.username || '';
     authState.role = result.role || '';
@@ -1402,6 +1408,7 @@
     const provider = $('connectProvider').value;
     for (const id of ['claudeHandoff','claudePreview','localChoiceRow','rescanLocal','startOllama','installOllama','localStarter','setupClaude','connectionModelRow','connectionAccountRow','connectionKeyRow','applyConnection','connectAccount','disconnectAccount']) $(id).hidden = true;
     $('connectionKey').value = '';
+    $('connectionModel').readOnly = false;
     $('connectionModel').value = '';
     $('connectionModels').replaceChildren();
     $('connectionStatus').textContent = 'Checking this host…';
@@ -1445,13 +1452,15 @@
         $('localChoice').replaceChildren(...localChoices.map((item, i) => new Option(item.model, String(i))));
         $('localChoiceRow').hidden = $('applyConnection').hidden = !localChoices.length;
         $('rescanLocal').hidden = false;
-        $('localStarter').hidden = !!localChoices.length || !result.ollama;
+        $('localStarter').hidden = !!localChoices.length || !result.ollama || !!result.incomplete;
         $('startOllama').hidden = !result.can_start;
         $('installOllama').hidden = !!localChoices.length || result.ollama || result.can_start;
         $('connectionStatus').textContent = localChoices.length ? 'Found on this computer. No account required.' :
+          result.incomplete ? 'Ollama could not identify the installed models. Choose Check again to retry.' :
           result.ollama ? 'Ollama is running. Download a starter model once to chat offline.' :
           result.can_start ? 'Ollama is installed on this computer. Start it to look for your models.' :
           'Install Ollama on the computer running PubPartner, then choose Check again.';
+        if (result.notice) $('connectionStatus').textContent = result.notice + ' ' + $('connectionStatus').textContent;
         return;
       }
       if (provider === 'openai_compatible') {
@@ -1469,6 +1478,7 @@
       $('connectionAccountRow').hidden = options.length < 2;
       $('connectionKeyRow').hidden = options.length > 0;
       $('connectionStatus').textContent = found.length ? 'Found a saved connection.' : status.available ? 'Found a credential on this host.' : 'Enter a provider key once to save it encrypted on this host.';
+      $('connectionModel').readOnly = !!found[0]?.model_name;
       $('connectionModel').value = found[0]?.model_name || '';
       $('connectionModelRow').hidden = $('applyConnection').hidden = false;
     } catch (e) {
@@ -1487,7 +1497,7 @@
       const tunnel = $('connectorRoute').value === 'openai-tunnel';
       createTunnel = tunnel && !state.tunnel_configured && state.can_create_tunnel;
       const ready = state.cartridge_configured && state.sdk_installed && (!tunnel || (state.tunnel_installed && (state.tunnel_configured || createTunnel)));
-      $('connectorInfo').textContent = state.running ? 'Process running: ' + state.route + (state.route === 'openai-tunnel' ? ' · ' + state.tunnel_id : ' · http://127.0.0.1:8768/mcp') :
+      $('connectorInfo').textContent = state.starting ? 'Starting local MCP…' : state.running ? 'Process running: ' + state.route + (state.route === 'openai-tunnel' ? ' · ' + state.tunnel_id : ' · http://127.0.0.1:8768/mcp') :
         !state.cartridge_configured ? 'Choose the cartridge ZIP to share.' :
         !state.sdk_installed ? 'Install the PubPartner connector extra on the host.' :
         tunnel && !state.tunnel_installed ? 'Install OpenAI tunnel-client on this host.' :
@@ -1496,7 +1506,7 @@
         tunnel && !state.tunnel_configured ? 'Configure a workspace tunnel ID and runtime credential.' :
         state.exit_code ? 'Connector exited with code ' + state.exit_code : 'Ready to start.';
       button.textContent = state.running ? 'Stop connector' : createTunnel ? 'Create tunnel and start' : 'Start connector';
-      button.disabled = !state.running && !ready;
+      button.disabled = state.starting || (!state.running && !ready);
     } catch (e) { $('connectorInfo').textContent = e.message; }
   }
   async function prepareClaude() {
@@ -1542,9 +1552,11 @@
   $('startOllama').onclick = () => localAction($('startOllama'), 'local-start', 'Starting Ollama on this computer…');
   async function setupClaude() {
     const button = $('setupClaude');
+    const sequence = lookupNumber;
     button.disabled = true;
     try {
       const state = await api('/api/pubpartner/connector');
+      if (sequence !== lookupNumber || !connectionDialog.open) return;
       if (!state.cartridge_configured) {
         $('connectorCartridge').closest('details').open = true;
         $('connectionStatus').textContent = 'Choose your cartridge ZIP below to continue setup.';
@@ -1553,6 +1565,7 @@
       }
       await api('/api/pubpartner/connector', {method:'POST', body:JSON.stringify({route:'http'})});
       await refreshConnector();
+      if (sequence !== lookupNumber || !connectionDialog.open) return;
       const a = document.createElement('a');
       a.href = '/api/pubpartner/connector/claude-desktop.mcpb';
       a.download = 'PubPartner.mcpb';
@@ -1560,23 +1573,27 @@
       const response = await fetch(a.href, {headers:{Authorization:'Bearer ' + authState.token}});
       if (!response.ok) throw Error('Could not download the Claude Desktop extension.');
       const url = URL.createObjectURL(await response.blob());
+      if (sequence !== lookupNumber || !connectionDialog.open) { URL.revokeObjectURL(url); return; }
       a.href = url;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 60000);
       $('connectionStatus').textContent = 'Open PubPartner.mcpb in Claude Desktop on this computer and approve installation. Ask Claude to use your PubPartner cartridge. Stop Local MCP here to disconnect.';
-    } catch (error) { $('connectionStatus').textContent = error.message; }
+    } catch (error) { if (sequence === lookupNumber) $('connectionStatus').textContent = error.message; }
     finally { button.disabled = false; }
   }
   $('setupClaude').onclick = setupClaude;
   $('connectorCartridge').onchange = async () => {
+    const sequence = lookupNumber;
+    const selectedProvider = $('connectProvider').value;
     const file = $('connectorCartridge').files[0];
     if (!file) return;
     try {
       if (file.size > 8*1024*1024) throw Error('Choose a cartridge under 8 MiB.');
       await api('/api/pubpartner/connector/cartridge',{method:'PUT',headers:{'Content-Type':'application/zip'},body:file});
       await refreshConnector();
-      if ($('connectProvider').value === 'claude_desktop') await setupClaude();
-      if ($('connectProvider').value === 'claude_web') await prepareClaude();
+      if (sequence !== lookupNumber || !connectionDialog.open) return;
+      if (selectedProvider === 'claude_desktop') await setupClaude();
+      if (selectedProvider === 'claude_web') await prepareClaude();
     } catch (e) { $('connectorInfo').textContent = e.message; }
     finally { $('connectorCartridge').value = ''; }
   };
@@ -1606,19 +1623,28 @@
     $('connectionError').textContent = '';
   });
   $('connectionAccount').onchange = () => {
-    $('connectionModel').value = found.find(row => row.model_id === $('connectionAccount').value)?.model_name || '';
+    const model = found.find(row => row.model_id === $('connectionAccount').value)?.model_name || '';
+    $('connectionModel').readOnly = !!model;
+    $('connectionModel').value = model;
   };
   $('connectAccount').onclick = async () => {
-    try { location.assign((await api('/api/pubpartner/chatgpt/connect',{method:'POST'})).url); }
-    catch (e) { $('connectionStatus').textContent = e.message; }
+    const sequence = lookupNumber;
+    try {
+      const account = await api('/api/pubpartner/chatgpt/connect',{method:'POST'});
+      if (sequence === lookupNumber && connectionDialog.open) location.assign(account.url);
+    } catch (e) { if (sequence === lookupNumber) $('connectionStatus').textContent = e.message; }
   };
   $('disconnectAccount').onclick = async () => {
-    try { await api('/api/pubpartner/chatgpt/account',{method:'DELETE'}); await inspectConnection(); }
-    catch (e) { $('connectionStatus').textContent = e.message; }
+    const sequence = lookupNumber;
+    try {
+      await api('/api/pubpartner/chatgpt/account',{method:'DELETE'});
+      if (sequence === lookupNumber && connectionDialog.open) await inspectConnection();
+    } catch (e) { if (sequence === lookupNumber) $('connectionStatus').textContent = e.message; }
   };
   $('applyConnection').onclick = async () => {
     const action = $('applyConnection');
     action.disabled = true;
+    const sequence = lookupNumber;
     try {
       let provider = $('connectProvider').value;
       const local = provider === 'local';
@@ -1634,6 +1660,7 @@
         const api_key = $('connectionKey').value.trim();
         if (!api_key) throw Error('Enter the provider API key.');
         const saved = await api('/api/pubpartner/providers/credentials',{method:'POST',body:JSON.stringify({provider,model,api_key,user_id:ids().user_id,run_fidelity:false})});
+        if (sequence !== lookupNumber || !connectionDialog.open) return;
         credential = saved.credential_model_id;
         $('connectionKey').value = '';
       }
@@ -1646,12 +1673,13 @@
         $('knowledgeMode').value = 'off';
       }
       await refreshProviderCredentials(false);
+      if (sequence !== lookupNumber || !connectionDialog.open) return;
       if (!local && !advanced && provider !== 'chatgpt_plan') $('providerCredential').value = credential;
       $('allowFallback').checked = false;
       connectionDialog.close();
       if (advanced) focusPanel('setup');
       else toast('Selected ' + $('provider').selectedOptions[0].text + ' for this conversation.');
-    } catch (e) { $('connectionStatus').textContent = e.message; }
+    } catch (e) { if (sequence === lookupNumber) $('connectionStatus').textContent = e.message; }
     finally { action.disabled = false; }
   };
 

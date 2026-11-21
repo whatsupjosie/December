@@ -275,7 +275,10 @@ def _public_provider(value):
 def _turn_kwargs(body: Dict[str, Any], request: Request, identity: Dict[str, Any]) -> Dict[str, Any]:
     body = dict(body)
     if not body.get("provider") and getattr(request.app.state, "pubpartner_spine", None) is not None:
-        body["provider"] = default_provider()
+        try:
+            body["provider"] = default_provider()
+        except ValueError:
+            raise HTTPException(409, "Repair the local launcher or select a provider in Connections.") from None
     if "allow_fallback" in body and not isinstance(body["allow_fallback"], bool):
         raise HTTPException(400, "allow_fallback must be a boolean")
     # v20/2i uses messages[]; the vessel client uses message + history. Both
@@ -358,7 +361,6 @@ async def live_turn(request: Request, identity: Dict[str, Any] = Depends(current
     spine = get_spine()
     if getattr(request.app.state, "pubpartner_spine", None) is not None:
         # Full Reach never defaults a real user to the deterministic test model.
-        body.setdefault("provider", default_provider())
         body.setdefault("allow_fallback", False)
     kwargs = _turn_kwargs(body, request, identity)
     _limit_or_429(kwargs["user_id"])
@@ -992,10 +994,9 @@ async def start_local_ollama(request: Request, identity=Depends(current_identity
 @router.post("/providers/local-starter")
 async def install_local_starter(request: Request, identity=Depends(current_identity)):
     import httpx
-    from .pubpartner_local_setup import download_starter
     _owner_connector(request, identity)
     try:
-        await download_starter()
+        await request.app.state.pubpartner_local_ollama.install_starter()
     except (httpx.HTTPError, ValueError):
         raise HTTPException(409, "Ollama could not finish the download. Check the connection and retry.") from None
     return {"ok": True}
@@ -1043,7 +1044,10 @@ async def claude_desktop_extension():
 
 @router.get("/providers/local-config")
 async def local_model_defaults():
-    return {"enabled": bool(os.getenv("PUBCAST_LOCAL_MODEL_URL")), "provider": default_provider()}
+    try:
+        return {"enabled": bool(os.getenv("PUBCAST_LOCAL_MODEL_URL")), "provider": default_provider()}
+    except ValueError:
+        return {"enabled": False, "provider": None, "error": "Local launcher settings are incomplete."}
 
 
 # ── Project work notes ──────────────────────────────────────────────────────

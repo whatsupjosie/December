@@ -26,6 +26,7 @@ class VoiceProfile:
     verbal_tics: tuple[str, ...] = field(default_factory=tuple)
     sentence_length: str = "varied"
     formality: str = "neutral"
+    spoken_voice_preference: tuple[tuple[str, str], ...] = field(default_factory=tuple)
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> "VoiceProfile":
@@ -37,10 +38,16 @@ class VoiceProfile:
         tics = data.get("verbal_tics", [])
         if not isinstance(tics, list):
             raise CartridgeValidationError("voice_profile.verbal_tics must be a list")
+        spoken = data.get("spoken_voice_preference") or {}
+        if isinstance(spoken, str):
+            spoken = {"description": spoken}
+        if not isinstance(spoken, dict):
+            raise CartridgeValidationError("spoken_voice_preference must contain named preferences")
         return VoiceProfile(
             cadence=str(data["cadence"]),
             vocabulary=str(data["vocabulary"]),
             verbal_tics=tuple(str(t) for t in tics),
+            spoken_voice_preference=tuple((str(k), str(v)) for k, v in spoken.items()),
             sentence_length=str(data.get("sentence_length", "varied")),
             formality=str(data.get("formality", "neutral")),
         )

@@ -33,6 +33,13 @@ def serve(cartridge: Cartridge, transport: str = "stdio", port: int = 8768) -> N
         ),
     )
 
+    if transport == "streamable-http" and os.getenv("PUBPARTNER_LAUNCH_ID"):
+        from starlette.responses import PlainTextResponse
+
+        @server.custom_route("/ready", methods=["GET"])
+        async def ready(request):
+            return PlainTextResponse(os.environ["PUBPARTNER_LAUNCH_ID"])
+
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
     async def pp_brief(query: str = "") -> str:
         """Get the selected character's voice, tendencies and relevant memories."""

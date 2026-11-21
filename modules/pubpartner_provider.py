@@ -76,11 +76,13 @@ def _starter_prompt(turn, full_prompt):
     vessel = packet.get("vessel") or {}
     alex = packet.get("alex") or {}
     context = {
-        "friend": {key: friend[key] for key in ("name","role","tone","cad","avoid","bound","law") if key in friend},
+        "friend": {key: friend[key] for key in ("name","identity","role","tone","cad","avoid","bound","law","modes") if key in friend},
         "user": packet.get("u"),
         "boundaries": packet.get("safe"),
         "guidance": [g.get("rule") for g in packet.get("guide", []) if isinstance(g, dict)],
         "tone": alex.get("tone_guidance"), "care": alex.get("response_guidelines"),
+        "do_not_touch": alex.get("do_not_touch"), "direction": packet.get("jeremy"),
+        "task": packet.get("task"), "output": packet.get("out"),
         "memories": [m.get("txt") for m in packet.get("m", []) if isinstance(m, dict)],
         "claims": vessel.get("claims"), "events": vessel.get("events"),
         "notes": packet.get("notes"), "history": packet.get("history"),

@@ -38,7 +38,12 @@ callback_access_filter = CallbackAccessFilter()
 
 
 def configured():
-    callback = urlsplit(os.getenv("PUBPARTNER_OPENAI_CALLBACK", ""))
+    try:
+        callback = urlsplit(os.getenv("PUBPARTNER_OPENAI_CALLBACK", ""))
+        if callback.port == 0:
+            return False
+    except ValueError:
+        return False
     secure = callback.scheme == "https" or (callback.scheme == "http" and callback.hostname == "127.0.0.1")
     return bool(os.getenv("PUBPARTNER_OPENAI_CLIENT_ID") and secure and callback.hostname
                 and callback.path == "/pubpartner" and not (callback.query or callback.fragment or callback.username or callback.password))
@@ -51,7 +56,8 @@ def prune(records):
 
 
 def session_id(identity):
-    return str((identity.get("payload") or {}).get("jti", "")) if identity.get("authenticated") else ""
+    token_id = (identity.get("payload") or {}).get("jti")
+    return token_id if identity.get("authenticated") and isinstance(token_id, str) else ""
 
 
 def require_session(identity):

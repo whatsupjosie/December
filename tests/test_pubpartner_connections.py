@@ -98,6 +98,7 @@ def test_connection_screen_and_saved_key(reach, tmp_path):
         dialog.wait_for()
         page.locator("#connectProvider").select_option("xai")
         page.wait_for_function("document.querySelector('#connectionModel').value === 'test-grok'")
+        assert not page.locator("#connectionModel").is_editable()
         assert not page.locator("#connectionKey").is_visible()
         page.get_by_role("button", name="Use connection",exact=True).click()
         page.wait_for_function("!document.querySelector('#connections').open")
@@ -399,3 +400,143 @@ def test_starter_prompt_uses_scoped_text_and_preserves_wording():
     assert "duplicated diagnostic context" not in prompt
     del packet["msg"]["text"]
     assert _starter_prompt({"llm_prompt_json":json.dumps(packet)}, "reference-only") == "reference-only"
+
+
+def test_small_model_keeps_identity_and_conversational_direction():
+    from modules.pubpartner_provider import _starter_prompt
+    packet = {"msg":{"text":"hello"}, "f":{"identity":"retained identity", "modes":{"a":"retained mode"}},
+              "jeremy":{"whisper":"retained direction"}, "alex":{"do_not_touch":["retained boundary"]}}
+    prompt = _starter_prompt({"llm_prompt_json":json.dumps(packet)}, "full")
+    for item in ("retained identity","retained mode","retained direction","retained boundary"):
+        assert item in prompt
+
+
+def test_cartridge_brief_keeps_spoken_voice_preference(tmp_path):
+    from pubpartner.cartridge import init_cartridge, load_cartridge
+    from pubpartner.prompt_assembler import assemble_prompt
+    import yaml
+    init_cartridge(tmp_path,"Example","Example friend","gentle","simple")
+    voice = tmp_path / "voice_profile.yaml"
+    data = yaml.safe_load(voice.read_text())
+    data["spoken_voice_preference"] = {"preset_name":"test preset","register":"lower"}
+    voice.write_text(yaml.safe_dump(data))
+    with load_cartridge(tmp_path) as cartridge:
+        brief = assemble_prompt(cartridge).text
+        assert "test preset" in brief and "lower" in brief
+
+
+def test_corrupt_launcher_does_not_break_cloud_setup(monkeypatch):
+    from modules.pubpartner_routes import local_model_defaults
+    monkeypatch.setenv("PUBCAST_LOCAL_MODEL_URL", "incomplete")
+    assert asyncio.run(local_model_defaults())["enabled"] is False
+
+
+def test_shared_download_survives_cancellation_and_retries_after_failure(monkeypatch):
+    from modules import pubpartner_local_setup as local
+
+    async def exercise():
+        entered = asyncio.Event()
+        release = asyncio.Event()
+        calls = []
+
+        async def pull():
+            calls.append(True)
+            entered.set()
+            await release.wait()
+            if len(calls) == 1:
+                raise ValueError("interrupted upstream")
+
+        monkeypatch.setattr(local, "download_starter", pull)
+        host = local.LocalOllama()
+        first = asyncio.create_task(host.install_starter())
+        await entered.wait()
+        first.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await first
+        second = asyncio.create_task(host.install_starter())
+        await asyncio.sleep(0)
+        release.set()
+        with pytest.raises(ValueError, match="interrupted upstream"):
+            await second
+        assert len(calls) == 1
+        await host.install_starter()
+        assert len(calls) == 2
+        await host.stop()
+
+    asyncio.run(exercise())
+
+
+def test_occupied_connector_port_never_reports_ready(tmp_path, monkeypatch):
+    from modules.pubpartner_connector_host import ConnectorHost
+    from pubpartner.cartridge import init_cartridge
+    init_cartridge(tmp_path, "Sample", "Test cartridge", "quiet", "simple")
+    monkeypatch.setenv("PUBPARTNER_CONNECTOR_CARTRIDGE", str(tmp_path))
+
+    async def exercise():
+        async def unrelated(reader, writer):
+            await reader.read(2048)
+            writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")
+            await writer.drain()
+            writer.close()
+
+        host = ConnectorHost(tmp_path)
+        async with await asyncio.start_server(unrelated, "127.0.0.1", 8768):
+            start = asyncio.create_task(host.start("http"))
+            while not host.status()["starting"] and not start.done():
+                await asyncio.sleep(.01)
+            assert not host.status()["running"]
+            with pytest.raises(ValueError, match="8768"):
+                await start
+        assert not host.status()["running"]
+        try:
+            assert (await host.start("http"))["running"]
+        finally:
+            await host.stop()
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("callback", ["https://[broken/pubpartner", "https://example.net:99999/pubpartner"])
+def test_invalid_oauth_host_setup_still_returns_status(monkeypatch, callback):
+    from modules.pubpartner_chatgpt_link import configured
+    monkeypatch.setenv("PUBPARTNER_OPENAI_CLIENT_ID", "synthetic")
+    monkeypatch.setenv("PUBPARTNER_OPENAI_CALLBACK", callback)
+    assert not configured()
+
+
+def test_discovery_distinguishes_failed_inspection_from_empty_catalog(monkeypatch):
+    from modules.pubpartner_local_setup import discover
+    monkeypatch.delenv("PUBCAST_LOCAL_MODEL_URL", raising=False)
+    original = httpx.AsyncClient
+
+    def upstream(request):
+        if request.url.path == "/api/tags":
+            return httpx.Response(200, json={"models": [{"name": "already-installed"}]})
+        return httpx.Response(503)
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: original(transport=httpx.MockTransport(upstream), **kw))
+    result = asyncio.run(discover())
+    assert result["ollama"] and result["incomplete"] and not result["choices"]
+
+
+def test_late_chatgpt_signin_does_not_redirect_after_switching_provider(reach):
+    from playwright.sync_api import sync_playwright
+    base, token = reach
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        page = browser.new_page(viewport={"width": 390, "height": 844})
+        page.add_init_script("sessionStorage.setItem('pubcast_token'," + json.dumps(token) + ")")
+        page.route("**/api/pubpartner/chatgpt/account", lambda route: route.fulfill(
+            json={"configured": True, "linked": False, "models": []}))
+        page.goto(base + "/pubpartner#connections")
+        held = []
+        page.route("**/api/pubpartner/chatgpt/connect", lambda route: held.append(route))
+        with page.expect_request("**/chatgpt/connect"):
+            page.locator("#connectAccount").click()
+        page.locator("#connectProvider").select_option("claude_web")
+        with page.expect_event("requestfinished", predicate=lambda req: req.url.endswith("/chatgpt/connect")):
+            held[0].fulfill(json={"url": base + "/unexpected-signin"})
+        page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
+        assert page.url == base + "/pubpartner#connections"
+        assert page.locator("#claudeHandoff").is_visible()
+        browser.close()
