@@ -140,6 +140,10 @@ class PubPartnerProviderDispatcher:
                     "model_available": False,
                     "error": f"{type(exc).__name__}: {exc}",
                 }
+        if provider == "chatgpt_plan":
+            from .pubpartner_chatgpt_link import current_session, status
+            account = status(current_session.get())
+            return {"ok": True, "provider": provider, "available": account["linked"], "models": account["models"]}
         if provider == "openai_compatible":
             base_url = str(config.get("base_url") or "").strip()
             require_key = bool(config.get("require_api_key", True))
@@ -205,7 +209,14 @@ class PubPartnerProviderDispatcher:
         user_id = str((fcp1.get("u") or {}).get("id") or "anon")
         started = time.time()
         try:
-            if provider == "runtime_profile":
+            if provider == "chatgpt_plan":
+                from .pubpartner_chatgpt_link import token_for_model
+                from .openai_responses_provider import responses_text
+                stream = responses_text(token_for_model(model), str(turn.get("llm_prompt_text") or ""),
+                                        system=_friend_generation_contract(turn), model=model)
+                reply = "".join([delta async for delta in stream])
+                result = ProviderResult(ok=bool(reply.strip()), provider=provider, model=model, raw_response=reply)
+            elif provider == "runtime_profile":
                 result = await self._runtime_profile(turn, provider_config)
             elif provider == "mock":
                 result = self._mock(turn, model=model)
@@ -219,7 +230,7 @@ class PubPartnerProviderDispatcher:
                 result = await self._openai_compatible(
                     turn, model=model, config=provider_config, user_id=user_id
                 )
-            elif provider in {"openai", "anthropic", "gemini", "mistral", "groq", "opencode_zen"}:
+            elif provider in {"openai", "anthropic", "gemini", "mistral", "groq", "xai", "opencode_zen"}:
                 result = await self._universal(
                     turn, provider=provider, model=model, config=provider_config, user_id=user_id
                 )

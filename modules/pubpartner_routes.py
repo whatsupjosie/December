@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+from zipfile import BadZipFile
+from yaml import YAMLError
 import os
 from contextvars import ContextVar
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from . import pubpartner_chatgpt_link as chatgpt_link
 from .pubpartner_rate_limit import RateLimiter
 from fastapi.responses import FileResponse, PlainTextResponse
 
@@ -22,13 +25,15 @@ from .local_model_config import default_provider
 _request_spine = ContextVar("pubpartner_request_spine", default=None)
 
 
-async def _bind_host_spine(request: Request):
+async def _bind_host_spine(request: Request, identity: Dict[str, Any] = Depends(current_identity)):
     # Each host owns its runtime; standalone tests may still configure _spine.
     # A second TestClient must never redirect a running host into its test store.
     token = _request_spine.set(getattr(request.app.state, "pubpartner_spine", None))
+    account = chatgpt_link.current_session.set(chatgpt_link.session_id(identity))
     try:
         yield
     finally:
+        chatgpt_link.current_session.reset(account)
         _request_spine.reset(token)
 
 
@@ -501,7 +506,7 @@ async def register_provider_credential(
     scoped_user = _scoped_user_id(request=request, identity=identity, explicit_value=body.get("user_id"))
     _limit_or_429(f"provider-key:{scoped_user}")
     provider = canonical_provider(str(body.get("provider") or ""))
-    allowed = {"openai", "anthropic", "gemini", "mistral", "groq", "opencode_zen"}
+    allowed = {"openai", "anthropic", "gemini", "mistral", "groq", "xai", "opencode_zen"}
     if provider not in allowed:
         raise HTTPException(status_code=400, detail=f"provider must be one of {sorted(allowed)}")
     model = str(body.get("model") or body.get("model_name") or "").strip()[:180]
@@ -530,6 +535,83 @@ async def register_provider_credential(
         "api_key_stored": True,
         "api_key": None,
     }
+
+
+def _owner_connector(request, identity):
+    if not identity.get("authenticated") or identity.get("role") != "owner":
+        raise HTTPException(403, "Sign in as the host owner to manage its connector.")
+    host = getattr(request.app.state, "pubpartner_connector", None)
+    if host is None:
+        raise HTTPException(503, "The connector launcher is unavailable on this host.")
+    return host
+
+
+@router.get("/connector")
+async def connector_status(request: Request, identity: Dict[str, Any] = Depends(current_identity)):
+    return _owner_connector(request, identity).status()
+
+
+@router.put("/connector/cartridge")
+async def select_connector_cartridge(request: Request, identity: Dict[str, Any] = Depends(current_identity)):
+    host = _owner_connector(request, identity)
+    payload = bytearray()
+    async for chunk in request.stream():
+        if len(payload) + len(chunk) > 8 * 1024 * 1024:
+            raise HTTPException(413, "Choose a cartridge under 8 MiB compressed.")
+        payload.extend(chunk)
+    try:
+        return await host.select(payload)
+    except (ValueError, RuntimeError, KeyError, TypeError, AttributeError, OSError,
+            BadZipFile, YAMLError):
+        raise HTTPException(400, "Stop the connector and choose a valid PubPartner cartridge ZIP.") from None
+
+
+@router.post("/connector")
+async def connector_start(request: Request, identity: Dict[str, Any] = Depends(current_identity)):
+    host = _owner_connector(request, identity)
+    body = await _json_dict(request)
+    try:
+        return await host.start(body.get("route"), create=body.get("create") is True)
+    except (ValueError, OSError) as error:
+        raise HTTPException(409, str(error)) from None
+
+
+@router.delete("/connector")
+async def connector_stop(request: Request, identity: Dict[str, Any] = Depends(current_identity)):
+    return await _owner_connector(request, identity).stop()
+
+
+@router.get("/chatgpt/account")
+async def chatgpt_account(identity: Dict[str, Any] = Depends(current_identity)):
+    return chatgpt_link.status(chatgpt_link.session_id(identity))
+
+
+@router.post("/chatgpt/connect")
+async def chatgpt_connect(identity: Dict[str, Any] = Depends(current_identity)):
+    try:
+        return await chatgpt_link.begin(identity)
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(502, "OpenAI sign-in discovery failed.") from None
+
+
+@router.post("/chatgpt/finish")
+async def chatgpt_finish(request: Request, identity: Dict[str, Any] = Depends(current_identity)):
+    try:
+        return await chatgpt_link.finish(identity, await _json_dict(request))
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(502, "OpenAI account verification or model discovery failed. Reconnect to retry.") from None
+
+
+@router.delete("/chatgpt/account")
+async def chatgpt_disconnect(identity: Dict[str, Any] = Depends(current_identity)):
+    session = chatgpt_link.require_session(identity)
+    chatgpt_link.accounts.pop(session, None)
+    chatgpt_link.pending.pop(session, None)
+    return {"ok": True}
 
 
 @router.get("/providers/catalog")

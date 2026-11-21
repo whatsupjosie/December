@@ -1,0 +1,166 @@
+"""Connection setup acceptance using real Reach and Chromium, plus simulated OpenAI consent."""
+import asyncio
+import base64
+import hashlib
+import json
+import sys
+import time
+from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
+from zipfile import ZipFile
+
+import httpx
+import jwt
+import pytest
+from cryptography.hazmat.primitives.asymmetric import rsa
+
+from modules import pubpartner_chatgpt_link as link
+from modules.pubpartner_provider import PubPartnerProviderDispatcher
+from tests.test_pubpartner_menus_browser import reach
+
+
+def test_consent_and_plan_turn(monkeypatch):
+    session = {"authenticated": True, "payload": {"jti": "session-one"}}
+    other = {"authenticated": True, "payload": {"jti": "session-two"}}
+    monkeypatch.setenv("PUBPARTNER_OPENAI_CLIENT_ID", "example-client")
+    monkeypatch.setenv("PUBPARTNER_OPENAI_CALLBACK", "http://127.0.0.1:8000/pubpartner")
+    secret = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    jwk = json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(secret.public_key()))
+    jwk["kid"] = "test"
+    params = {}
+    original = httpx.AsyncClient
+
+    def upstream(req):
+        if req.url.path.endswith("openid-configuration"):
+            return httpx.Response(200,json=dict(issuer=link.ISSUER,authorization_endpoint=link.ISSUER+"/authorize",
+                token_endpoint=link.ISSUER+"/token",jwks_uri=link.ISSUER+"/jwks"))
+        if req.url.path == "/token":
+            fields = parse_qs(req.content.decode())
+            challenge = base64.urlsafe_b64encode(hashlib.sha256(fields["code_verifier"][0].encode()).digest()).decode().rstrip("=")
+            assert challenge == params["code_challenge"][0]
+            claims = dict(sub="sample",iat=int(time.time()),exp=int(time.time())+120,nonce=params["nonce"][0],
+                          aud="example-client",iss=link.ISSUER,email="tester@example.com")
+            return httpx.Response(200,json=dict(access_token="test-access",expires_in=120,scope=link.PLAN_SCOPE,
+                id_token=jwt.encode(claims,secret,algorithm="RS256",headers={"kid":"test"})))
+        if req.url.path == "/jwks":
+            return httpx.Response(200,json={"keys":[jwk]})
+        assert req.headers["Authorization"] == "Bearer test-access"
+        if req.url.path == "/v1/models":
+            return httpx.Response(200,json={"models":[{"slug":"test-plan","visibility":"list"}]})
+        assert req.url.path == "/v1/responses"
+        body = json.loads(req.content)
+        assert body["store"] is False and body["stream"] is True
+        return httpx.Response(200,text='data: {"type":"response.output_text.delta","delta":"hello"}\n\ndata: {"type":"response.completed","response":{"status":"completed"}}\n\n')
+
+    monkeypatch.setattr(httpx,"AsyncClient",lambda **kw: original(transport=httpx.MockTransport(upstream),**kw))
+    async def exercise():
+        params.update(parse_qs(urlsplit((await link.begin(session))["url"]).query))
+        callback = {"state":params["state"][0],"code":"test-code"}
+        with pytest.raises(Exception, match="another session"):
+            await link.finish(other,callback)
+        result = await link.finish(session,callback)
+        assert result["linked"] and "test-access" not in json.dumps(result)
+        with pytest.raises(Exception, match="expired"):
+            await link.finish(session,callback)
+        token = link.current_session.set("session-one")
+        try:
+            answer = await PubPartnerProviderDispatcher().dispatch({},dict(provider="chatgpt_plan",model="test-plan"))
+            assert answer.ok and answer.raw_response == "hello"
+        finally:
+            link.current_session.reset(token)
+            link.accounts.pop("session-one", None)
+    asyncio.run(exercise())
+
+
+def test_connection_screen_and_saved_key(reach, tmp_path):
+    from playwright.sync_api import sync_playwright
+    base, token = reach
+    headers = {"Authorization": "Bearer "+token}
+    resp = httpx.post(base+"/api/pubpartner/providers/credentials",headers=headers,
+                      json=dict(provider="xai",model="test-grok",api_key="test-only-key"))
+    assert resp.status_code == 200
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        ctx = browser.new_context(viewport={"width":390,"height":844})
+        ctx.add_init_script("sessionStorage.setItem('pubcast_token',"+json.dumps(token)+");sessionStorage.setItem('pubcast_user',JSON.stringify({username:'josie-check',role:'owner'}));")
+        page = ctx.new_page()
+        page.goto(base+"/byok")
+        page.get_by_role("link",name="AI connections").click()
+        dialog = page.get_by_role("dialog",name="AI connections")
+        dialog.wait_for()
+        page.locator("#connectProvider").select_option("xai")
+        page.wait_for_function("document.querySelector('#connectionModel').value === 'test-grok'")
+        assert not page.locator("#connectionKey").is_visible()
+        page.get_by_role("button", name="Use connection",exact=True).click()
+        page.wait_for_function("!document.querySelector('#connections').open")
+        assert page.locator("#provider").input_value() == "xai"
+        assert page.locator("#providerCredential").input_value() == resp.json()["credential_model_id"]
+        page.get_by_role("button",name="Connections",exact=True).click()
+        page.locator("#connections summary").click()
+        archive = tmp_path / "guest.zip"
+        with ZipFile(archive,"w") as z:
+            z.writestr("character.yaml","name: Sample\nsummary: A test guest\n")
+            z.writestr("voice_profile.yaml","cadence: calm\nvocabulary: plain\n")
+        page.locator("#connectorCartridge").set_input_files(archive)
+        page.wait_for_function("document.querySelector('#connectorInfo').textContent.includes('Ready to start')")
+        page.locator("#connectorToggle").click()
+        page.wait_for_function("document.querySelector('#connectorToggle').textContent === 'Stop connector'")
+        async def get_brief():
+            from mcp import ClientSession
+            from mcp.client.streamable_http import streamablehttp_client
+            for _ in range(50):
+                try:
+                    async with httpx.AsyncClient(trust_env=False) as client:
+                        await client.get("http://127.0.0.1:8768/mcp")
+                    break
+                except httpx.ConnectError:
+                    await asyncio.sleep(.1)
+            async with streamablehttp_client("http://127.0.0.1:8768/mcp") as (r,w,_), ClientSession(r,w) as session:
+                await session.initialize()
+                assert "# Sample" in (await session.call_tool("pp_brief",{})).content[0].text
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=1) as worker:
+            worker.submit(asyncio.run, get_brief()).result(timeout=25)
+        page.locator("#connectorToggle").click()
+        page.wait_for_function("document.querySelector('#connectorToggle').textContent === 'Start connector'")
+        browser.close()
+
+
+def test_workspace_tunnel_creation(tmp_path, monkeypatch):
+    import shutil
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from modules.pubpartner_connector_host import ConnectorHost
+
+    if not shutil.which("tunnel-client"):
+        pytest.skip("Optional OpenAI tunnel client unavailable")
+    received = []
+
+    class Workspace(BaseHTTPRequestHandler):
+        def do_POST(self):
+            received.append((self.path, json.loads(self.rfile.read(int(self.headers["Content-Length"])))))
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"id":"tunnel_test","name":"PubPartner"}')
+
+        def log_message(self, *args):
+            pass
+
+    with ThreadingHTTPServer(("127.0.0.1", 0), Workspace) as server:
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        monkeypatch.setenv("CONTROL_PLANE_BASE_URL", f"http://127.0.0.1:{server.server_port}")
+        monkeypatch.setenv("OPENAI_ADMIN_KEY", "sk-admin-synthetic")
+        monkeypatch.setenv("PUBPARTNER_OPENAI_WORKSPACE_ID", "workspace_test")
+        monkeypatch.delenv("CONTROL_PLANE_TUNNEL_ID", raising=False)
+        try:
+            host = ConnectorHost(tmp_path)
+            assert asyncio.run(host.create_tunnel()) == "tunnel_test"
+            assert ConnectorHost(tmp_path).tunnel_id() == "tunnel_test"
+            with pytest.raises(ValueError, match="resume"):
+                asyncio.run(host.create_tunnel())
+            assert len(received) == 1 and received[0][1]["name"] == "PubPartner"
+        finally:
+            server.shutdown()
+            thread.join()

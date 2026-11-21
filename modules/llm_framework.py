@@ -764,6 +764,12 @@ def get_adapter_for_provider(provider: str, api_key: str = "") -> BotLLMAdapter:
     If no api_key is supplied, returns the shared registry instance which
     reads from os.environ (the host's own key).
     """
+    if provider in {"xai", "grok"}:
+        from .openai_compatible_provider import OpenAICompatibleBotAdapter
+        return OpenAICompatibleBotAdapter(
+            api_key=api_key or os.getenv("XAI_API_KEY", ""),
+            base_url="https://api.x.ai/v1",
+        )
     if api_key:
         if provider == "mistral":
             return MistralBotAdapter(api_key=api_key)

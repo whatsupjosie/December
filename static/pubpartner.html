@@ -3,6 +3,7 @@
 <html lang="en" data-theme="lantern">
 <head>
   <meta charset="utf-8" />
+  <meta name="referrer" content="no-referrer" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>PubPartner — Your AI friend, carried across models</title>
   <link rel="stylesheet" href="/static/pubpartner.css" />
@@ -47,6 +48,28 @@
       </form>
     </div>
   </div>
+  <dialog id="connections" aria-labelledby="connectionsTitle">
+    <form method="dialog"><button aria-label="Close connections">Close</button></form>
+    <h2 id="connectionsTitle">AI connections</h2>
+    <label>Use with PubPartner<select id="connectProvider">
+      <option value="chatgpt_plan">ChatGPT account</option><option value="openai">OpenAI API</option>
+      <option value="local">Local AI</option><option value="anthropic">Claude</option>
+      <option value="gemini">Gemini</option><option value="xai">Grok</option>
+      <option value="openai_compatible">Other compatible endpoint</option>
+    </select></label>
+    <details><summary>Share this host’s cartridge with an MCP client</summary>
+      <label>Host cartridge<input id="connectorCartridge" type="file" accept=".zip"></label>
+      <label>Connection route<select id="connectorRoute"><option value="http">Local MCP</option><option value="openai-tunnel">OpenAI private tunnel</option></select></label>
+      <p role="status" id="connectorInfo"></p><button type="button" id="connectorToggle">Start connector</button>
+    </details>
+    <p id="connectionStatus" role="status"></p>
+    <label id="connectionAccountRow" hidden>Saved connection<select id="connectionAccount"></select></label>
+    <label id="connectionModelRow" hidden>Model<input id="connectionModel" list="connectionModels"><datalist id="connectionModels"></datalist></label>
+    <label id="connectionKeyRow" hidden>API key<input id="connectionKey" type="password" autocomplete="off"></label>
+    <button id="connectAccount" type="button" hidden>Continue with ChatGPT</button>
+    <button id="disconnectAccount" type="button" hidden>Disconnect account</button>
+    <button id="applyConnection" type="button" hidden>Use connection</button>
+  </dialog>
   <div class="ambient-lantern ambient-left" aria-hidden="true"></div>
   <div class="ambient-lantern ambient-right" aria-hidden="true"></div>
   <div class="app-shell" id="appShell">
@@ -93,7 +116,7 @@
       </div>
       <div class="profile-chip">
         <span class="profile-orb">PP</span>
-        <div><strong id="accountName">Pub Partner</strong><small id="providerLabel">mock</small></div><button id="accountButton" class="account-button" type="button" title="Owner account">Sign in</button>
+        <div><strong id="accountName">Pub Partner</strong><small id="providerLabel">mock</small></div><button id="openConnections" type="button" class="account-button">Connections</button><button id="accountButton" class="account-button" type="button" title="Owner account">Sign in</button>
       </div>
     </header>
 
@@ -234,8 +257,8 @@
           <label>Friend<select id="friendId"><option value="alex" selected>Alex</option><option value="craig">Craig</option><option value="friend">Friend</option></select></label>
           <label>Provider<select id="provider">
             <option value="ollama" selected>Ollama local</option><option value="mock">Mock test (diagnostics only)</option><option value="offline">Offline rules (diagnostics only)</option>
-            <option value="openai">OpenAI / GPT</option><option value="anthropic">Anthropic / Claude</option><option value="gemini">Google Gemini</option>
-            <option value="mistral">Mistral</option><option value="groq">Groq</option><option value="opencode_zen">OpenCode Zen</option>
+            <option value="openai">OpenAI API</option><option value="chatgpt_plan">ChatGPT account</option><option value="anthropic">Anthropic / Claude</option><option value="gemini">Google Gemini</option>
+            <option value="mistral">Mistral</option><option value="groq">Groq</option><option value="xai">xAI (Grok)</option><option value="opencode_zen">OpenCode Zen</option>
             <option value="openai_compatible">OpenAI-compatible / LM Studio / llama.cpp / gateway</option><option value="echo">Echo test</option>
           </select></label>
           <label>Model<input id="modelName" value="gpt-4o-mini" list="ollamaModels" placeholder="llama3.1 / mistral / gemma3:1b" /><datalist id="ollamaModels"></datalist></label>
@@ -243,7 +266,7 @@
           <label>Credential<select id="providerCredential"><option value="">Environment key / no key</option></select></label>
           <label class="wide">Provider API key<input id="providerApiKey" type="password" autocomplete="off" placeholder="Stored encrypted; never shown again" /></label>
           <button id="saveProviderKey" type="button">Save Provider Key</button>
-          <p class="wide">These connections use provider API credentials. Chat subscription sign-in is not connected in this build.</p>
+          <p class="wide">Open Connections to link a ChatGPT account or find an existing provider credential.</p>
           <textarea id="guidance" placeholder="Add guidance: when I’m stressed, keep it short; for lyrics, never alter exact text."></textarea>
           <label class="wide checkline"><input id="allowFallback" type="checkbox" /> Allow offline diagnostic fallback (not a real AI reply)</label>
           <button id="saveGuidance">Save Guidance</button><button id="scanModels" type="button">Scan Models</button><button id="runPreflight" type="button">Preflight</button>
