@@ -137,6 +137,10 @@ async def call_ollama(
                     "options": {
                         "temperature": temperature,
                         "num_ctx": num_ctx,
+                        # Small CPU-only installations can spend more time synchronizing
+                        # threads than evaluating this 360M starter model.
+                        **({"num_thread": min(2, os.cpu_count() or 1)}
+                           if model == "smollm2:360m-instruct-q4_K_M" else {}),
                         "num_predict": max_tokens,
                     },
                 },

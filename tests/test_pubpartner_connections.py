@@ -387,3 +387,15 @@ def test_choose_detected_local_model_without_typing(reach):
         assert page.locator("#modelName").input_value() == "my-local-model"
         assert not page.locator("#allowFallback").is_checked()
         browser.close()
+
+
+def test_starter_prompt_uses_scoped_text_and_preserves_wording():
+    from modules.pubpartner_provider import _starter_prompt
+    message = "Keep both lines.\n  Keep these spaces."
+    packet = {"f":{"name":"Test","bound":["respect privacy"]},"msg":{"text":message},
+              "vessel":{"claims":["scoped memory"],"prompt_text":"duplicated diagnostic context"}}
+    prompt = _starter_prompt({"llm_prompt_json":json.dumps(packet)}, "full")
+    assert prompt.endswith(message) and "respect privacy" in prompt and "scoped memory" in prompt
+    assert "duplicated diagnostic context" not in prompt
+    del packet["msg"]["text"]
+    assert _starter_prompt({"llm_prompt_json":json.dumps(packet)}, "reference-only") == "reference-only"
