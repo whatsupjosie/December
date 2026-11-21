@@ -21,6 +21,8 @@ const reachFileMode=false;
 const $=id=>document.getElementById(id);
 const soloTextarea=$('soloTextarea'),draftArea=$('draftArea');
 let coWriting=false,initializing=false,generating=false,chatSending=false,editingIdx=null;
+let committed=['Original'],buffer=[];
+function render(){} // the production desk wraps render to synchronize its iframe
 window.receivedInputs=0;window.writerNotes=[];
 function addChat(role,message){writerNotes.push({role,message});}
 soloTextarea.addEventListener('input',()=>receivedInputs++);
@@ -77,8 +79,7 @@ def app():
         page.goto("http://localhost/test-parent")
         page.evaluate("twoiSetPresentation('typewriter')")
         page.evaluate("soloTextarea.focus(); soloTextarea.setSelectionRange(soloTextarea.value.length,soloTextarea.value.length)")
-        page.evaluate("twoiSetPresentation(\'typewriter\')")
-        page.wait_for_function("document.querySelector(\'#twoiTypewriterConsole\')?.dataset.ready === \'true\'", timeout=20000)
+        page.wait_for_function("document.querySelector('#twoiTypewriterConsole')?.dataset.ready === 'true'", timeout=20000)
         child = page.frame_locator("#twoiTypewriterConsole")
         child.locator("#painted").wait_for()
         yield page, child
@@ -113,7 +114,7 @@ def test_touch_keyboard_edits_real_manuscript_and_preserves_native_undo(app):
 
 def test_closing_keyboard_and_spoofed_messages_cannot_edit_document(app):
     page,child = app
-    page.evaluate("twoiSetPresentation(\'notebook\')")
+    page.evaluate("twoiSetPresentation('notebook')")
     assert page.evaluate("document.body.dataset.twoiDesk") == "notebook"
     _key(child,"A","X")
     page.wait_for_timeout(60)
