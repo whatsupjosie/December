@@ -129,3 +129,53 @@ def test_the_typewriter_can_be_chosen_from_any_window_and_its_sounds_start_off(l
     assert stored is None or '"click":false' in stored
     page.evaluate("twoiSetPresentation('notebook')")
     assert page.evaluate("document.body.dataset.twoiDesk") == "notebook" and page.evaluate("spineCanvas.width > 0")
+
+
+def test_protected_write_line_rejects_edits_but_other_lines_remain_editable(laptop):
+    """Reconcile the useful lock behavior from 2i-beta-polish with the newer page."""
+    page = laptop
+    original = "One.\nTwo is locked.\nThree."
+    page.locator("#soloTextarea").fill(original)
+    page.evaluate("lockedLines.add(1); render()")
+    page.evaluate("""() => {
+      const t = document.getElementById('soloTextarea');
+      t.focus();
+      const at = t.value.indexOf('Two') + 3;
+      t.setSelectionRange(at, at);
+    }""")
+    page.keyboard.insert_text("INTRUSION")
+    assert page.input_value("#soloTextarea") == original
+    assert page.evaluate("committed.join('\\n')") == original
+    page.evaluate("""() => {
+      const t = document.getElementById('soloTextarea');
+      t.focus(); t.setSelectionRange(0, t.value.length);
+    }""")
+    page.keyboard.insert_text("replace everything")
+    assert page.input_value("#soloTextarea") == original
+    page.evaluate("""() => {
+      const t = document.getElementById('soloTextarea');
+      t.focus(); t.setSelectionRange(t.value.length, t.value.length);
+    }""")
+    page.keyboard.insert_text(" Free")
+    assert page.input_value("#soloTextarea") == original + " Free"
+
+
+def test_protected_line_tracks_insertion_and_deletion_above_it(laptop):
+    """Line protection follows the original paragraph, not its old row number."""
+    page = laptop
+    page.locator("#soloTextarea").fill("A\nB locked\nC")
+    page.evaluate("lockedLines.add(1); render()")
+    page.evaluate("""() => {
+      const t = document.getElementById('soloTextarea');
+      t.focus(); t.setSelectionRange(0, 0);
+    }""")
+    page.keyboard.press("Enter")
+    assert page.input_value("#soloTextarea") == "\nA\nB locked\nC"
+    assert sorted(page.evaluate("[...lockedLines]")) == [2]
+    page.evaluate("""() => {
+      const t = document.getElementById('soloTextarea');
+      t.focus(); t.setSelectionRange(0, 0);
+    }""")
+    page.keyboard.press("Delete")
+    assert page.input_value("#soloTextarea") == "A\nB locked\nC"
+    assert sorted(page.evaluate("[...lockedLines]")) == [1]
