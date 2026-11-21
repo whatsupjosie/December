@@ -19,7 +19,8 @@ from modules.pubpartner_provider import PubPartnerProviderDispatcher
 from tests.test_pubpartner_menus_browser import reach
 
 
-def test_consent_and_plan_turn(monkeypatch):
+@pytest.mark.parametrize("grant,model_list", [(True, True), (True, False), (False, False)])
+def test_consent_and_plan_turn(monkeypatch, grant, model_list):
     session = {"authenticated": True, "payload": {"jti": "session-one"}}
     other = {"authenticated": True, "payload": {"jti": "session-two"}}
     monkeypatch.setenv("PUBPARTNER_OPENAI_CLIENT_ID", "example-client")
@@ -40,13 +41,14 @@ def test_consent_and_plan_turn(monkeypatch):
             assert challenge == params["code_challenge"][0]
             claims = dict(sub="sample",iat=int(time.time()),exp=int(time.time())+120,nonce=params["nonce"][0],
                           aud="example-client",iss=link.ISSUER,email="tester@example.com")
-            return httpx.Response(200,json=dict(access_token="test-access",expires_in=120,scope=link.PLAN_SCOPE,
+            return httpx.Response(200,json=dict(access_token="test-access",expires_in=120,scope=link.PLAN_SCOPE if grant else "openid",
                 id_token=jwt.encode(claims,secret,algorithm="RS256",headers={"kid":"test"})))
         if req.url.path == "/jwks":
             return httpx.Response(200,json={"keys":[jwk]})
         assert req.headers["Authorization"] == "Bearer test-access"
         if req.url.path == "/v1/models":
-            return httpx.Response(200,json={"models":[{"slug":"test-plan","visibility":"list"}]})
+            assert grant
+            return httpx.Response(200,json={"models":[{"slug":"test-plan","visibility":"list"}] if model_list else []})
         assert req.url.path == "/v1/responses"
         body = json.loads(req.content)
         assert body["store"] is False and body["stream"] is True
@@ -54,7 +56,8 @@ def test_consent_and_plan_turn(monkeypatch):
 
     monkeypatch.setattr(httpx,"AsyncClient",lambda **kw: original(transport=httpx.MockTransport(upstream),**kw))
     async def exercise():
-        params.update(parse_qs(urlsplit((await link.begin(session))["url"]).query))
+        params.update(parse_qs(urlsplit((await link.begin(session, host_id="test-host", origin="http://127.0.0.1:8000"))["url"]).query))
+        assert params["ext_agent_host_id"][0].startswith("urn:uuid:")
         callback = {"state":params["state"][0],"code":"test-code"}
         with pytest.raises(Exception, match="another session"):
             await link.finish(other,callback)
@@ -65,7 +68,12 @@ def test_consent_and_plan_turn(monkeypatch):
         token = link.current_session.set("session-one")
         try:
             answer = await PubPartnerProviderDispatcher().dispatch({},dict(provider="chatgpt_plan",model="test-plan"))
-            assert answer.ok and answer.raw_response == "hello"
+            assert result["plan_enabled"] is grant
+            assert bool(result["models"]) is model_list
+            if model_list:
+                assert answer.ok and answer.raw_response == "hello"
+            else:
+                assert not answer.ok
         finally:
             link.current_session.reset(token)
             link.accounts.pop("session-one", None)
@@ -164,3 +172,157 @@ def test_workspace_tunnel_creation(tmp_path, monkeypatch):
         finally:
             server.shutdown()
             thread.join()
+
+
+def test_disconnect_wins_during_consent(monkeypatch):
+    session = {"authenticated": True, "payload": {"jti": "disconnect-test"}}
+    params = {}
+    monkeypatch.setenv("PUBPARTNER_OPENAI_CLIENT_ID", "client")
+    monkeypatch.setenv("PUBPARTNER_OPENAI_CALLBACK", "http://127.0.0.1:8000/pubpartner")
+    secret = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    jwk = json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(secret.public_key()))
+    jwk["kid"] = "test"
+    original = httpx.AsyncClient
+
+    async def exercise():
+        reading_models, resume = asyncio.Event(), asyncio.Event()
+
+        async def upstream(req):
+            if req.url.path.endswith("openid-configuration"):
+                return httpx.Response(200, json=dict(issuer=link.ISSUER, authorization_endpoint=link.ISSUER+"/authorize",
+                    token_endpoint=link.ISSUER+"/token", jwks_uri=link.ISSUER+"/jwks"))
+            if req.url.path == "/token":
+                now = int(time.time())
+                claims = dict(sub="u", iat=now, exp=now+60, nonce=params["nonce"][0], aud="client", iss=link.ISSUER)
+                return httpx.Response(200, json=dict(access_token="test", expires_in=60, scope=link.PLAN_SCOPE,
+                    id_token=jwt.encode(claims, secret, algorithm="RS256", headers={"kid":"test"})))
+            if req.url.path == "/jwks":
+                return httpx.Response(200, json={"keys":[jwk]})
+            reading_models.set()
+            await resume.wait()
+            return httpx.Response(200, json={"models":[{"slug":"test","visibility":"list"}]})
+
+        from modules.pubpartner_routes import chatgpt_disconnect
+        monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: original(transport=httpx.MockTransport(upstream), **kw))
+        params.update(parse_qs(urlsplit((await link.begin(session, host_id="test-host", origin="http://127.0.0.1:8000"))["url"]).query))
+        task = asyncio.create_task(link.finish(session, {"state":params["state"][0], "code":"sample"}))
+        await asyncio.wait_for(reading_models.wait(), 3)
+        await chatgpt_disconnect(identity=session)
+        resume.set()
+        await asyncio.gather(task, return_exceptions=True)
+        assert not link.status("disconnect-test")["linked"]
+    try:
+        asyncio.run(exercise())
+    finally:
+        link.accounts.pop("disconnect-test", None)
+        link.pending.pop("disconnect-test", None)
+
+
+def test_callback_credentials_do_not_enter_reach_log(reach, tmp_path_factory):
+    base, _ = reach
+    # A synthetic authorization callback through the production launcher.
+    marker = "synthetic-callback-value-for-log-check"
+    response = httpx.get(base + "/pubpartner", params={"state":"synthetic-state", "code":marker})
+    assert response.status_code == 200
+    logs = list(tmp_path_factory.getbasetemp().glob("pp_menus*/reach.log"))
+    assert logs
+    for log in logs:
+        content = log.read_text()
+        assert "/health" in content
+        assert marker not in content
+
+
+def test_wrong_callback_origin_is_rejected_before_sign_in(monkeypatch):
+    from fastapi import HTTPException
+    monkeypatch.setenv("PUBPARTNER_OPENAI_CLIENT_ID", "sample")
+    monkeypatch.setenv("PUBPARTNER_OPENAI_CALLBACK", "http://127.0.0.1:8000/pubpartner")
+    with pytest.raises(HTTPException, match="same address"):
+        asyncio.run(link.begin({"authenticated":True, "payload":{"jti":"test"}},
+                               host_id="local-test", origin="http://localhost:8000"))
+
+
+def test_interrupted_tunnel_record_keeps_local_controls_available(tmp_path, monkeypatch):
+    from modules.pubpartner_connector_host import ConnectorHost
+    monkeypatch.delenv("CONTROL_PLANE_TUNNEL_ID", raising=False)
+    host = ConnectorHost(tmp_path)
+    host.tunnel_record.parent.mkdir(parents=True)
+    host.tunnel_record.write_text("{")
+    state = asyncio.run(host.stop())
+    assert state["tunnel_needs_recovery"] and not state["can_create_tunnel"]
+    assert not state["running"]
+
+
+@pytest.mark.parametrize("provider,variable,host,header", [
+    ("xai","XAI_API_KEY","api.x.ai","authorization"),
+    ("openai","OPENAI_API_KEY","api.openai.com","authorization"),
+    ("anthropic","ANTHROPIC_API_KEY","api.anthropic.com","x-api-key"),
+    ("gemini","GEMINI_API_KEY","generativelanguage.googleapis.com","x-goog-api-key"),
+])
+@pytest.mark.parametrize("accepted", [True, False])
+def test_hosted_provider_selection(monkeypatch, provider, variable, host, header, accepted):
+    original = httpx.AsyncClient
+    key = "synthetic-provider-key"
+    monkeypatch.setenv(variable, key)
+    calls = []
+
+    def upstream(request):
+        calls.append(request.url.host)
+        assert request.headers[header] == ("Bearer " + key if header == "authorization" else key)
+        assert "current-turn" in request.content.decode()
+        if not accepted:
+            return httpx.Response(401, text="rejected " + key)
+        if provider == "anthropic":
+            return httpx.Response(200, json={"stop_reason":"end_turn","content":[{"type":"text","text":"hello"}]})
+        if provider == "gemini":
+            return httpx.Response(200, json={"candidates":[{"finishReason":"STOP","content":{"parts":[{"text":"hello"}]}}]})
+        if provider == "xai":
+            payload = {"choices":[{"delta":{"content":"hello"}, "finish_reason":"stop"}]}
+            return httpx.Response(200, text="data: "+json.dumps(payload)+"\n\ndata: [DONE]\n\n")
+        return httpx.Response(200, text='data: {"type":"response.output_text.delta","delta":"hello"}\n\ndata: {"type":"response.completed","response":{"status":"completed"}}\n\n')
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: original(transport=httpx.MockTransport(upstream), **kwargs))
+    result = asyncio.run(PubPartnerProviderDispatcher().dispatch(
+        {"llm_prompt_text":"current-turn"}, {"provider":provider,"model":"synthetic-model"}))
+    assert calls == [host]
+    assert result.ok is accepted
+    assert result.raw_response == ("hello" if accepted else "")
+    assert key not in json.dumps(result.as_dict())
+
+
+def test_bad_memory_does_not_replace_selected_cartridge(tmp_path):
+    from io import BytesIO
+    from modules.pubpartner_connector_host import ConnectorHost
+    host = ConnectorHost(tmp_path)
+
+    def archive(memories=None):
+        data = BytesIO()
+        with ZipFile(data, "w") as z:
+            z.writestr("character.yaml", "name: Sample\nsummary: Test\n")
+            z.writestr("voice_profile.yaml", "cadence: calm\nvocabulary: plain\n")
+            if memories:
+                z.writestr("memories.jsonl", memories)
+        return data.getvalue()
+
+    original = archive()
+    asyncio.run(host.select(original))
+    with pytest.raises(ValueError):
+        asyncio.run(host.select(archive("incomplete record")))
+    assert host.selected.read_bytes() == original
+
+
+def test_cancelled_callback_keeps_retry_control(reach):
+    from playwright.sync_api import sync_playwright
+    base, token = reach
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        page = browser.new_page(viewport={"width":390,"height":844})
+        page.add_init_script("sessionStorage.setItem('pubcast_token',"+json.dumps(token)+")")
+        page.route("**/api/pubpartner/chatgpt/account", lambda route: route.fulfill(
+            json={"configured":True, "linked":False, "models":[]}))
+        page.goto(base+"/pubpartner?state=synthetic&error=access_denied")
+        page.locator("#connectionError").wait_for()
+        page.locator("#connectAccount").wait_for()
+        assert urlsplit(page.url).query == ""
+        page.get_by_role("button",name="Close connections").click()
+        assert page.locator("#connectionError").is_hidden()
+        browser.close()

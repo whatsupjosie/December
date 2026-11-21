@@ -5,7 +5,7 @@ import json
 import tempfile
 import zipfile
 
-import yaml
+import sqlite3
 from importlib.util import find_spec
 import os
 from pathlib import Path
@@ -28,25 +28,10 @@ class ConnectorHost:
         return Path(configured) if configured else None
 
     async def select(self, payload):
-        from pubpartner.schema import Identity, VoiceProfile
         async with self.lock:
             if self.status()["running"]:
                 raise ValueError("Stop the running connector before selecting another cartridge.")
-            with zipfile.ZipFile(io.BytesIO(payload)) as archive:
-                files = [f for f in archive.infolist() if not f.is_dir()]
-                if len(files) > 128 or sum(f.file_size for f in files) > 16 * 1024 * 1024:
-                    raise ValueError("Choose a cartridge up to 16 MiB unpacked.")
-                parents = {Path(f.filename).parent for f in files}
-                if (len(parents) != 1 or any(".." in f.filename or "\\" in f.filename or f.filename.startswith("/")
-                                             for f in files) or len({f.filename for f in files}) != len(files)):
-                    raise ValueError("Choose a cartridge with one folder of files.")
-                folder = parents.pop()
-                if len(folder.parts) > 1:
-                    raise ValueError("Choose a cartridge with at most one outer folder.")
-                Identity.from_dict(yaml.safe_load(archive.read((folder / "character.yaml").as_posix())))
-                VoiceProfile.from_dict(yaml.safe_load(archive.read((folder / "voice_profile.yaml").as_posix())))
-                if archive.testzip():
-                    raise ValueError("Cartridge integrity check failed.")
+            await asyncio.to_thread(self.validate, payload)
             self.selected.parent.mkdir(parents=True, exist_ok=True)
             with tempfile.NamedTemporaryFile(dir=self.selected.parent, delete=False) as tmp:
                 tmp.write(payload)
@@ -56,12 +41,42 @@ class ConnectorHost:
                 Path(tmp.name).unlink(missing_ok=True)
             return self.status()
 
+    @staticmethod
+    def validate(payload):
+        from pubpartner.cartridge import load_cartridge
+        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+            entries = archive.infolist()
+            files = [entry for entry in entries if not entry.is_dir()]
+            if len(entries) > 129 or sum(entry.file_size for entry in entries) > 16 * 1024 * 1024:
+                raise ValueError("Choose a cartridge up to 16 MiB unpacked.")
+            parents = {Path(entry.filename).parent for entry in files}
+            if len(parents) != 1:
+                raise ValueError("Choose one folder of cartridge files.")
+            folder = parents.pop()
+            if (len(folder.parts) > 1 or len({entry.filename for entry in entries}) != len(entries)
+                    or any(".." in entry.filename or "\\" in entry.filename or ":" in entry.filename
+                           or entry.filename.startswith("/") or (entry.is_dir() and Path(entry.filename) != folder)
+                           for entry in entries)):
+                raise ValueError("Choose a cartridge with at most one outer folder.")
+            with tempfile.TemporaryDirectory() as scratch:
+                archive.extractall(scratch)
+                try:
+                    with load_cartridge(Path(scratch) / folder) as cartridge:
+                        cartridge.memory.count()
+                except sqlite3.Error:
+                    raise ValueError("The cartridge memory database could not be read.") from None
+
     def tunnel_id(self):
         configured = os.getenv("CONTROL_PLANE_TUNNEL_ID")
         if configured:
             return configured
         if self.tunnel_record.is_file():
-            record = json.loads(self.tunnel_record.read_text())
+            try:
+                record = json.loads(self.tunnel_record.read_text())
+            except (UnicodeError, ValueError, OSError):
+                return None
+            if not isinstance(record, dict):
+                return None
             if record.get("workspace") == os.getenv("PUBPARTNER_OPENAI_WORKSPACE_ID"):
                 return record.get("id")
         return None
@@ -93,6 +108,7 @@ class ConnectorHost:
 
     def status(self):
         source = self.source()
+        tunnel_id = self.tunnel_id()
         return {
             "cartridge_configured": bool(source and Path(source).exists()),
             "sdk_installed": find_spec("mcp") is not None,
@@ -100,8 +116,9 @@ class ConnectorHost:
             "can_create_tunnel": bool(not self.tunnel_record.exists() and os.getenv("OPENAI_ADMIN_KEY")
                                      and os.getenv("PUBPARTNER_OPENAI_WORKSPACE_ID")
                                      and (os.getenv("CONTROL_PLANE_API_KEY") or os.getenv("OPENAI_API_KEY"))),
-            "tunnel_id": self.tunnel_id(),
-            "tunnel_configured": bool(self.tunnel_id() and
+            "tunnel_id": tunnel_id,
+            "tunnel_needs_recovery": self.tunnel_record.exists() and not tunnel_id,
+            "tunnel_configured": bool(tunnel_id and
                                       (os.getenv("CONTROL_PLANE_API_KEY") or os.getenv("OPENAI_API_KEY"))),
             "running": self.process is not None and self.process.returncode is None,
             "route": self.route,

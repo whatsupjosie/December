@@ -1098,6 +1098,8 @@ async def lifespan(application: FastAPI):
         cricket_keeper=cricket_keeper, vessel_runtime=partner_vessel, scoped_memory=True,
     )
     application.state.pubpartner_spine.provider_dispatcher.runtime_repo_root = Path(__file__).resolve().parent
+    from modules.pubpartner_chatgpt_link import callback_access_filter
+    logging.getLogger("uvicorn.access").addFilter(callback_access_filter)
     from modules.pubpartner_connector_host import ConnectorHost
     application.state.pubpartner_connector = ConnectorHost(DATA_DIR)
     application.include_router(pubpartner_routes.router)

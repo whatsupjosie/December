@@ -6,10 +6,12 @@ memory and are usable only with the originating authenticated PubCast session.
 import base64
 import hashlib
 import os
+import logging
 import secrets
 import time
 from contextvars import ContextVar
 from urllib.parse import urlencode, urlsplit
+from uuid import NAMESPACE_URL, uuid5
 
 import httpx
 from fastapi import HTTPException
@@ -19,6 +21,20 @@ PLAN_SCOPE = "chatgpt.tokens.use.direct"
 current_session = ContextVar("chatgpt_link_session", default="")
 pending = {}
 accounts = {}
+
+
+class CallbackAccessFilter(logging.Filter):
+    """Preserve the access event while removing callback parameters."""
+    def filter(self, record):
+        args = record.args
+        if isinstance(args, tuple) and len(args) == 5 and isinstance(args[2], str):
+            path, separator, _ = args[2].partition("?")
+            if separator and path == "/pubpartner":
+                record.args = (*args[:2], path, *args[3:])
+        return True
+
+
+callback_access_filter = CallbackAccessFilter()
 
 
 def configured():
@@ -57,14 +73,15 @@ async def metadata(client):
     return doc
 
 
-async def begin(identity):
+async def begin(identity, *, host_id, origin):
     session = require_session(identity)
     if not configured():
         raise HTTPException(409, "This host needs a registered PubPartner OpenAI client and callback.")
     callback = os.environ["PUBPARTNER_OPENAI_CALLBACK"]
+    callback_url = urlsplit(callback)
+    if origin != f"{callback_url.scheme}://{callback_url.netloc}":
+        raise HTTPException(409, "Open PubPartner on the same address as its registered ChatGPT callback.")
     client_id = os.environ["PUBPARTNER_OPENAI_CLIENT_ID"]
-    async with httpx.AsyncClient(timeout=12) as client:
-        doc = await metadata(client)
     prune(pending)
     state = secrets.token_urlsafe(32)
     verifier = secrets.token_urlsafe(48)
@@ -72,7 +89,11 @@ async def begin(identity):
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
     pending[session] = dict(state=state, verifier=verifier, nonce=nonce, expires=time.monotonic()+600,
                             callback=callback, client_id=client_id)
-    params = dict(client_id=client_id, redirect_uri=callback, response_type="code",
+    async with httpx.AsyncClient(timeout=12) as client:
+        doc = await metadata(client)
+    if pending.get(session, {}).get("state") != state:
+        raise HTTPException(409, "This sign-in attempt was cancelled or replaced.")
+    params = dict(ext_agent_host_id=uuid5(NAMESPACE_URL, "pubpartner:openai:" + host_id).urn, client_id=client_id, redirect_uri=callback, response_type="code",
                   resource="https://api.openai.com/v1", scope=f"openid email profile resource.invoke {PLAN_SCOPE}", prompt="select_account consent",
                   state=state, nonce=nonce, code_challenge=challenge, code_challenge_method="S256")
     return {"url": doc["authorization_endpoint"] + "?" + urlencode(params)}
@@ -84,9 +105,9 @@ async def finish(identity, body):
     session = require_session(identity)
     prune(pending)
     attempt = pending.get(session)
-    if not attempt or not secrets.compare_digest(str(body.get("state", "")).encode(), attempt["state"].encode()):
+    if not attempt or attempt.get("used") or not secrets.compare_digest(str(body.get("state", "")).encode(), attempt["state"].encode()):
         raise HTTPException(400, "This sign-in request expired or belongs to another session.")
-    del pending[session]
+    attempt["used"] = True
     if body.get("error") or not body.get("code"):
         raise HTTPException(400, "Account connection cancelled.")
     client_id = attempt["client_id"]
@@ -111,14 +132,18 @@ async def finish(identity, body):
                             options={"require":["sub","iat","exp","nonce"]})
         if claims["nonce"] != attempt["nonce"] or claims.get("azp", client_id) != client_id:
             raise ValueError("Identity did not match sign-in request")
-        if PLAN_SCOPE not in tokens.get("scope", "").split():
-            raise HTTPException(403, "Account signed in. ChatGPT plan usage was not granted.")
-        access = tokens["access_token"]
-        catalog = await client.get("https://api.openai.com/v1/models", headers={"Authorization":"Bearer "+access})
-        catalog.raise_for_status()
-        models = [m["slug"] for m in catalog.json().get("models", []) if m.get("visibility")=="list" and m.get("slug")]
-        if not models:
-            raise HTTPException(409, "This account returned no eligible models.")
+        access = ""
+        models = []
+        if PLAN_SCOPE in tokens.get("scope", "").split():
+            access = tokens["access_token"]
+            catalog = await client.get("https://api.openai.com/v1/models", headers={"Authorization":"Bearer "+access})
+            catalog.raise_for_status()
+            models = [m["slug"] for m in catalog.json().get("models", [])
+                      if m.get("visibility") == "list" and m.get("slug")]
+    prune(pending)
+    if pending.get(session) is not attempt:
+        raise HTTPException(409, "This sign-in attempt expired, was disconnected, or was replaced.")
+    del pending[session]
     prune(accounts)
     accounts[session] = dict(access=access, models=models, label=claims.get("email") or claims["sub"],
                              expires=time.monotonic()+int(tokens["expires_in"]))
@@ -128,7 +153,7 @@ async def finish(identity, body):
 def status(session):
     prune(accounts)
     record = accounts.get(session)
-    return {"configured": configured(), "linked": bool(record), "label": record["label"] if record else "",
+    return {"configured": configured(), "linked": bool(record), "plan_enabled": bool(record and record["access"]), "label": record["label"] if record else "",
             "models": record["models"] if record else []}
 
 

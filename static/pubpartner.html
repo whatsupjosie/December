@@ -62,6 +62,7 @@
       <label>Connection route<select id="connectorRoute"><option value="http">Local MCP</option><option value="openai-tunnel">OpenAI private tunnel</option></select></label>
       <p role="status" id="connectorInfo"></p><button type="button" id="connectorToggle">Start connector</button>
     </details>
+    <p id="connectionError" role="alert" hidden></p>
     <p id="connectionStatus" role="status"></p>
     <label id="connectionAccountRow" hidden>Saved connection<select id="connectionAccount"></select></label>
     <label id="connectionModelRow" hidden>Model<input id="connectionModel" list="connectionModels"><datalist id="connectionModels"></datalist></label>

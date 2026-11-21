@@ -143,7 +143,7 @@ class PubPartnerProviderDispatcher:
         if provider == "chatgpt_plan":
             from .pubpartner_chatgpt_link import current_session, status
             account = status(current_session.get())
-            return {"ok": True, "provider": provider, "available": account["linked"], "models": account["models"]}
+            return {"ok": True, "provider": provider, "available": bool(account["models"]), "models": account["models"]}
         if provider == "openai_compatible":
             base_url = str(config.get("base_url") or "").strip()
             require_key = bool(config.get("require_api_key", True))

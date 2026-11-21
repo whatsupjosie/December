@@ -178,7 +178,10 @@
         if (location.hash === '#connections') {
           if (hasCallback) {
             try { await api('/api/pubpartner/chatgpt/finish',{method:'POST',body:JSON.stringify(Object.fromEntries(callback))}); }
-            catch (error) { openConnections(); ++lookupNumber; $('connectionStatus').textContent = error.message; }
+            catch (error) {
+              $('connectionError').textContent = error.message;
+              $('connectionError').hidden = false;
+            }
           }
           if (!connectionDialog.open) openConnections();
         }
@@ -1409,7 +1412,10 @@
         planModels = account.models;
         $('connectAccount').hidden = !account.configured || !authState.token;
         $('disconnectAccount').hidden = !account.linked;
-        if (account.linked) {
+        if (account.linked && !account.models.length) {
+          const detail = account.plan_enabled ? 'No eligible models are available.' : 'ChatGPT plan usage was not granted.';
+          $('connectionStatus').textContent = 'Signed in as ' + account.label + '. ' + detail + ' Reconnect or choose another provider.';
+        } else if (account.linked) {
           $('connectionStatus').textContent = 'Connected as ' + account.label + '. Eligible requests use this ChatGPT plan.';
           $('connectionModels').replaceChildren(...account.models.map(m => new Option(m,m)));
           $('connectionModel').value = account.models[0];
@@ -1457,6 +1463,7 @@
         !state.cartridge_configured ? 'Choose the cartridge ZIP to share.' :
         !state.sdk_installed ? 'Install the PubPartner connector extra on the host.' :
         tunnel && !state.tunnel_installed ? 'Install OpenAI tunnel-client on this host.' :
+        tunnel && state.tunnel_needs_recovery ? 'Check the workspace tunnel list and set CONTROL_PLANE_TUNNEL_ID to resume.' :
         createTunnel ? 'Create a private tunnel in the configured OpenAI workspace.' :
         tunnel && !state.tunnel_configured ? 'Configure a workspace tunnel ID and runtime credential.' :
         state.exit_code ? 'Connector exited with code ' + state.exit_code : 'Ready to start.';
@@ -1492,7 +1499,12 @@
   }
   $('openConnections').onclick = openConnections;
   $('connectProvider').onchange = inspectConnection;
-  connectionDialog.addEventListener('close', () => { ++lookupNumber; $('connectionKey').value = ''; });
+  connectionDialog.addEventListener('close', () => {
+    ++lookupNumber;
+    $('connectionKey').value = '';
+    $('connectionError').hidden = true;
+    $('connectionError').textContent = '';
+  });
   $('connectionAccount').onchange = () => {
     $('connectionModel').value = found.find(row => row.model_id === $('connectionAccount').value)?.model_name || '';
   };

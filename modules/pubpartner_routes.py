@@ -587,9 +587,10 @@ async def chatgpt_account(identity: Dict[str, Any] = Depends(current_identity)):
 
 
 @router.post("/chatgpt/connect")
-async def chatgpt_connect(identity: Dict[str, Any] = Depends(current_identity)):
+async def chatgpt_connect(request: Request, identity: Dict[str, Any] = Depends(current_identity)):
     try:
-        return await chatgpt_link.begin(identity)
+        return await chatgpt_link.begin(identity, host_id=request.app.state.guest_admission.host_id,
+                                        origin=request.headers.get("origin") or str(request.base_url).rstrip("/"))
     except HTTPException:
         raise
     except Exception:
