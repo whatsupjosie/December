@@ -37,3 +37,24 @@ C. Verify `file://` typewriter interaction explicitly. The live iframe targets a
 D. Re-run accessibility, phone/tablet visual acceptance, DOCX/exports, and 2i's full test suite. Resolve only defects demonstrated by observable behavior.
 
 **No main merge or release claim.** This is a contained reconciliation and acceptance advance, not the declaration that 2i is feature-complete.
+
+## Non-Chromium execution evidence (same-day follow-up)
+
+The local execution environment cannot resolve `github.com` for a clone, so the complete repository cannot be installed or exercised here. However, the connected GitHub API supplied **the actual current production JavaScript**; it was executed in a separate V8 JavaScript isolate using deterministic fake browser/HTTP boundaries. This is narrower than Node, Chromium, an actual server, or real IndexedDB.
+
+**Final V8 source-execution checks: 44 passed, 0 failed.** Counts are individual assertions/scenarios, not a claim about the project's entire test suite:
+
+| Boundary exercised | Passed | Tested |
+| --- | ---: | --- |
+| Actual `typewriter-input.js` and `narrative-core.js` | 16 | Caret/selection/Unicode/backspace/blocked input; protected-line remapping; bounded draft preservation; prior-scene context |
+| Actual `saveDocument` extracted from `reach.js` | 9 | Hosted save; late edits and revision 2; shared in-flight save; 409/503 failures; missing browser recovery; no-network; Foresight-file guard; wrong-document race |
+| Actual `studio-desk.js` | 13 | View switching, iframe handshake, Write/Collab routing, busy and invalid-state restrictions, spoofed-window/origin rejection, file-session guard |
+| **Both actual** `studio-desk.js` and `typewriter-input.js` together | 6 | End-to-end fake-DOM relay for insertion, emoji backspace, Collab draft, protected beforeinput veto, foreign-origin rejection and busy-state rejection |
+
+Harness-only false starts: initial V8 simulated browser lacked `URLSearchParams`, and an early parameter-based fake did not allow mutable state; those were repaired and rerun. An initial combined-adapter fake lacked `addEventListener`, then was repaired. The **final** results above exclude those harness setup failures. These results do not demonstrate that browsers render the UI or that disk persistence survives a restart.
+
+**Additional inspection (non-execution):** all 17 external script/style references in `2i/writers-room-v22.html` resolve to tracked repository files through its hosted routes, with zero missing or duplicate links. The 48-slot typewriter hotspot manifest has zero missing required keys, duplicate IDs, overlapping keyboxes, out-of-range coordinates, or unwanted studio action IDs. Its referenced image exists in the repository. No image rendering was claimed.
+
+**New committed regression suite:** `tests/test_2i_typewriter_real_adapter_node.js` directly loads the real production input adapter and studio desk into a fake DOM rather than substituting a fake editor adapter. Six scenarios are encoded and its JavaScript grammar parsed, but `node --test` on this newly created file remains **NOT RUN** until a local checkout is available. The six equivalent actual-source scenarios did run in the isolated V8 test above.
+
+All production 2i source, manuscript storage format, and existing user content remain untouched by this integration branch. No CI workflows were invoked. The PR remains draft.
