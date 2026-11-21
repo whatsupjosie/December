@@ -250,6 +250,9 @@ async function saveToFile() {
   const savingId = documentId;
   const savingMutation = mutation;
   fileSavingId = savingId;
+  // This Save writes recovery immediately. Its pending autosave must not
+  // replace the result of the picker after cancellation or a write error.
+  clearTimeout(serverTimer);
   try {
     writeRecovery();
     const result = await writeOfflineManuscript({

@@ -26,7 +26,7 @@ function fixture() {
   const writes = [], recoveries = [], notices = [], downloads = [];
   const indicator = {textContent:''};
   const context = createContext({
-    Blob, Event, TextEncoder, URL, setTimeout: () => {},
+    Blob, Event, TextEncoder, URL, setTimeout: () => {}, clearTimeout, serverTimer:null,
     document: {
       dispatchEvent() {},
       createElement: () => ({click() { downloads.push(this.download); }})
