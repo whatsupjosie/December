@@ -756,10 +756,20 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
         # The route itself enforces the per-file and per-note ceilings while reading.
         ("/api/notes", 26 * 1024 * 1024),
         ("/api/avatars/imports", 210 * 1024 * 1024),  # avatar GLBs; the route caps the file at 200 MB
+        # Replay uploads: the route refuses files over 5 MB (and requests over 5 MB + 256 KB) itself; the 1 MB default
+        # rejected every replay between 1 and 5 MB before it got there.
+        ("/api/upload", 5 * 1024 * 1024 + 256 * 1024),
     )
 
     @classmethod
     def limit_for(cls, path: str) -> int:
+        if path == "/api/recording/import":
+            # The route streams the bundle to disk and enforces PUBCAST_RECORDING_IMPORT_MAX_BYTES itself; the guard
+            # follows the same setting plus multipart overhead. At the 1 MB default no real recording could be imported.
+            try:
+                return int(os.environ.get("PUBCAST_RECORDING_IMPORT_MAX_BYTES", str(64 * 1024 ** 3))) + 1024 * 1024
+            except ValueError:
+                return 64 * 1024 ** 3 + 1024 * 1024
         for prefix, limit in cls.LARGE_BODY_LIMITS:
             if path == prefix or (prefix.endswith("/") and path.startswith(prefix)):
                 return limit

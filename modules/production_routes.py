@@ -540,6 +540,11 @@ def create_production_router(
         response = session.to_dict()
         if capture_paths:
             response["capture_paths"] = capture_paths
+        # FFmpeg exiting within moments of starting means nothing is being recorded; say so now.
+        startup = getattr(capture_engine, "startup_failures", None)
+        capture_errors = startup(session.session_id) if callable(startup) else []
+        if capture_errors:
+            response["capture_errors"] = capture_errors
         return response
 
     @router.post("/api/recording/{session_id}/activate")
@@ -579,10 +584,16 @@ def create_production_router(
                     "session_id": session_id,
                     "duration": (session.ended_at or time.time()) - session.started_at,
                     "artifacts": artifacts,
+                    "capture_warnings": [w for item in (getattr(capture_engine, "report", lambda _s: [])(session_id) or []) for w in item.get("warnings", [])],
                 },
             })
 
-        return session.to_dict()
+        response = session.to_dict()
+        report = getattr(capture_engine, "report", None)
+        capture_report = report(session_id) if callable(report) else []
+        if capture_report:
+            response["capture_report"] = capture_report
+        return response
 
     @router.post("/api/recording/{session_id}/pause")
     async def pause_recording(session_id: str, request: Request, identity: Dict[str, Any] = Depends(require_role("mod"))):
