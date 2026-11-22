@@ -229,11 +229,14 @@ def test_a_lagging_encoder_is_reported_and_a_healthy_one_is_not(tmp_path):
         log = tmp_path / "take.log"; log.write_text(log_text)
         return _CaptureProcess(source_id="cam", output_path=out, proc=SimpleNamespace(returncode=rc), started_at=100.0,
                                log_path=log, stopped_at=108.0)
-    slow = FFmpegCaptureEngine._report_for(engine, process("frame=100 fps=20 time=00:00:04.60 bitrate=1kbits/s speed=0.57x\r"))
+    opened = "Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'source.mp4':\n"      # every real FFmpeg log has this once an input opens
+    slow = FFmpegCaptureEngine._report_for(engine, process(opened + "frame=100 fps=20 time=00:00:04.60 bitrate=1kbits/s speed=0.57x\r"))
     assert slow["speed"] == pytest.approx(0.57) and slow["encoded_seconds"] == pytest.approx(4.6)
     assert any("0.57x" in w and "shorter than the take" in w for w in slow["warnings"])
-    fine = FFmpegCaptureEngine._report_for(engine, process("frame=240 fps=30 time=00:00:07.90 bitrate=1kbits/s speed=1.02x\r"))
+    fine = FFmpegCaptureEngine._report_for(engine, process(opened + "frame=240 fps=30 time=00:00:07.90 bitrate=1kbits/s speed=1.02x\r"))
     assert fine["warnings"] == []
+    waiting = FFmpegCaptureEngine._report_for(engine, process("Waiting for connection on rtmp://0.0.0.0:1935/live/key\n"))
+    assert any("never opened the input" in w for w in waiting["warnings"]), "a listener nobody connected to must say so"
     crashed = FFmpegCaptureEngine._report_for(engine, process("Unknown encoder 'nope'\n", rc=1))
     assert any("status 1" in w and "Unknown encoder" in w for w in crashed["warnings"])
 

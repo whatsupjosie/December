@@ -1194,6 +1194,9 @@ async def lifespan(application: FastAPI):
     # Live camera view: authoritative camera pose + avatar motion for static/camera_avatar_live.html.
     from modules.camera_view_routes import create_camera_view_router
     application.include_router(create_camera_view_router(cameras))
+    # Real cameras and microphones: listener addresses for phones/pro cameras, and the host's audio inputs.
+    from modules.live_source_routes import create_live_source_router
+    application.include_router(create_live_source_router(cameras))
     # Every program/preview change, from any route, reaches the stage pages.
     from modules.camera_broadcast import CameraBroadcastBridge
     camera_broadcast = CameraBroadcastBridge(cameras, hub)

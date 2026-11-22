@@ -30,6 +30,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from fastapi.responses import FileResponse
 
+from modules.audio_input_spec import AudioInputError, parse_audio_input
 from modules.cameras import CameraManager, CameraSource, CameraTransport
 from modules.recording import (
     RecordingService,
@@ -177,6 +178,9 @@ def create_production_router(
         if blackbox is not None:
             blackbox.record_event(event_type, source=source, actor=actor, data=data or {})
 
+    # Microphone chosen for a recording at start time (see modules/audio_input_spec.py), kept until the capture starts.
+    session_audio_inputs: Dict[str, Any] = {}
+
     async def _start_capture_for_session(session) -> List[str]:
         if capture_engine is None or not getattr(capture_engine, "available", False):
             return []
@@ -188,10 +192,15 @@ def create_production_router(
             return []
         profile = recording.get_profile(session.profile_id)
         session_dir = recording._session_dir(session.session_id)
-        paths = await capture_engine.start(session.session_id, source_objects, profile, session_dir)
+        microphone = session_audio_inputs.get(session.session_id)
+        # Passed only when one was chosen, so capture engines without the keyword keep working.
+        paths = (await capture_engine.start(session.session_id, source_objects, profile, session_dir, audio_input=microphone)
+                 if microphone is not None else
+                 await capture_engine.start(session.session_id, source_objects, profile, session_dir))
         return [str(path) for path in paths]
 
     async def _stop_capture_for_session(session_id: str) -> List[Dict[str, Any]]:
+        session_audio_inputs.pop(session_id, None)
         if capture_engine is None or not getattr(capture_engine, "available", False):
             return []
         if not capture_engine.is_capturing(session_id):
@@ -509,6 +518,13 @@ def create_production_router(
         session_id = _string_field(body, "session_id", default="", max_length=128) or None
         countdown = int(_numeric_field(body, "countdown_seconds", default=5, minimum=0))
         host_override = _bool_field(body, "host_override", default=False)
+        microphone = None
+        audio_text = _string_field(body, "audio_input", default="", max_length=300)
+        if audio_text:
+            try:
+                microphone = parse_audio_input(audio_text)
+            except AudioInputError as exc:
+                raise HTTPException(400, str(exc))
 
         try:
             session = recording.start_session(
@@ -522,7 +538,13 @@ def create_production_router(
         except (ValueError, PermissionError, KeyError) as exc:
             raise HTTPException(400, str(exc))
 
-        capture_paths = await _start_capture_for_session(session)
+        if microphone is not None:
+            session_audio_inputs[session.session_id] = microphone
+        try:
+            capture_paths = await _start_capture_for_session(session)
+        finally:
+            if session.state == RecordingState.ACTIVE:
+                session_audio_inputs.pop(session.session_id, None)
 
         if hub:
             await hub.broadcast_system_event({
@@ -556,6 +578,7 @@ def create_production_router(
             raise HTTPException(400, str(exc))
 
         capture_paths = await _start_capture_for_session(session)
+        session_audio_inputs.pop(session_id, None)
 
         if hub:
             await hub.broadcast_system_event({

@@ -29,6 +29,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
+from urllib.parse import urlsplit, urlunsplit
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,41 @@ def _ffmpeg_bin() -> str:
 
 
 # ── Transport → FFmpeg input builder ─────────────────────────────────────────
+_LISTEN_HOSTS = {"0.0.0.0", "::", "[::]"}
+# FFmpeg's default 5 s look at a live stream before it starts encoding is time during which the take is already
+# running; 2 s is enough to see the picture and sound of a phone or camera and halves the delay.
+_LIVE_PROBE = ["-analyzeduration", "2000000", "-probesize", "2000000"]
+
+
+def _is_listener(endpoint: str) -> bool:
+    """True when the endpoint names this machine's own address, i.e. the camera connects to us."""
+    try:
+        return (urlsplit(endpoint).hostname or "") in {h.strip("[]") for h in _LISTEN_HOSTS}
+    except ValueError:
+        return False
+
+
+def _srt_endpoint(endpoint: str) -> str:
+    """SRT defaults to calling out; an endpoint on 0.0.0.0 means "wait for the camera", so say so."""
+    if not _is_listener(endpoint):
+        return endpoint
+    parts = urlsplit(endpoint)
+    if "mode=" in parts.query:
+        return endpoint
+    query = (parts.query + "&" if parts.query else "") + "mode=listener"
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, query, parts.fragment))
+
+
+def _webcam_input(endpoint: str) -> List[str]:
+    """A camera attached to this machine. ``/dev/videoN`` is Linux, ``avfoundation:N`` macOS, anything else DirectShow."""
+    if endpoint.startswith("/dev/"):
+        return ["-f", "v4l2", "-i", endpoint]
+    if endpoint.lower().startswith("avfoundation:"):
+        return ["-f", "avfoundation", "-framerate", "30", "-i", endpoint.split(":", 1)[1]]
+    device = endpoint if endpoint.lower().startswith("video=") else f"video={endpoint}"
+    return ["-f", "dshow", "-i", device]
+
+
 def _build_ffmpeg_input(transport: str, endpoint: str) -> List[str]:
     """Return the FFmpeg input argument list for a given camera source."""
     t = transport.lower()
@@ -58,8 +94,19 @@ def _build_ffmpeg_input(transport: str, endpoint: str) -> List[str]:
     if t == "file":
         return ["-re", "-i", endpoint]          # -re = real-time read-back
 
-    if t in ("rtmp", "srt"):
-        return ["-i", endpoint]
+    if t == "rtmp":
+        # A phone app or camera that PUSHES to us: an endpoint on 0.0.0.0 makes FFmpeg the server and wait for it.
+        return (["-listen", "1"] if _is_listener(endpoint) else []) + _LIVE_PROBE + ["-i", endpoint]
+
+    if t == "srt":
+        return _LIVE_PROBE + ["-i", _srt_endpoint(endpoint)]
+
+    if t == "rtsp":
+        # IP cameras. TCP avoids the dropped-packet corruption UDP gives over Wi-Fi.
+        return ["-rtsp_transport", "tcp"] + _LIVE_PROBE + ["-i", endpoint]
+
+    if t == "webcam":
+        return _webcam_input(endpoint)
 
     if t == "ndi":
         # Requires FFmpeg built with libndi_newtek
@@ -212,6 +259,7 @@ class FFmpegCaptureEngine:
         sources,          # list of CameraSource objects
         profile,          # EncodingProfile object
         session_dir: Path,
+        audio_input=None,  # optional AudioInput (a microphone): recorded with the FIRST source, replacing its own sound
     ) -> List[Path]:
         """
         Spawn one FFmpeg process per source.
@@ -227,6 +275,7 @@ class FFmpegCaptureEngine:
 
         self._reports.pop(session_id, None)
         self._startup_failures.pop(session_id, None)
+        mic_pending = audio_input is not None
         procs: List[_CaptureProcess] = []
         output_paths: List[Path] = []
         synthetic_paths: List[Path] = []
@@ -237,6 +286,12 @@ class FFmpegCaptureEngine:
             out_path = session_dir / f"{safe_name}.{ext}"
 
             input_args  = _build_ffmpeg_input(src.transport.value, src.endpoint)
+            if mic_pending:
+                mic_pending = False
+                # Two sources cannot both open one microphone, so it goes to the first. Picture from input 0,
+                # sound from the microphone (input 1); an audio-only profile takes the microphone alone.
+                input_args = input_args + audio_input.ffmpeg_args()
+                input_args += ["-map", "1:a:0"] if profile.is_audio_only else ["-map", "0:v:0", "-map", "1:a:0"]
             output_args = _build_ffmpeg_output(profile, out_path)
 
             cmd = [self._bin, "-y", "-hide_banner"] + input_args + output_args
@@ -333,6 +388,8 @@ class FFmpegCaptureEngine:
         rc = cp.proc.returncode
         if rc not in (0, 255, -15, None):
             warnings.append(f"FFmpeg exited with status {rc}: {self._log_tail(cp.log_path)}")
+        if text and "Input #0" not in text:
+            warnings.append("FFmpeg never opened the input: nothing connected to this listener, or the device or address could not be opened")
         if size == 0:
             warnings.append("No media was written for this source")
         if speed is not None and speed < _LAG_SPEED and wall >= 3.0:
