@@ -1181,6 +1181,9 @@ async def lifespan(application: FastAPI):
     application.state.camera_pool = camera_pool
     application.include_router(create_camera_pool_router(camera_pool))
     application.include_router(create_studio25d_media_router(cameras, pool=camera_pool))
+    # Live camera view: authoritative camera pose + avatar motion for static/camera_avatar_live.html.
+    from modules.camera_view_routes import create_camera_view_router
+    application.include_router(create_camera_view_router(cameras))
     # Every program/preview change, from any route, reaches the stage pages.
     from modules.camera_broadcast import CameraBroadcastBridge
     camera_broadcast = CameraBroadcastBridge(cameras, hub)
