@@ -6,6 +6,7 @@ honestly and never crash the friend loop.
 """
 from __future__ import annotations
 
+import json
 import os
 import time
 from dataclasses import dataclass, field
@@ -60,6 +61,34 @@ def _friend_generation_contract(turn: Dict[str, Any]) -> str:
         "analysis, role labels, or explanatory scaffolding. A natural, specific "
         "response is better than generic assistant advice."
     )
+
+
+def _starter_prompt(turn, full_prompt):
+    """Send conversational context once, without the operational packet and receipts."""
+    payload = turn.get("llm_prompt_json")
+    if not isinstance(payload, str):
+        return full_prompt
+    packet = json.loads(payload)
+    message = packet.get("msg", {}).get("text")
+    if not isinstance(message, str):
+        return full_prompt
+    friend = packet.get("f", {})
+    vessel = packet.get("vessel") or {}
+    alex = packet.get("alex") or {}
+    context = {
+        "friend": {key: friend[key] for key in ("name","identity","role","tone","cad","avoid","bound","law","modes") if key in friend},
+        "user": packet.get("u"),
+        "boundaries": packet.get("safe"),
+        "guidance": [g.get("rule") for g in packet.get("guide", []) if isinstance(g, dict)],
+        "tone": alex.get("tone_guidance"), "care": alex.get("response_guidelines"),
+        "do_not_touch": alex.get("do_not_touch"), "direction": packet.get("jeremy"),
+        "task": packet.get("task"), "output": packet.get("out"),
+        "memories": [m.get("txt") for m in packet.get("m", []) if isinstance(m, dict)],
+        "claims": vessel.get("claims"), "events": vessel.get("events"),
+        "notes": packet.get("notes"), "history": packet.get("history"),
+    }
+    details = json.dumps({k:v for k,v in context.items() if v}, ensure_ascii=False, separators=(",",":"))
+    return "Speak as the friend described below. Use relevant context and answer the user briefly.\n" + details + "\nUser: " + message
 
 
 class PubPartnerProviderDispatcher:
@@ -140,6 +169,10 @@ class PubPartnerProviderDispatcher:
                     "model_available": False,
                     "error": f"{type(exc).__name__}: {exc}",
                 }
+        if provider == "chatgpt_plan":
+            from .pubpartner_chatgpt_link import current_session, status
+            account = status(current_session.get())
+            return {"ok": True, "provider": provider, "available": bool(account["models"]), "models": account["models"]}
         if provider == "openai_compatible":
             base_url = str(config.get("base_url") or "").strip()
             require_key = bool(config.get("require_api_key", True))
@@ -205,7 +238,14 @@ class PubPartnerProviderDispatcher:
         user_id = str((fcp1.get("u") or {}).get("id") or "anon")
         started = time.time()
         try:
-            if provider == "runtime_profile":
+            if provider == "chatgpt_plan":
+                from .pubpartner_chatgpt_link import token_for_model
+                from .openai_responses_provider import responses_text
+                stream = responses_text(token_for_model(model), str(turn.get("llm_prompt_text") or ""),
+                                        system=_friend_generation_contract(turn), model=model)
+                reply = "".join([delta async for delta in stream])
+                result = ProviderResult(ok=bool(reply.strip()), provider=provider, model=model, raw_response=reply)
+            elif provider == "runtime_profile":
                 result = await self._runtime_profile(turn, provider_config)
             elif provider == "mock":
                 result = self._mock(turn, model=model)
@@ -219,7 +259,7 @@ class PubPartnerProviderDispatcher:
                 result = await self._openai_compatible(
                     turn, model=model, config=provider_config, user_id=user_id
                 )
-            elif provider in {"openai", "anthropic", "gemini", "mistral", "groq", "opencode_zen"}:
+            elif provider in {"openai", "anthropic", "gemini", "mistral", "groq", "xai", "opencode_zen"}:
                 result = await self._universal(
                     turn, provider=provider, model=model, config=provider_config, user_id=user_id
                 )
@@ -402,8 +442,11 @@ class PubPartnerProviderDispatcher:
             num_ctx = max(2048, min(16384, int(config["num_ctx"])))
         if prompt_tokens + max_tokens + 384 > num_ctx:
             warnings.append("model context may be too small for full friend memory and reply")
+        prompt = _friend_generation_contract(turn) + "\n\n" + str(turn.get("llm_prompt_text") or "")
+        if model == "smollm2:360m-instruct-q4_K_M":
+            prompt = _starter_prompt(turn, prompt)
         response = await call_ollama(
-            _friend_generation_contract(turn) + "\n\n" + str(turn.get("llm_prompt_text") or ""),
+            prompt,
             model=model if model != "unknown" else str(config.get("model") or ""),
             host=str(config.get("host") or ""),
             temperature=float(config.get("temperature", 0.7)),
