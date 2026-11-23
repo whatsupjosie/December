@@ -23,6 +23,8 @@ class CameraTransport(str, Enum):
     NDI = "ndi"
     RTMP = "rtmp"
     SRT = "srt"
+    RTSP = "rtsp"      # IP cameras
+    WEBCAM = "webcam"  # a camera attached to the host (/dev/videoN, avfoundation:N, or a DirectShow name)
     FILE = "file"
     VIRTUAL = "virtual"
     VOXEL_3D = "voxel_3d"  # For future Rust renderer integration
