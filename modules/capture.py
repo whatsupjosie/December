@@ -154,6 +154,9 @@ class FFmpegCaptureEngine:
 
     def __init__(self) -> None:
         self._active: Dict[str, List[_CaptureProcess]] = {}   # session_id → [processes]
+        # Outputs recorded from the lavfi test pattern, kept after stop() so the
+        # artifact list can say which files are not real camera video.
+        self._synthetic: Dict[str, List[Path]] = {}
         try:
             self._bin = _ffmpeg_bin()
             logger.info("FFmpegCaptureEngine ready: %s", self._bin)
@@ -187,6 +190,7 @@ class FFmpegCaptureEngine:
 
         procs: List[_CaptureProcess] = []
         output_paths: List[Path] = []
+        synthetic_paths: List[Path] = []
 
         for src in sources:
             ext = profile.container.value          # mp4 / webm / wav / mov
@@ -213,6 +217,12 @@ class FFmpegCaptureEngine:
                 )
                 procs.append(cp)
                 output_paths.append(out_path)
+                if src.transport.value.lower() == "virtual":
+                    synthetic_paths.append(out_path)
+                    logger.warning(
+                        "Source %s is a virtual camera: %s will contain an FFmpeg test pattern, not rendered PubWorld video.",
+                        src.source_id, out_path,
+                    )
                 logger.info("Capture started for %s → %s (pid=%d)", src.source_id, out_path, proc.pid)
 
             except Exception as e:
@@ -220,8 +230,19 @@ class FFmpegCaptureEngine:
 
         if procs:
             self._active[session_id] = procs
+        if synthetic_paths:
+            self._synthetic[session_id] = synthetic_paths
+            while len(self._synthetic) > 50:   # bounded: drop the oldest session's record
+                self._synthetic.pop(next(iter(self._synthetic)))
 
         return output_paths
+
+    def synthetic_outputs(self, session_id: str) -> List[Path]:
+        """Outputs of this session recorded from the test pattern (``virtual`` transport).
+
+        Still available after ``stop()`` so callers can mark the registered artifacts.
+        """
+        return list(self._synthetic.get(session_id, []))
 
     async def stop(self, session_id: str) -> List[Path]:
         """
