@@ -21,6 +21,8 @@ from .sir_purfluous_waiting_room import load_profile
 
 _OFFLINE_NOTE = ("My full powers wait on the speaking model, Sancho. Offline I keep to the door, "
                  "the craft, and my own history.")
+# Public name read by BotManager to say so in the room when he falls back to these lines.
+OFFLINE_NOTE = _OFFLINE_NOTE
 
 
 def _pick(options: Sequence[str], message: str) -> str:
