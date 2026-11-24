@@ -135,6 +135,8 @@ def select(message: str, history: Sequence[Mapping[str, str]] = ()) -> Dict[str,
     if not beats:
         return {"topics": topics, "mood": mood, "cards": []}
     beat = _pick(beats, seed, "beat", recent, slots)
+    if beat.get("solo"):  # a card that ends on its own beat (a cut-off, an exit) stands alone
+        return {"topics": topics, "mood": mood, "cards": [beat]}
     chosen = []
     roll = seed[0]
     if roll % 3 != 0:  # two times in three he opens before the beat
