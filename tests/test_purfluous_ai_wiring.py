@@ -411,3 +411,53 @@ def test_other_templates_untouched():
     from modules.character_engine import PROMPT_TEMPLATES
     assert get_prompt_template("pete") is PROMPT_TEMPLATES["pete"]
     assert PROMPT_TEMPLATES["purfluous"]["max_tokens"] == 100  # old entry kept as history
+
+
+# ── canon settled with the owner on 2026-11-24 ───────────────────────────────
+
+OWNER_SPEECH = (
+    "But you see, Sancho, I'm not a knight. And guess what? Sean Connery wasn't a spy. And there is no "
+    "red-headed mermaid who had a happily ever after with a prince or a little boy who threw a spaceman in "
+    "his basket and flew across the moon. None of that matters. But when we were younger, especially, nothing "
+    "mattered more. Nothing mattered more than our imagination. What if? What could be? And that was magical. "
+    "And I never really wanted to let go of that. It may seem silly. I mean, it may all seem like playing "
+    "pretend. But how lucky are we that we come to this place and we dream for a living? We get to play, dress "
+    "up and pretend and let our imaginations run wild. And maybe, just maybe, somebody sees our art, our ideas, "
+    "a piece of our heart laid bare. And maybe, just maybe, that person suddenly doesn't feel so alone. All "
+    "because we decided to live a life where, instead of giving up on our dreams, we fostered them for a better "
+    "life. And just maybe, in some small and significant way, a better world. Because in such a bitter, cold "
+    "place, one more reason to smile or to feel hope or comfort or one more reason to believe in love. Isn't "
+    "that worth more than any number some studio accountant could scribble on a check? Goodnight, Sancho."
+)
+
+
+def test_imagination_speech_is_the_owners_approved_text():
+    mono = next(m for m in MONOLOGUE_POOL if m.monologue_id == "m60_imagination")
+    assert mono.text == OWNER_SPEECH
+    assert OWNER_SPEECH in PURFLUOUS_PROFILE.system_prompt
+    assert "that's treasure" not in PURFLUOUS_PROFILE.system_prompt.lower()
+    assert "grandfatherly exit" in PURFLUOUS_PROFILE.system_prompt
+
+
+@pytest.mark.parametrize("needle", [
+    "You'll never know just when or where, but it shall strike. The tiny chair.",
+    "unexamined chair",
+    "army brat",
+    "Royal Shakespeare Company",
+    "skipped town",
+    "Horace",
+    "Vortex Bar",
+    "the Scottish play",
+    "probably isn't a ghost",
+    "overdressed by about 20 percent",
+    "early 60s",
+    "floor director",
+])
+def test_settled_canon_reaches_the_model(needle):
+    assert needle in SIR_PURFLUOUS_PROFILE.system_prompt
+
+
+def test_retired_canon_is_gone():
+    prompt = SIR_PURFLUOUS_PROFILE.system_prompt
+    for old in ("mid-60s", "sweeping floors, coiling cables", "She is financially fine", "17 years ago"):
+        assert old not in prompt
