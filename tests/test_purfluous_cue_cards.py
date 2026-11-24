@@ -64,3 +64,19 @@ def test_online_cue_is_private_note():
 def test_no_card_slots_left_unfilled():
     for c in DECK["cards"]:
         assert "{" not in cc._fill(c["text"], DECK["slots"])
+
+
+def test_he_draws_on_the_eq_card_catalog():
+    from modules.wired.eq_card_selector import CardLibrary
+    catalog_texts = {c.text for c in CardLibrary().cards.values()}
+    assert cc.compose("I am so burned out") in catalog_texts
+    assert cc.compose("my best friend lied to me") in catalog_texts
+
+
+def test_crisis_resource_cards_are_never_his():
+    for msg in ("he hit me", "I was shot", "my dad died", "I can't do this anymore", "I lost my mother"):
+        _ctx, cards = cc._catalog_read(msg)
+        assert all("crisis" not in c["id"] and "trauma_safety" not in c["id"] and "resources" not in c["id"] for c in cards)
+        out = respond(msg)
+        for banned in ("988", "RAINN", "safe right now", "Lifeline"):
+            assert banned not in out, (msg, out)

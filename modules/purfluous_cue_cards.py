@@ -55,20 +55,54 @@ def _load(path: str = str(DECK_PATH)) -> Mapping:
 def reload() -> None:
     """Drop the cached deck so edits to the JSON are picked up."""
     _load.cache_clear()
+    _reader_and_selector.cache_clear()
+
+
+# Catalog cards he never uses. Josie's ruling (2026-11-24): "Fuck the crisis
+# resources." These are the catalog's crisis_support cards (hotlines, RAINN,
+# "Are you safe right now?"). The catalog itself is unchanged for other bots.
+_CATALOG_EXCLUDED_TYPES = {"crisis_support"}
+_CATALOG_SOLO = {"fatigue", "autonomy", "identity", "interpersonal", "betrayal"}
+
+
+@lru_cache(maxsize=1)
+def _reader_and_selector():
+    try:
+        from companion_support.eq_disambiguation_engine import ContextDisambiguator
+        from modules.wired.eq_card_selector import ContextAwareCardSelector
+        return ContextDisambiguator(), ContextAwareCardSelector()
+    except Exception as exc:
+        logger.debug("EQ card catalog unavailable: %s", exc)
+        return None, None
+
+
+def _catalog_read(message: str) -> Tuple[str, List[dict]]:
+    """Read the message with the EQ reader and return (situation, catalog cards that fit it).
+
+    Uses the card catalog's own picker (modules/wired/eq_card_selector.py), minus
+    crisis cards. Each call is read fresh, with no carried-over history.
+    """
+    reader, selector = _reader_and_selector()
+    if reader is None:
+        return "unclear", []
+    try:
+        result = reader.analyze(message, "purfluous_cue_cards", include_history=False)
+        picks = selector.select_response(result, num_options=len(selector.library.cards))
+    except Exception as exc:  # the reader is advisory; never let it break a reply
+        logger.debug("EQ reader failed: %s", exc)
+        return "unclear", []
+    context = getattr(result.primary_context, "value", "unclear") or "unclear"
+    cards = [{"id": f"catalog:{c.id}", "kind": "catalog", "topics": [context], "moods": [], "text": c.text}
+             for c, _score in picks if c.response_type not in _CATALOG_EXCLUDED_TYPES]
+    return context, cards
+
+
+def _eq_context(message: str) -> str:
+    return _catalog_read(message)[0]
 
 
 def _eq_hurt(message: str) -> bool:
-    try:
-        from companion_support.eq_disambiguation_engine import ContextDisambiguator
-    except Exception:
-        return False
-    try:
-        result = ContextDisambiguator().analyze(message, "purfluous_cue_cards", include_history=False)
-    except Exception as exc:  # the reader is advisory; never let it break a reply
-        logger.debug("EQ reader failed: %s", exc)
-        return False
-    context = getattr(getattr(result, "primary_context", None), "value", "")
-    return context in _HURT_CONTEXTS
+    return _eq_context(message) in _HURT_CONTEXTS
 
 
 def read(message: str) -> Tuple[List[str], str]:
@@ -123,14 +157,23 @@ def select(message: str, history: Sequence[Mapping[str, str]] = ()) -> Dict[str,
     def fits(card: dict, kind: str) -> bool:
         return card["kind"] == kind and mood in card["moods"]
 
+    context, catalog = _catalog_read(message)
+
     if mood == "hurt":
-        plain = _pick([c for c in cards if fits(c, "plain")], seed, "plain", recent, slots)
+        pool = [c for c in cards if fits(c, "plain")] + catalog
+        plain = _pick(pool, seed, "plain", recent, slots)
         return {"topics": topics, "mood": mood, "cards": [plain] if plain else []}
+
+    if context in _CATALOG_SOLO and catalog and not (set(topics) - {"celebrate", "setback"}):
+        card = _pick(catalog, seed, "catalog", recent, slots)
+        return {"topics": topics, "mood": mood, "cards": [card]}
 
     spoken = [t for t in topics if t not in ("celebrate", "setback")] or [t for t in topics]
     beats = []
     if mood in ("celebrate", "setback"):  # a win or a stumble outranks the subject it happened in
         beats = [c for c in cards if c["kind"] == "beat" and mood in c["topics"]]
+        if mood == "celebrate":
+            beats += [c for c in catalog if context in ("achievement", "milestone")]
     beats = beats or [c for c in cards if c["kind"] == "beat" and mood in c["moods"] and set(c["topics"]) & set(spoken)]
     if not beats:
         return {"topics": topics, "mood": mood, "cards": []}
