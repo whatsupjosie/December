@@ -475,7 +475,14 @@ class BotManager:
                     history = await cricket.enrich_context(payload.get("text", ""), history)
                 except Exception as memory_exc:
                     logger.warning("Jeremy Cricket memory failed for %s: %s", cfg.bot_id, memory_exc)
-            prompt = self._build_prompt(cfg, history, stage_hint=payload.get("text") if payload.get("nudge") else None)
+            hint = payload.get("text") if payload.get("nudge") else None
+            if hint is None and cfg.bot_id == "sir_purfluous" and payload.get("text"):
+                try:
+                    from .purfluous_cue_cards import cues_for
+                    hint = cues_for(payload["text"], history)
+                except Exception as cue_exc:  # cues are advisory; never block a reply
+                    logger.warning("Sir Purfluous cue cards failed: %s", cue_exc)
+            prompt = self._build_prompt(cfg, history, stage_hint=hint)
             if not prompt:
                 audit('skipped', reason='No prompt')
                 return
@@ -566,12 +573,12 @@ class BotManager:
                 lines = prompt.rstrip().splitlines()
                 latest = "status"
                 for line in reversed(lines[:-1]):
-                    if re.match(r"^(?:[^:\n]{1,128}):\s+", line) and not line.startswith("System instruction:"):
+                    if re.match(r"^(?:[^:\n]{1,128}):\s+", line) and not line.startswith(("System instruction:", "Stage direction (private):")):
                         latest = line.split(":", 1)[1].strip()
                         break
                 hist = []
                 for line in lines[:-1]:
-                    if ": " in line and not line.startswith("System instruction:"):
+                    if ": " in line and not line.startswith(("System instruction:", "Stage direction (private):")):
                         who, _, said = line.partition(": ")
                         hist.append({"speaker": who, "text": said})
                 return respond(latest, hist)
