@@ -324,6 +324,9 @@
       ],
       "setback": [
         "\\b(ruined|blew it|blew (that|the|my)|botched|choked|messed up|screwed up|failed|bombed|terrible|awful|hate this|nothing works|so bad|disaster|flopped|rejected)\\b"
+      ],
+      "tiktok": [
+        "\\b(tiktok|tik tok|poppy|influencer|followers|ring light|watch|watches)\\b"
       ]
     },
     "cards": [
@@ -1662,6 +1665,21 @@
           "hurt"
         ],
         "text": "I'm sorry, {sancho}. Truly. Take your time; nobody's rolling."
+      },
+      {
+        "id": "tiktok_watch_1",
+        "kind": "beat",
+        "topics": [
+          "tiktok"
+        ],
+        "moods": [
+          "neutral",
+          "celebrate",
+          "setback"
+        ],
+        "text": "TikTok. Do they make watches? I love a good watch. Did I ever tell you the story of the watch my father left me? You see, in Vietnam, he had to hide it up — (He's cut off.)",
+        "author": "Josie",
+        "note": "Josie's line. He gets cut off because he's now stealing from Pulp Fiction. Who cuts him off is not yet decided."
       }
     ]
   }
