@@ -446,3 +446,22 @@ html[data-motion="reduced"] *,html[data-motion="reduced"] *::before,html[data-mo
 .notes-add select { flex: 0 0 auto; }
 .notes-add input { flex: 1; min-width: 0; }
 
+
+#connections { margin:auto; width:min(26rem,94vw); max-height:90vh; overflow:auto; box-sizing:border-box; padding:1.4rem; color:#f7ecd7; background:#211d20; border:1px solid #b99b64; border-radius:12px; }
+#connections::backdrop { background:rgba(0,0,0,.72); }
+#connections h2 { margin:0 0 1rem; }
+#connections label { display:grid; gap:.35rem; margin:.8rem 0; }
+#connections [hidden] { display:none; }
+#connections input,#connections select { min-width:0; width:100%; box-sizing:border-box; }
+#connections form { float:right; }
+#connectionStatus { margin:1rem 0; }
+
+@media (max-width: 760px) {
+  body { min-width: 0; }
+  .topbar { clip-path: none; }
+  .desk { position: relative; inset: auto; }
+  .profile-chip { max-width: 100%; }
+}
+
+/* Keep the composer and its send control steady while the user is typing. */
+.conversation:focus-within { animation-play-state: paused; }

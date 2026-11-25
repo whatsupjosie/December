@@ -130,7 +130,13 @@ def load_cartridge(source: str | Path) -> Cartridge:
 
     seed_path = cartridge_dir / "memories.jsonl"
     if seed_path.exists() and store.count() == 0:
-        store.seed_from_jsonl(seed_path)
+        try:
+            store.seed_from_jsonl(seed_path)
+        except Exception:
+            store.close()
+            if cleanup_dir is not None:
+                shutil.rmtree(cleanup_dir, ignore_errors=True)
+            raise
 
     return Cartridge(path=cartridge_dir, definition=definition, memory=store)
 
