@@ -1,0 +1,1401 @@
+From a4fafd1cf611cc1c77aad38c013c35a4f5e5ed35 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 25 Nov 2026 04:45:57 +0000
+Subject: [PATCH] Pause really pauses in every take mode
+
+Pause now closes each camera's file and resume starts the next piece, so the
+paused stretch is never recorded; stop joins the pieces, checks the join and
+only then removes them. Camcorder, data-only and main-camera takes all pause:
+show data keeps nothing from a pause and a main-camera program is assembled on
+take time with the pause removed. Replaces the suspend approach, which still
+wrote the paused stretch once the encoder woke.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../STUDIO_LINE_MISSING_FIXES_2026-11-24.md   |  18 +-
+ modules/capture.py                            | 443 +++++++++++++-----
+ modules/production_routes.py                  |  59 ++-
+ modules/recording_modes.py                    | 183 +++++++-
+ tests/test_capture_engine_safety.py           | 166 +++++--
+ tests/test_recording_modes_e2e.py             | 118 +++++
+ 6 files changed, 775 insertions(+), 212 deletions(-)
+
+diff --git a/handoffs/STUDIO_LINE_MISSING_FIXES_2026-11-24.md b/handoffs/STUDIO_LINE_MISSING_FIXES_2026-11-24.md
+index e2b23b4..ed4ca50 100644
+--- a/handoffs/STUDIO_LINE_MISSING_FIXES_2026-11-24.md
++++ b/handoffs/STUDIO_LINE_MISSING_FIXES_2026-11-24.md
+@@ -16,7 +16,7 @@ Labels: RAN = I ran it and saw the result. READ = I opened and read the code. GU
+ | d3b9db8 | Counter reports loading, redirecting, error and ready; speech runtime counts dialogue starts | Missing | Ported by patch, tests copied | static/foresight_counter.html, static/program_audio_runtime.js and six tests (f956fc5) |
+ | d637bb3 | Test clients no longer boot the whole app by accident | Missing (the cast-name part was present) | Ported | conftest.py, tests/conftest.py (f956fc5) |
+ | 7a0745a | FFmpeg never writes over a file | Missing: FFmpeg ran with -y and names started empty | Ported against this line's engine | modules/capture.py: start() and start_audio_input() use -n; _names_in_use and _reserved_names (890b24d) |
+-| b2b7d23 | Pause really pauses the encoders | Missing, and worse than main-debug's old code: the studio pause route never touched FFmpeg on any computer, so a "paused" take kept recording | Ported: engine and route | modules/capture.py: _suspend, _windows_suspend, _CaptureProcess.set_paused, FFmpegCaptureEngine.set_paused; modules/production_routes.py: pause_recording (890b24d, b391380) |
++| b2b7d23 | Pause really pauses the encoders | Missing, and worse than main-debug's old code: the studio pause route never touched FFmpeg on any computer, so a "paused" take kept recording | First ported as main-debug's suspend (890b24d, b391380); then rebuilt, because suspending FFmpeg does not keep the pause out of the file (see below). Pause now works in all three take modes | modules/capture.py: _CaptureProcess.pause, FFmpegCaptureEngine.set_paused, _join, _joined_problem; modules/recording_modes.py: ModeTake.set_paused, _clock; modules/production_routes.py: pause_recording |
+ | e225c19 | Each failed camera is named and kept with the take; stop all encoders at once | Partly: the director panel already named failed starts; nothing was saved with the take, spawn failures were lost, stops ran one by one | Ported | modules/capture.py: stop(), failures(), _stop_failure; modules/recording.py: RecordingSession.capture_errors, note_capture_errors; modules/production_routes.py: _note_capture_errors, _start_errors (890b24d, cf5a13c, b391380) |
+ | 597174a | PANIC stops every take at once and a file that could not be added is kept for retry | Partly: PANIC already finished media before closing; it ran one take at a time and dropped files that failed to register | Ported | modules/production_routes.py: finish_all_captures, unregistered_outputs, CaptureNotFinished (b391380) |
+ | 884c1cd | Console stop finishes media before closing the take; host_override must be a real true or false | Missing (the long-take tool was present) | Ported | modules/studio_console_actions.py: confirmed_stop_session_id and the boolean check; modules/production_routes.py: studio_action_execute (b391380) |
+@@ -37,8 +37,10 @@ Also already present, though the studio's own 11-23 handoff listed them as not d
+ The studio line does not have main-debug's SessionCapture class, so main-debug's capture and route code could not be copied. Each idea was written against this line's FFmpegCaptureEngine, production routes and recording modes.
+ 
+ - No overwrite. Every new file name skips names already in the take folder, folded for letter case, and names a leftover .ffmpeg.log still holds, plus names a running encoder is writing in the same folder. FFmpeg also runs with -n, so it refuses rather than replaces. The microphone file gets the same treatment.
+-- Pause. Mac and Linux: SIGSTOP and SIGCONT. Windows: NtSuspendProcess and NtResumeProcess from ntdll, called through ctypes, so nothing is installed. If any running encoder cannot change, the ones that did are put back and the route answers 409 with the reason; the take is never half paused. An encoder that already ended (one that failed to start) is skipped. A paused encoder is resumed before it is told to stop, because a suspended FFmpeg cannot read the stop key. Paused time is left out of the speed check, so a pause is not reported as lag.
+-- Data-only and main-camera takes now refuse pause with 409 ("cannot be paused yet; it is still recording"). Before, they were marked paused while their mode kept recording. Their modes have no pause design; that is a question for Josie below.
++- Pause, why it was rebuilt. Suspending FFmpeg (SIGSTOP on Mac and Linux, NtSuspendProcess on Windows, main-debug's way) freezes the encoder but not the camera: a live camera's picture piles up while it is frozen and is written the moment it resumes, and a file camera catches up. RAN: a suspended take still held the paused stretch. So that way was dropped on every computer.
++- Pause, how it works now. Pause closes each camera's file cleanly (the same stop key as a normal stop, then terminate after 8 seconds, then kill after 5), so the paused stretch is never recorded at all. Resume starts each camera again into the next piece, name.part002.webm and so on; a file camera picks up where it had got to, not from the start. Stop joins the pieces into the take's usual file name without re-encoding, checks the joined file (size, length within half a second plus a tenth per piece, same streams) and only then removes the pieces. If the join or the check fails, every piece is kept and listed in the take. Windows uses the same path, with no suspend calls.
++- Pause in the take modes. Camcorder, data-only and main-camera takes all pause. While paused, show data keeps nothing (a cut made during the pause is not in it); it writes take.paused and take.resumed, and take.resumed notes where the cameras stood. A main-camera take does not follow cuts while paused; when it resumes it comes back on whatever camera is live then, and the program is assembled on take time with the pause removed. The take record lists each pause and the total paused seconds.
++- Pause, limits. A phone or listener camera (RTMP or SRT listener) is disconnected at pause and has to reconnect at resume. After a resume there is a short gap while each camera comes back; in a main-camera program it shows as black. If a camera cannot stop, the ones that did are started again and the route answers 409 with the reason, so the take is never half paused. If a camera cannot come back, the take resumes with the rest and names it.
+ - Failures. Each source that fails to start (including one FFmpeg could not launch) or fails at stop is saved with the take as {source_id, error, phase}. If FFmpeg is missing on the computer, the take says so for each source. The list is written only when something failed, so clean takes keep their files unchanged. Takes saved by main-debug with its {source_id: error} map still load.
+ - Files never lost. A finished file that cannot be added to its take (a full disk) stays on disk and in a queue. Stop answers 409 naming the files and leaves the take open; pressing stop again adds them. PANIC and shutdown retry the queue too. An encoder that would not stop also answers 409, so stop can be pressed again.
+ - PANIC and shutdown finish every take at once, each take's media before its session is closed.
+@@ -51,13 +53,15 @@ The studio line does not have main-debug's SessionCapture class, so main-debug's
+ - RAN: tests/test_capture_output_names.py, 4 passed; the lag-report checks from tests/test_recording_pipeline_e2e.py, run by hand because that file needs httpx; tests/test_camera_fixes_2026_11_21.py, 60 passed, 1 not runnable here (needs fastapi).
+ - RAN: the real routes end to end with real FFmpeg, through a throwaway stand-in for fastapi kept outside the repo (not committed). All 27 checks passed: start and console start name the broken camera; the saved take names it; pause and resume through the route really stop and restart the file; a full disk keeps the file and the take open and a second stop saves it; console stop closes the take only after the encoders finished; an unconfirmed console stop touches nothing; text "false" for host_override is refused; PANIC stops two takes together in about 8 seconds and both keep their files; shutdown finishes a take still recording; a data-only take refuses pause and keeps recording; with no FFmpeg the take says nothing was recorded.
+ - RAN: node --check on the Control Room script and the ported browser files. Python import checks on every changed module.
+-- NOT RUN: the browser tests, any fastapi route test in the repo (fastapi and httpx are not installed here and installing them waits on Josie's yes), Windows pause (the code path is READ only; it needs a run on her laptop), the Control Room in a real browser, and the renderer build.
++- RAN, 2026-11-25, after the pause rebuild, with the web server libraries from requirements.txt installed in a scratch environment (the repo's own setup, nothing committed): tests/test_capture_engine_safety.py 10 passed, with new tests that a live camera's paused stretch is not in its file, a take stopped while paused keeps what was recorded, a file camera resumes where it had got to, an ended encoder does not block pause, and a camera that cannot come back is named. tests/test_recording_modes_e2e.py 10 passed, three of them new: a paused camcorder, data-only and main-camera take through the real routes with live test cameras, each checking the files leave the pause out (the camera's on-screen clock jumps by the pause), show data keeps nothing from the pause, and the main-camera program shows red, blue, red with its length equal to the take less the pause. The three new ones passed three runs in a row. Also passed: tests/test_recording_modes_unit.py, test_capture_output_names.py, test_camera_fixes_2026_11_21.py (91 with the two above), test_recording_pipeline_e2e.py, test_camera_capture_cleanup.py, test_blackbox_capture_disconnect.py, test_segmented_capture_and_preservation.py (17), test_live_sources_e2e.py, test_frontend_startup_contracts.py, test_module_router_parity_guards.py.
++- The throwaway fastapi stand-in used on 11-24 is retired; its check that a data-only take refuses pause no longer applies.
++- NOT RUN: the browser tests, Windows pause (READ only; it needs a run on her laptop), the Control Room in a real browser, and the renderer build.
+ 
+ ## Open items for Josie
+ 
+-1. Should data-only and main-camera takes be able to pause? Right now they refuse, honestly. Saying yes means designing what a pause does to a cut-following take.
+-2. Pause on Windows needs one real try on her laptop: start a take, pause, wait, resume, stop, and check the file has no gap of recording during the pause.
+-3. bin/ws_renderer was not rebuilt. Building it downloads the 95 crates in rust_crate/Cargo.lock, which waits on her yes. The file there is a Linux program either way; on her Windows laptop the renderer would need its own Windows build.
++1. Answered: Josie said a paused camera should stop recording and actually pause. Done for all three take modes, as above.
++2. Pause on Windows needs one real try on her laptop: start a take, pause for a few seconds, resume, stop, and check the file is about the take less the pause and that the pieces are gone.
++3. bin/ws_renderer was not rebuilt, on hold. The renderer libraries (94 crates in rust_crate/Cargo.lock, 80 MB) are packaged, not built, on branch claude/renderer-crates-vendored-2026-11-24 (commit 151ce1d, from 2541c09), so they are kept. READ: rust_crate/src/ws_renderer.rs only acknowledges frames; its render tick logs a line and never sends a rendered picture back, and the voxel bridge is not written. So the renderer does not yet do what its own header says.
+ 4. The director panel's pause shows "PAUSE FAILED" without the server's reason, because postJSON drops the reply on a 409. Not changed (not in main-debug, and it is her screen).
+ 5. static/control_stations.js listens for recording_paused and recording_resumed events that nothing sends. Not changed.
+ 
+diff --git a/modules/capture.py b/modules/capture.py
+index f3e60dc..39dec9c 100644
+--- a/modules/capture.py
++++ b/modules/capture.py
+@@ -25,11 +25,10 @@ import logging
+ import os
+ import re
+ import shutil
+-import signal
+ import time
+ from dataclasses import dataclass, field
+ from pathlib import Path
+-from typing import Dict, List, Optional
++from typing import Any, Dict, List, Optional
+ from urllib.parse import urlsplit, urlunsplit
+ 
+ logger = logging.getLogger(__name__)
+@@ -207,6 +206,43 @@ def _reserve_output_path(session_dir: Path, stem: str, ext: str, reserved: set)
+     return candidate
+ 
+ 
++def _probe(path: Path) -> Optional[dict]:
++    """Duration and stream kinds of a media file, from ffprobe; None when ffprobe is not there."""
++    probe = shutil.which(os.environ.get("PUBCAST_FFPROBE", "") or "ffprobe")
++    if not probe:
++        return None
++    import json
++    import subprocess
++    try:
++        out = subprocess.run([probe, "-v", "error", "-show_entries", "stream=codec_type:format=duration", "-of", "json",
++                              str(path)], capture_output=True, timeout=120, check=True).stdout
++        data = json.loads(out)
++        duration = float(data.get("format", {}).get("duration"))
++    except (subprocess.SubprocessError, OSError, ValueError, TypeError):
++        return {}
++    return {"duration": duration, "streams": sorted(s.get("codec_type") for s in data.get("streams", []))}
++
++
++def _joined_problem(joined: Path, pieces: List[Path]) -> Optional[str]:
++    """Why ``joined`` does not hold what ``pieces`` held, or None when it does."""
++    size = joined.stat().st_size
++    total = sum(p.stat().st_size for p in pieces)
++    if size < 0.9 * total:
++        return f"the joined file holds {size} bytes; the pieces hold {total}"
++    found = _probe(joined)
++    if found is None:
++        return None          # no ffprobe on this machine: the size is what can be checked
++    parts = [_probe(p) or {} for p in pieces]
++    if not found or any(not part for part in parts):
++        return "the joined file or a piece could not be read back"
++    expected = sum(part["duration"] for part in parts)
++    if abs(found["duration"] - expected) > 0.5 + 0.1 * len(parts):
++        return f"the joined file lasts {found['duration']:.2f} s; the pieces last {expected:.2f} s"
++    if any(part["streams"] != found["streams"] for part in parts):
++        return "the pieces do not all carry the same picture and sound streams"
++    return None
++
++
+ def _build_ffmpeg_output(profile, output_path: Path) -> List[str]:
+     """Return FFmpeg codec/output arguments from an EncodingProfile."""
+     args: List[str] = []
+@@ -247,108 +283,112 @@ _STOPPED_CLEANLY = (0, 255, -15)
+ 
+ 
+ class PauseUnsupported(RuntimeError):
+-    """This machine has no way to suspend a running FFmpeg, so a pause would not stop the recording."""
++    """A pause could not stop every encoder of a take, so the take was left recording."""
+ 
+ 
+-def _windows_suspend(pid: int, paused: bool) -> None:
+-    """Suspend or resume every thread of process ``pid`` (Windows has no SIGSTOP).
+-
+-    Uses the same system calls as Task Manager and Process Explorer (NtSuspendProcess and
+-    NtResumeProcess in ntdll), so nothing has to be installed.
+-    """
+-    import ctypes
+-    from ctypes import wintypes
+-
+-    process_suspend_resume = 0x0800
+-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+-    ntdll = ctypes.WinDLL("ntdll")
+-    kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+-    kernel32.OpenProcess.restype = wintypes.HANDLE
+-    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+-    call = ntdll.NtSuspendProcess if paused else ntdll.NtResumeProcess
+-    call.argtypes = (wintypes.HANDLE,)
+-    call.restype = ctypes.c_long
+-    handle = kernel32.OpenProcess(process_suspend_resume, False, pid)
+-    if not handle:
+-        raise OSError(ctypes.get_last_error(), f"Windows would not let PubCast {'pause' if paused else 'resume'} FFmpeg")
+-    try:
+-        status = call(handle)
+-    finally:
+-        kernel32.CloseHandle(handle)
+-    if status < 0:
+-        raise OSError(f"Windows refused to {'pause' if paused else 'resume'} FFmpeg (status 0x{status & 0xFFFFFFFF:08X})")
+-
+-
+-def _suspend(proc: "asyncio.subprocess.Process", paused: bool) -> None:
+-    """Stop or restart an encoder's clock: SIGSTOP/SIGCONT where they exist, the Windows calls on Windows."""
+-    if os.name == "nt":
+-        _windows_suspend(proc.pid, paused)
+-        return
+-    sig = getattr(signal, "SIGSTOP" if paused else "SIGCONT", None)
+-    if sig is None:
+-        raise PauseUnsupported("This machine cannot suspend a running FFmpeg capture, so the take cannot be paused")
+-    proc.send_signal(sig)
++@dataclass
++class _Piece:
++    """One stretch of a source's recording: from a start or resume to the pause or stop after it."""
++    path: Path
++    log_path: Optional[Path]
++    started_at: float
++    stopped_at: Optional[float] = None
++    returncode: Optional[int] = None
+ 
+ 
+ # ── Per-source process handle ─────────────────────────────────────────────────
+ @dataclass
+ class _CaptureProcess:
++    """One source's recording.
++
++    A pause finishes the file the running FFmpeg is writing and ends that FFmpeg, so nothing at all is read
++    from the camera while the take is paused. Suspending FFmpeg instead (SIGSTOP, or NtSuspendProcess on
++    Windows) only delays the recording: a live camera keeps sending, the stream waits in the network buffer,
++    and on resume FFmpeg writes the paused stretch into the file (measured 2026-11-25: a 5 s pause in 8 s of
++    recording gave a 13.9 s file from an SRT camera). Resume starts a new FFmpeg on the same camera writing
++    the next piece, and stop joins the pieces into ``output_path`` without re-encoding them.
++    """
+     source_id: str
+     output_path: Path
+     proc: asyncio.subprocess.Process
+     started_at: float = field(default_factory=time.time)
+     log_path: Optional[Path] = None
+     stopped_at: Optional[float] = None
++    cmd: List[str] = field(default_factory=list)     # the FFmpeg command; its last item is the file it writes
+     paused: bool = False
+     paused_since: Optional[float] = None
+-    paused_seconds: float = 0.0        # time spent suspended, finished pauses only
++    paused_seconds: float = 0.0        # time spent paused, finished pauses only
++    pieces: List[_Piece] = field(default_factory=list)   # finished pieces, oldest first
++    current_path: Optional[Path] = None                  # the file the running FFmpeg writes
++    piece_started_at: Optional[float] = None
++    join: Dict[str, Any] = field(default_factory=dict)   # what stop did with the pieces, when there was more than one
++
++    def __post_init__(self) -> None:
++        if self.current_path is None:
++            self.current_path = self.output_path
++        if self.piece_started_at is None:
++            self.piece_started_at = self.started_at
+ 
+-    def set_paused(self, paused: bool) -> None:
+-        """Suspend (True) or resume (False) this encoder. Raises when that did not happen."""
+-        if self.paused == paused:
+-            return
+-        if self.proc.returncode is not None:
+-            raise RuntimeError(f"The encoder for {self.source_id} has already stopped")
+-        _suspend(self.proc, paused)
+-        now = time.time()
+-        if paused:
+-            self.paused_since = now
+-        else:
+-            self.paused_seconds += now - (self.paused_since or now)
+-            self.paused_since = None
+-        self.paused = paused
++    @property
++    def ended(self) -> bool:
++        """True when this source records nothing more on its own: its FFmpeg exited without being paused."""
++        return self.proc.returncode is not None and not self.paused
++
++    def all_pieces(self, at: Optional[float] = None) -> List[_Piece]:
++        """Every piece so far, the one being written included."""
++        pieces = list(self.pieces)
++        if not self.paused:
++            pieces.append(_Piece(self.current_path, self.log_path, self.piece_started_at,
++                                 self.stopped_at or at, self.proc.returncode))
++        return pieces
+ 
+     def suspended_seconds(self, at: Optional[float] = None) -> float:
+-        """Seconds this encoder has been suspended, counting a pause still in progress."""
++        """Seconds this source has been paused, counting a pause still in progress."""
+         current = ((at or time.time()) - self.paused_since) if self.paused_since is not None else 0.0
+         return self.paused_seconds + max(0.0, current)
+ 
+-    async def terminate(self) -> None:
+-        self.stopped_at = time.time()
+-        if self.proc.returncode is None:
+-            if self.paused:
+-                # A suspended FFmpeg cannot read the "q" that finishes its file; let it run again first.
+-                try:
+-                    self.set_paused(False)
+-                except (ProcessLookupError, OSError, RuntimeError):
+-                    logger.warning("Could not resume the paused encoder for %s before stopping it", self.source_id)
+-            try:
+-                if self.proc.stdin:
+-                    self.proc.stdin.write(b"q")
+-                    await self.proc.stdin.drain()
+-            except (BrokenPipeError, ConnectionResetError):
+-                # FFmpeg cannot hear "q". Waiting for it to end by itself would hang on a live camera,
+-                # which never ends, so it gets the same grace time and then the stop signal.
+-                pass
++    async def _finish(self) -> None:
++        """Have FFmpeg finish the file it is writing: "q" first, then the stop signal, then kill."""
++        if self.proc.returncode is not None:
++            return
++        try:
++            if self.proc.stdin:
++                self.proc.stdin.write(b"q")
++                await self.proc.stdin.drain()
++        except (BrokenPipeError, ConnectionResetError):
++            # FFmpeg cannot hear "q". Waiting for it to end by itself would hang on a live camera,
++            # which never ends, so it gets the same grace time and then the stop signal.
++            pass
++        try:
++            await asyncio.wait_for(self.proc.wait(), timeout=8.0)
++        except asyncio.TimeoutError:
+             try:
+-                await asyncio.wait_for(self.proc.wait(), timeout=8.0)
++                self.proc.terminate()
++                await asyncio.wait_for(self.proc.wait(), timeout=5.0)
+             except asyncio.TimeoutError:
+-                try:
+-                    self.proc.terminate()
+-                    await asyncio.wait_for(self.proc.wait(), timeout=5.0)
+-                except asyncio.TimeoutError:
+-                    self.proc.kill()
+-                    await self.proc.wait()
++                self.proc.kill()
++                await self.proc.wait()
++
++    async def pause(self) -> bool:
++        """Finish this source's current piece. False when there was nothing recording to pause."""
++        if self.paused or self.proc.returncode is not None:
++            return False
++        at = time.time()
++        await self._finish()
++        self.pieces.append(_Piece(self.current_path, self.log_path, self.piece_started_at, at, self.proc.returncode))
++        self.paused, self.paused_since = True, at
++        logger.info("Capture for %s paused (piece %d ended, rc=%s)", self.source_id, len(self.pieces),
++                    self.proc.returncode)
++        return True
++
++    async def terminate(self) -> None:
++        self.stopped_at = time.time()
++        if self.paused:
++            # Nothing is running: the last piece was finished when the take was paused.
++            self.paused_seconds += self.stopped_at - (self.paused_since or self.stopped_at)
++            self.paused_since = None
++            return
++        await self._finish()
+         logger.info("Capture process for %s finished (rc=%s)", self.source_id, self.proc.returncode)
+ 
+ 
+@@ -367,6 +407,8 @@ class FFmpegCaptureEngine:
+         # What FFmpeg actually did, per session: failed starts and encoders that fell behind real time.
+         self._reports: Dict[str, List[dict]] = {}
+         self._startup_failures: Dict[str, List[dict]] = {}
++        # Sources that did not pause or resume properly, per session ({"source_id", "error", "phase"}).
++        self._pause_failures: Dict[str, List[dict]] = {}
+         try:
+             self._bin = _ffmpeg_bin()
+             logger.info("FFmpegCaptureEngine ready: %s", self._bin)
+@@ -483,6 +525,7 @@ class FFmpegCaptureEngine:
+             for cp in procs:
+                 if cp.output_path.parent.resolve() == folder:
+                     names.add(cp.output_path.name.casefold())
++                    names.update(piece.path.name.casefold() for piece in cp.all_pieces())
+         return names
+ 
+     async def _spawn(self, cmd: List[str], source_id: str, out_path: Path) -> Optional["_CaptureProcess"]:
+@@ -502,7 +545,7 @@ class FFmpegCaptureEngine:
+             logger.error("Failed to start FFmpeg for %s: %s", source_id, e)
+             return None
+         logger.info("Capture started for %s → %s (pid=%d)", source_id, out_path, proc.pid)
+-        return _CaptureProcess(source_id=source_id, output_path=out_path, proc=proc, log_path=log_path)
++        return _CaptureProcess(source_id=source_id, output_path=out_path, proc=proc, log_path=log_path, cmd=list(cmd))
+ 
+     async def _register_started(self, session_id: str, procs: List["_CaptureProcess"],
+                                 spawn_failures: Optional[List[dict]] = None) -> None:
+@@ -553,10 +596,11 @@ class FFmpegCaptureEngine:
+         return {"source_id": cp.source_id, "returncode": cp.proc.returncode,
+                 "error": self._log_tail(cp.log_path) or f"FFmpeg exited with status {cp.proc.returncode}"}
+ 
+-    def _report_for(self, cp: "_CaptureProcess") -> dict:
+-        """What this encode did, read from FFmpeg's own progress lines."""
++    @staticmethod
++    def _log_stats(path: Optional[Path]):
++        """(speed, encoded seconds, log text) from one FFmpeg log's progress lines."""
+         try:
+-            text = cp.log_path.read_text(errors="replace") if cp.log_path else ""
++            text = path.read_text(errors="replace") if path else ""
+         except OSError:
+             text = ""
+         speeds = re.findall(r"speed=\s*([0-9.]+)x", text)
+@@ -566,30 +610,54 @@ class FFmpegCaptureEngine:
+         if times:
+             h, m, sec = times[-1]
+             encoded = int(h) * 3600 + int(m) * 60 + float(sec)
++        return speed, encoded, text
++
++    def _report_for(self, cp: "_CaptureProcess") -> dict:
++        """What this source's recording did, read from FFmpeg's own progress lines (every piece of it)."""
+         end = cp.stopped_at or time.time()
+-        wall = end - cp.started_at
+-        suspended = cp.suspended_seconds(end)
+-        if suspended > 0 and encoded is not None and wall - suspended > 0:
+-            # FFmpeg's own speed counts the paused time as time it fell behind; a pause is not lag.
+-            speed = round(encoded / (wall - suspended), 3)
+-        size = cp.output_path.stat().st_size if cp.output_path.exists() else 0
++        pieces = cp.all_pieces(end)
++        speed, encoded, any_unopened, recorded = None, None, False, 0.0
+         warnings: List[str] = []
+-        rc = cp.proc.returncode
+-        if rc not in _STOPPED_CLEANLY + (None,):
+-            warnings.append(f"FFmpeg exited with status {rc}: {self._log_tail(cp.log_path)}")
+-        if text and "Input #0" not in text:
++        for piece in pieces:
++            piece_speed, piece_encoded, text = self._log_stats(piece.log_path)
++            if piece_encoded is not None:
++                encoded = (encoded or 0.0) + piece_encoded
++            speed = piece_speed if len(pieces) == 1 else speed
++            if piece.path.exists() and piece.path.stat().st_size > 0:
++                recorded += max(0.0, (piece.stopped_at or end) - piece.started_at)
++            elif cp.join.get("state") == "joined" and piece.path.name in cp.join.get("pieces", []) and piece_encoded:
++                recorded += max(0.0, (piece.stopped_at or end) - piece.started_at)   # its file is now in the joined one
++            if text and "Input #0" not in text:
++                any_unopened = True
++            if piece.returncode not in _STOPPED_CLEANLY + (None,):
++                warnings.append(f"FFmpeg exited with status {piece.returncode}: {self._log_tail(piece.log_path)}")
++        if len(pieces) > 1 and encoded is not None and recorded > 0:
++            # FFmpeg's own speed is per piece; across pieces it is what was encoded over the time recorded.
++            speed = round(encoded / recorded, 3)
++        if cp.output_path.exists():
++            size = cp.output_path.stat().st_size
++        else:
++            size = sum(p.path.stat().st_size for p in pieces if p.path.exists())
++        if any_unopened:
+             warnings.append("FFmpeg never opened the input: nothing connected to this listener, or the device or address could not be opened")
+         if size == 0:
+             warnings.append("No media was written for this source")
+-        if speed is not None and speed < _LAG_SPEED and wall - suspended >= 3.0:
++        if speed is not None and speed < _LAG_SPEED and recorded >= 3.0:
+             warnings.append(f"Encoder ran at {speed:.2f}x real time: this recording is shorter than the take "
+                             "and the missing footage is not recoverable. Use a lighter profile or a faster preset "
+                             "(PUBCAST_CAPTURE_X264_PRESET).")
+-        report = {"source_id": cp.source_id, "returncode": rc, "output_bytes": size,
+-                  "wall_seconds": round(wall, 2), "encoded_seconds": encoded, "speed": speed,
++        if cp.join.get("state") == "failed":
++            warnings.append(f"The pieces of this paused recording could not be joined, so each is kept: {cp.join.get('error')}")
++        report = {"source_id": cp.source_id, "returncode": cp.proc.returncode, "output_bytes": size,
++                  "wall_seconds": round(end - cp.started_at, 2), "encoded_seconds": encoded, "speed": speed,
+                   "warnings": warnings, "log": cp.log_path.as_posix() if cp.log_path else None}
+-        if suspended > 0:
++        suspended = cp.suspended_seconds(end)
++        if suspended > 0 or len(pieces) > 1:
+             report["paused_seconds"] = round(suspended, 2)
++            report["recorded_seconds"] = round(recorded, 2)
++            report["pieces"] = len(pieces)
++        if cp.join:
++            report["join"] = dict(cp.join)
+         return report
+ 
+     @staticmethod
+@@ -625,6 +693,10 @@ class FFmpegCaptureEngine:
+         output_paths: List[Path] = []
+         # Every camera is told to stop at once: one slow encoder must not hold the others (or a PANIC) back.
+         results = await asyncio.gather(*(cp.terminate() for cp in procs), return_exceptions=True)
++        # A take that was paused has its pieces joined back into one file per camera, all cameras at once.
++        await asyncio.gather(*(self._join(cp) for cp, result in zip(procs, results)
++                               if not isinstance(result, BaseException) and cp.proc.returncode is not None),
++                             return_exceptions=True)
+         reports = self._reports.setdefault(session_id, [])
+         for cp, result in zip(procs, results):
+             error = result if isinstance(result, BaseException) else None
+@@ -635,7 +707,10 @@ class FFmpegCaptureEngine:
+                 report["error"] = failure
+                 logger.warning("Capture %s/%s: %s", session_id, cp.source_id, failure)
+             reports.append(report)
+-            if cp.proc.returncode is not None and report["output_bytes"] > 0:
++            if cp.proc.returncode is not None and cp.join.get("state") == "failed":
++                # Nothing is lost: every piece is a whole file of its own and is handed on as it is.
++                output_paths += [Path(p) for p in cp.join.get("kept", [])]
++            elif cp.proc.returncode is not None and report["output_bytes"] > 0:
+                 output_paths.append(cp.output_path)
+                 logger.info("Artifact ready: %s (%d bytes)", cp.output_path, report["output_bytes"])
+             elif cp.proc.returncode is not None:
+@@ -649,47 +724,161 @@ class FFmpegCaptureEngine:
+             self._active.pop(session_id, None)
+         return output_paths
+ 
++    async def _join(self, cp: "_CaptureProcess") -> None:
++        """Join the pieces of a paused recording into ``cp.output_path`` without re-encoding them.
++
++        The pieces are removed only after the joined file has been read back and holds what they held; if the
++        join fails, or cannot be checked, every piece is kept and handed on as it is.
++        """
++        pieces = cp.all_pieces()
++        if len(pieces) < 2 or cp.join:
++            return
++        folder = cp.output_path.parent
++        stem, ext = cp.output_path.stem, cp.output_path.suffix.lstrip(".")
++        usable = [p for p in pieces if p.path.is_file() and p.path.stat().st_size > 0]
++        cp.join = {"state": "running", "pieces": [p.path.name for p in pieces]}
++        if not usable:
++            cp.join = {"state": "empty", "pieces": cp.join["pieces"]}
++            return
++        try:
++            first = pieces[0]
++            if first.path == cp.output_path and first.path.exists():
++                # The first piece was written under the take's own name; it moves aside so the joined file can have it.
++                moved = _reserve_output_path(folder, f"{stem}.part001", ext, self._reserved_names(folder))
++                if moved.exists():
++                    raise FileExistsError(moved.name)
++                os.rename(first.path, moved)
++                if first.log_path and first.log_path.exists():
++                    log_moved = moved.with_name(moved.name + _LOG_SUFFIX)
++                    if not log_moved.exists():
++                        os.rename(first.log_path, log_moved)
++                        first.log_path = log_moved
++                first.path = moved
++                cp.join["pieces"][0] = moved.name
++            usable = [p for p in pieces if p.path.is_file() and p.path.stat().st_size > 0]
++            listing = folder / f".{cp.output_path.name}.pieces.txt"
++            listing.write_text("ffconcat version 1.0\n" + "".join(
++                "file '" + p.path.name.replace("'", "'\\''") + "'\n" for p in usable), encoding="utf-8")
++            joining = folder / f".{stem}.joining.{ext}"
++            if joining.exists() or cp.output_path.exists():
++                raise FileExistsError(joining.name if joining.exists() else cp.output_path.name)
++            log_path = cp.output_path.with_name(cp.output_path.name + _LOG_SUFFIX)
++            cmd = [self._bin, "-n", "-hide_banner", "-nostdin", "-f", "concat", "-safe", "0", "-i", listing.name,
++                   "-map", "0", "-c", "copy", joining.name]
++            with open(log_path, "ab") as log:
++                proc = await asyncio.create_subprocess_exec(*cmd, cwd=str(folder), stdin=asyncio.subprocess.DEVNULL,
++                                                            stdout=asyncio.subprocess.DEVNULL, stderr=log)
++                await asyncio.wait_for(proc.wait(), timeout=3600)
++            if proc.returncode != 0 or not joining.is_file():
++                raise RuntimeError(f"FFmpeg exited with status {proc.returncode}: {self._log_tail(log_path, 2)}")
++            problem = await asyncio.to_thread(_joined_problem, joining, [p.path for p in usable])
++            if problem:
++                raise RuntimeError(problem)
++            os.rename(joining, cp.output_path)
++            for piece in usable:
++                piece.path.unlink()
++            listing.unlink()
++            cp.join = {"state": "joined", "pieces": cp.join["pieces"], "file": cp.output_path.name}
++        except Exception as exc:
++            logger.error("Pieces of %s could not be joined: %s", cp.output_path, exc)
++            kept = [str(p.path) for p in pieces if p.path.is_file() and p.path.stat().st_size > 0]
++            cp.join = {"state": "failed", "pieces": cp.join.get("pieces", []), "kept": kept, "error": str(exc)[:400]}
++
+     def failures(self, session_id: str) -> List[dict]:
+-        """Sources of a session that did not record properly: failed to start, or failed when stopped.
++        """Sources of a session that did not record properly: failed to start, pause, resume, or stop.
+ 
+-        Each is ``{"source_id", "error", "phase"}`` with phase "start" or "stop"."""
++        Each is ``{"source_id", "error", "phase"}`` with phase "start", "pause", "resume" or "stop"."""
+         items = [{"source_id": f.get("source_id"), "error": f.get("error"), "phase": "start"}
+                  for f in self._startup_failures.get(session_id, [])]
++        items += [dict(f) for f in self._pause_failures.get(session_id, [])]
+         items += [{"source_id": r.get("source_id"), "error": r.get("error"), "phase": "stop"}
+                   for r in self._reports.get(session_id, []) if r.get("failed")]
+         return items
+ 
+-    def set_paused(self, session_id: str, paused: bool) -> None:
+-        """Suspend or resume every encoder of ``session_id``, or none of them.
++    async def set_paused(self, session_id: str, paused: bool) -> List[dict]:
++        """Pause or resume every source of ``session_id``. Returns the sources that did not (failures).
+ 
+-        Raises (PauseUnsupported, OSError, RuntimeError) when a running encoder could not change; the ones
+-        that already had are put back, so the take is never half paused. A pause that cannot happen
+-        is reported, never skipped: a "paused" take that keeps recording is the worse failure.
++        A pause finishes each running encoder's file and ends it, so nothing is recorded until resume. Resume
++        starts each paused source again into a new piece. Raises PauseUnsupported when an encoder could not be
++        ended; the sources already paused are then started again, so the take is never half paused.
+         """
+-        changed: List[_CaptureProcess] = []
+-        try:
+-            for cp in self._active.get(session_id, []):
+-                # An encoder that already ended (one that failed to start, say) records nothing to pause.
+-                if cp.paused != paused and cp.proc.returncode is None:
+-                    cp.set_paused(paused)
+-                    changed.append(cp)
+-        except Exception:
+-            for cp in reversed(changed):
+-                try:
+-                    cp.set_paused(not paused)
+-                except (RuntimeError, OSError):
+-                    logger.exception("Could not put the encoder for %s back as it was", cp.source_id)
+-            raise
++        procs = self._active.get(session_id, [])
++        problems: List[dict] = []
++        if paused:
++            results = await asyncio.gather(*(cp.pause() for cp in procs), return_exceptions=True)
++            stuck = [cp for cp, result in zip(procs, results)
++                     if isinstance(result, BaseException) and cp.proc.returncode is None]
++            if stuck:
++                paused_now = [cp for cp, result in zip(procs, results) if result is True]
++                await self._resume_all(session_id, paused_now)
++                raise PauseUnsupported("These cameras could not be stopped, so the take is still recording: "
++                                       + ", ".join(cp.source_id for cp in stuck))
++            for cp, result in zip(procs, results):
++                if result is True and cp.pieces and cp.pieces[-1].returncode not in _STOPPED_CLEANLY:
++                    problems.append({"source_id": cp.source_id, "phase": "pause",
++                                     "error": f"FFmpeg exited with status {cp.pieces[-1].returncode} when paused: "
++                                              f"{self._log_tail(cp.pieces[-1].log_path, 2)}"})
++        else:
++            problems = await self._resume_all(session_id, [cp for cp in procs if cp.paused])
++        if problems:
++            self._pause_failures.setdefault(session_id, []).extend(problems)
++            self._bound(self._pause_failures)
++            for item in problems:
++                logger.error("Capture for %s did not %s: %s", item["source_id"], item["phase"], item["error"])
++        return problems
++
++    async def _resume_all(self, session_id: str, procs: List["_CaptureProcess"]) -> List[dict]:
++        results = await asyncio.gather(*(self._resume_one(cp) for cp in procs), return_exceptions=True)
++        problems: List[dict] = []
++        started: List[_CaptureProcess] = []
++        for cp, result in zip(procs, results):
++            if isinstance(result, BaseException):
++                problems.append({"source_id": cp.source_id, "phase": "resume", "error": f"could not be started again: {result}"})
++            elif isinstance(result, dict):
++                problems.append(result)
++            else:
++                started.append(cp)
++        if started:
++            # A camera that cannot be opened again exits within moments; say so now, as at the start.
++            await asyncio.sleep(_STARTUP_CHECK_SECONDS)
++            problems += [{**self._describe(cp), "phase": "resume"} for cp in started if cp.proc.returncode is not None]
++        for item in problems:
++            item.pop("returncode", None)
++        return problems
++
++    async def _resume_one(self, cp: "_CaptureProcess") -> Optional[dict]:
++        """Start a paused source again, writing its next piece. A dict says why it could not be."""
++        if not cp.paused:
++            return None
++        if not cp.cmd or cp.cmd[-1] != str(cp.output_path):
++            return {"source_id": cp.source_id, "phase": "resume", "error": "the command that recorded this source is not known"}
++        folder = cp.output_path.parent
++        path = _reserve_output_path(folder, f"{cp.output_path.stem}.part{len(cp.pieces) + 1:03d}",
++                                    cp.output_path.suffix.lstrip("."), self._reserved_names(folder))
++        cmd = cp.cmd[:-1] + [str(path)]
++        if "-re" in cmd:
++            # A file camera plays on while the take is paused, as a live one does: it comes back where it has got to.
++            at = cmd.index("-re") + 1
++            cmd[at:at] = ["-ss", f"{time.time() - cp.started_at:.3f}"]
++        fresh = await self._spawn(cmd, cp.source_id, path)
++        if fresh is None:
++            return {"source_id": cp.source_id, "phase": "resume",
++                    "error": "FFmpeg could not be started again after the pause; see the server log"}
++        now = time.time()
++        cp.proc, cp.log_path, cp.current_path, cp.piece_started_at = fresh.proc, fresh.log_path, path, fresh.started_at
++        cp.paused_seconds += now - (cp.paused_since or now)
++        cp.paused, cp.paused_since = False, None
++        return None
+ 
+     def is_paused(self, session_id: str) -> bool:
+-        procs = self._active.get(session_id, [])
+-        return bool(procs) and all(cp.paused for cp in procs if cp.proc.returncode is None)
++        procs = [cp for cp in self._active.get(session_id, []) if not cp.ended]
++        return bool(procs) and all(cp.paused for cp in procs)
+ 
+-    async def pause(self, session_id: str) -> None:
+-        self.set_paused(session_id, True)
++    async def pause(self, session_id: str) -> List[dict]:
++        return await self.set_paused(session_id, True)
+ 
+-    async def resume(self, session_id: str) -> None:
+-        self.set_paused(session_id, False)
++    async def resume(self, session_id: str) -> List[dict]:
++        return await self.set_paused(session_id, False)
+ 
+     def is_capturing(self, session_id: str) -> bool:
+         return session_id in self._active
+diff --git a/modules/production_routes.py b/modules/production_routes.py
+index dfc76c1..869f676 100644
+--- a/modules/production_routes.py
++++ b/modules/production_routes.py
+@@ -865,32 +865,53 @@ def create_production_router(
+             session = recording.get_session(session_id)
+         except KeyError as exc:
+             raise HTTPException(400, str(exc))
+-        if session.state in (RecordingState.ACTIVE, RecordingState.PAUSED) and recording_modes.owns_capture(session_id):
+-            # A data-only or main-camera take records through its mode, which has no pause yet. Marking it
+-            # paused while it keeps recording would say something untrue.
+-            raise HTTPException(409, f"A {session.mode.replace('_', ' ')} take cannot be paused yet; it is still recording")
++        live = session.state in (RecordingState.ACTIVE, RecordingState.PAUSED)
++        word = "paused" if paused else "resumed"
++        problems: List[Dict[str, Any]] = []
+         engine_changed = False
+-        if capture_engine is not None and capture_engine.is_capturing(session_id) and session.state in (
+-                RecordingState.ACTIVE, RecordingState.PAUSED):
+-            set_paused = getattr(capture_engine, "set_paused", None)
+-            try:
+-                if callable(set_paused):
+-                    set_paused(session_id, paused)
+-                else:
+-                    await (capture_engine.pause(session_id) if paused else capture_engine.resume(session_id))
+-                engine_changed = True
+-            except (RuntimeError, OSError, NotImplementedError) as exc:
+-                raise HTTPException(409, f"The cameras could not be {'paused' if paused else 'resumed'}: {exc}")
++        modes_changed = False
++
++        async def engine_pause(value: bool) -> List[Dict[str, Any]]:
++            result = capture_engine.set_paused(session_id, value)
++            if asyncio.iscoroutine(result):
++                result = await result
++            return list(result or [])
++
+         try:
+-            session = recording.pause_session(session_id, paused)
+-        except (KeyError, ValueError) as exc:
++            # The camcorder path's cameras (every chosen camera, for the whole take) ...
++            if live and capture_engine is not None and capture_engine.is_capturing(session_id):
++                problems += await engine_pause(paused)
++                engine_changed = True
++            # ... and what a data-only or main-camera take records itself, with every mode's show data.
++            if live:
++                mode_problems = await recording_modes.set_paused(session_id, paused)
++                if mode_problems is not None:
++                    problems += mode_problems
++                    modes_changed = True
++        except (RuntimeError, OSError, NotImplementedError, ValueError) as exc:
+             if engine_changed:
+                 try:
+-                    getattr(capture_engine, "set_paused")(session_id, not paused)
++                    await engine_pause(not paused)
+                 except Exception:
+                     logger.exception("Could not put the cameras of %s back after a failed pause", session_id)
++            raise HTTPException(409, f"The take could not be {word}: {exc}")
++        _note_capture_errors(session_id, problems)
++        try:
++            session = recording.pause_session(session_id, paused)
++        except (KeyError, ValueError) as exc:
++            try:
++                if engine_changed:
++                    await engine_pause(not paused)
++                if modes_changed:
++                    await recording_modes.set_paused(session_id, not paused)
++            except Exception:
++                logger.exception("Could not put the cameras of %s back after a failed pause", session_id)
+             raise HTTPException(400, str(exc))
+-        return session.to_dict()
++        reply = session.to_dict()
++        if problems:
++            # Named here as well as kept with the take: a camera that did not come back after a pause is not recording.
++            reply["pause_problems"] = problems
++        return reply
+ 
+     @router.post("/api/recording/{session_id}/marker")
+     async def add_marker(session_id: str, request: Request, identity: Dict[str, Any] = Depends(require_role("mod"))):
+diff --git a/modules/recording_modes.py b/modules/recording_modes.py
+index 15bb291..ea1ec17 100644
+--- a/modules/recording_modes.py
++++ b/modules/recording_modes.py
+@@ -52,6 +52,7 @@ import threading
+ import time
+ import zlib
+ from dataclasses import dataclass, field
++from types import SimpleNamespace
+ from pathlib import Path
+ from typing import Any, Dict, Iterator, List, Optional, Tuple
+ 
+@@ -180,6 +181,7 @@ class ShowDataRecorder:
+         self.raw_bytes = 0
+         self.error: Optional[str] = None
+         self.closed = False
++        self.paused = False           # while the take is paused nothing it receives is kept
+         self.summary: Dict[str, Any] = {}
+ 
+     def open(self) -> None:
+@@ -192,9 +194,9 @@ class ShowDataRecorder:
+             self._write(header)
+             self._flush()
+ 
+-    def record(self, kind: str, data: Any, *, room: Optional[str] = None) -> None:
++    def record(self, kind: str, data: Any, *, room: Optional[str] = None, during_pause: bool = False) -> None:
+         with self._lock:
+-            if self.closed or self.error or self._gz is None:
++            if self.closed or self.error or self._gz is None or (self.paused and not during_pause):
+                 return
+             entry: Dict[str, Any] = {"seq": self.events, "t": round(time.monotonic() - self._t0, 6),
+                                      "utc": time.time(), "kind": kind}
+@@ -483,6 +485,11 @@ class ModeTake:
+         self._loop = asyncio.get_running_loop()
+         self._worker: Optional[asyncio.Task] = None
+         self._next_index = 1
++        # Each pause as [wall time paused, wall time resumed (None while still paused)].
++        self.pauses: List[List[Optional[float]]] = []
++        # A cut, a pause and a resume never run at the same time: each sees the others finished.
++        self._busy = asyncio.Lock()
++        self._paused_keys: Dict[str, str] = {}
+ 
+     # -- start ---------------------------------------------------------------------------------------------
+     async def begin(self) -> List[str]:
+@@ -498,8 +505,9 @@ class ModeTake:
+             jobs.append(self._start_program())
+         if self.mode in ("data_only", "main_camera"):
+             jobs.append(self._start_sound())
+-        for result in await asyncio.gather(*jobs):
+-            paths += result
++        async with self._busy:
++            for result in await asyncio.gather(*jobs):
++                paths += result
+         if self.mode == "main_camera":
+             self._worker = asyncio.create_task(self._work(), name=f"recording-mode-{self.session_id}")
+             self._worker.add_done_callback(_report_task_failure)
+@@ -670,7 +678,7 @@ class ModeTake:
+         if seg is None or seg.state != "running":
+             return
+         engine = self.controller.capture_engine
+-        seg.stop_requested_at = time.time()
++        seg.stop_requested_at = seg.stop_requested_at or time.time()
+         await engine.stop(seg.key)
+         report = engine.report(seg.key) if hasattr(engine, "report") else []
+         seg.report = report[0] if report else {}
+@@ -679,7 +687,7 @@ class ModeTake:
+         seg.duration = info.get("duration") or seg.report.get("encoded_seconds")
+         seg.has_audio = bool(info.get("audio"))
+         speed = seg.report.get("speed")
+-        wall = seg.stop_requested_at - seg.spawned_at
++        wall = self._clock(seg.stop_requested_at) - self._clock(seg.spawned_at)     # paused time left out
+         if seg.duration and seg.duration - wall > 0.75:
+             seg.error = (f"the file holds {seg.duration:.2f} s for {wall:.2f} s of take: the source was not paced to "
+                          "the clock (a test pattern does this), so this piece's timing is not the take's")
+@@ -687,8 +695,9 @@ class ModeTake:
+             seg.error = f"the encoder fell behind real time ({speed:.2f}x), so this piece is shorter than its stretch"
+         if seg.duration:
+             # FFmpeg writes every frame it read before it was told to stop, so the file ends at the stop request.
+-            seg.media_offset = seg.stop_requested_at - seg.duration
+-            seg.first_frame_at = max(seg.spawned_at, seg.media_offset)
++            # Both times are take time (see _clock): a paused stretch is in neither the file nor the program.
++            seg.media_offset = self._clock(seg.stop_requested_at) - seg.duration
++            seg.first_frame_at = max(self._clock(seg.spawned_at), seg.media_offset)
+         else:
+             seg.error = seg.error or "no picture was written"
+         self.controller._witness(self.session, "segment_stopped", source_id=seg.source_id, segment=index,
+@@ -729,10 +738,13 @@ class ModeTake:
+             if event is None:
+                 return
+             try:
+-                if event.destination == "program":
+-                    await self._cut(event)
+-                elif event.destination == "preview" and self.arm_preview:
+-                    await self._preview_changed(event)
++                async with self._busy:
++                    if self.state != "recording":
++                        pass             # paused: nothing records; resume puts the live camera back
++                    elif event.destination == "program":
++                        await self._cut(event)
++                    elif event.destination == "preview" and self.arm_preview:
++                        await self._preview_changed(event)
+             except Exception as exc:     # a cut must never take the whole recording down
+                 logger.exception("Recording mode %s could not follow a cut", self.session_id)
+                 self.notes.append(f"A cut to {getattr(event, 'source_id', '?')} could not be followed: {exc}")
+@@ -819,11 +831,125 @@ class ModeTake:
+             return          # that camera is already recording, as the one on the live screen
+         await self._arm(target)
+ 
++    # -- pause ---------------------------------------------------------------------------------------------
++    def _clock(self, t: Optional[float]) -> Optional[float]:
++        """Take time: wall time with every paused stretch before ``t`` taken out (a time inside a pause is the
++        moment that pause began). The picture and sound files hold take time, since nothing records while paused.
++        With no pause, take time is wall time."""
++        if t is None:
++            return None
++        removed = 0.0
++        for start, end in self.pauses:
++            if start is None or t <= start:
++                break
++            stop = end if end is not None else (self.stopped_at or time.time())
++            if t < stop:
++                return start - removed
++            removed += stop - start
++        return t - removed
++
++    def paused_seconds(self) -> float:
++        now = self.stopped_at or time.time()
++        return sum((end if end is not None else now) - start for start, end in self.pauses)
++
++    def _engine_keys(self) -> Dict[str, str]:
++        """Every encoder this take runs itself, with the name the operator knows it by."""
++        keys: Dict[str, str] = {}
++        for seg in self.segments.values():
++            if seg.state == "running":
++                keys[seg.key] = seg.source_id
++        for entry in self.sound:
++            if entry.get("key") and entry.get("state") == "recording":
++                keys[entry["key"]] = f"{entry['source_id']} (sound)"
++        if self.microphone and self.microphone.get("state") == "recording" and self.microphone.get("key"):
++            keys[self.microphone["key"]] = "microphone"
++        return keys
++
++    async def set_paused(self, paused: bool) -> List[Dict[str, Any]]:
++        """Pause or resume everything this take records: picture, sound, microphone and show data.
++
++        While paused nothing is written: each encoder has finished its piece, the show data keeps nothing it
++        receives, and cuts are not followed. Resume starts the encoders again into new pieces and, on a
++        main-camera take, records whichever camera is on the live screen by then. Returns the sources that
++        did not pause or resume properly; raises when one could not be stopped (the take then keeps recording).
++        """
++        async with self._busy:
++            if self.state not in ("recording", "paused"):
++                raise ModeRequestError("This take is not recording")
++            if paused == (self.state == "paused"):
++                return []
++            engine = self.controller.capture_engine
++            keys = self._engine_keys() if paused else dict(self._paused_keys)
++            at = time.time()
++            cameras = self.controller.cameras
++            program = cameras.get_program_source()
++            if not paused and self.mode == "main_camera" and not self.arm_preview and self._program is not None:
++                seg = self.segments.get(self._program)
++                if seg is not None and program is not None and program.source_id != seg.source_id:
++                    # Cut away from while paused: that camera is not on the live screen any more, so it does not
++                    # record again; the cut that follows closes it and starts the camera that is.
++                    keys.pop(seg.key, None)
++                    seg.stop_requested_at = self.pauses[-1][0]     # its file ends where the pause began
++            problems: List[Dict[str, Any]] = []
++            if engine is not None and keys:
++                if paused:
++                    results = await asyncio.gather(*(engine.set_paused(key, True) for key in keys), return_exceptions=True)
++                    failed = [key for key, result in zip(keys, results) if isinstance(result, BaseException)]
++                    if failed:
++                        done = [key for key, result in zip(keys, results) if not isinstance(result, BaseException)]
++                        await asyncio.gather(*(engine.set_paused(key, False) for key in done), return_exceptions=True)
++                        raise RuntimeError("could not stop " + ", ".join(keys[key] for key in failed) + "; the take is still recording")
++                else:
++                    results = await asyncio.gather(*(engine.set_paused(key, False) for key in keys), return_exceptions=True)
++                for key, result in zip(keys, results):
++                    if isinstance(result, BaseException):
++                        problems.append({"source_id": keys[key], "error": str(result), "phase": "resume"})
++                    else:
++                        problems += [{**item, "source_id": keys[key]} for item in result]
++            if paused:
++                self._paused_keys = keys
++                self.pauses.append([at, None])
++                self.state = "paused"
++                if self.data is not None:
++                    self.data.record("take.paused", {"paused_seconds_before": round(self.paused_seconds(), 3)},
++                                     during_pause=True)
++                    self.data.paused = True
++            else:
++                self._paused_keys = {}
++                self.pauses[-1][1] = at
++                self.state = "recording"
++                preview = cameras.get_preview_source()
++                if self.data is not None:
++                    self.data.paused = False
++                    # Camera moves while paused were not kept, so the record says where every camera stands now.
++                    self.data.record("take.resumed", {
++                        "paused_seconds": round(self.paused_seconds(), 3),
++                        "program": program.source_id if program else None,
++                        "preview": preview.source_id if preview else None,
++                        "cameras": [{"source_id": c.source_id, "position": list(c.position), "rotation": list(c.rotation),
++                                     "fov": c.fov, "focus": getattr(c, "focus", None)} for c in cameras.list_sources()]})
++                if self.mode == "main_camera":
++                    current = self.intervals[-1].source_id if self.intervals else None
++                    if program is not None and program.source_id != current:
++                        self._queue.put_nowait(SimpleNamespace(destination="program", source_id=program.source_id,
++                                                               timestamp=at, resumed=True))
++                    if self.arm_preview and preview is not None:
++                        self._queue.put_nowait(SimpleNamespace(destination="preview", source_id=preview.source_id,
++                                                               timestamp=at, resumed=True))
++            for item in problems:
++                self.notes.append(f"{item['source_id']} did not {item.get('phase', 'resume')}: {str(item.get('error'))[:200]}")
++            self.controller._witness(self.session, "mode_paused" if paused else "mode_resumed",
++                                     paused_seconds=round(self.paused_seconds(), 3), problems=len(problems))
++            self._write_record()
++            return problems
++
+     # -- stop ----------------------------------------------------------------------------------------------
+     async def end(self) -> List[Dict[str, Any]]:
+         """Stop everything this mode started; returns the media files to register."""
+         self.state = "stopping"
+         self.stopped_at = time.time()
++        if self.pauses and self.pauses[-1][1] is None:
++            self.pauses[-1][1] = self.stopped_at      # stopped while paused: the pause lasts to the stop
+         if self._worker is not None:
+             self._queue.put_nowait(None)
+             try:
+@@ -831,6 +957,8 @@ class ModeTake:
+             except asyncio.TimeoutError:
+                 self._worker.cancel()
+                 self.notes.append("A cut was still being followed when the take stopped")
++        await self._busy.acquire()          # a pause or resume still running finishes first
++        self._busy.release()
+         self._end_current(at=self.stopped_at)
+         engine = self.controller.capture_engine
+         media: List[Dict[str, Any]] = []
+@@ -905,7 +1033,9 @@ class ModeTake:
+         width, height = (profile.resolution or "1920x1080").lower().split("x")
+         rate = profile.frame_rate or "30"
+         frame = 1.0 / float(rate)
+-        origin, pieces = plan_program(self.intervals, self.segments, frame=frame)
++        # Segment files hold take time (paused stretches left out); the live-screen stretches are wall times.
++        intervals = [dataclasses.replace(i, start=self._clock(i.start), end=self._clock(i.end)) for i in self.intervals]
++        origin, pieces = plan_program(intervals, self.segments, frame=frame)
+         if not pieces:
+             return {"state": "empty", "error": "nothing was on the live screen long enough to join"}
+         total = sum(_piece_duration(p) for p in pieces)
+@@ -948,7 +1078,7 @@ class ModeTake:
+         if mic_path is not None:
+             chains.append("".join(labels) + f"concat=n={len(pieces)}:v=1:a=0[vout]")
+             m = input_of(mic_path)
+-            mic_first = mic["_stop_at"] - mic["duration"]
++            mic_first = self._clock(mic["_stop_at"]) - mic["duration"]
+             offset = origin - mic_first
+             lead = f"atrim=start={offset:.6f}," if offset > 0 else ""
+             delay = f"adelay={int(round(-offset * 1000))}:all=1," if offset < 0 else ""
+@@ -991,6 +1121,8 @@ class ModeTake:
+         take = cls(controller, session)
+         take.t0 = float(record.get("take_started_utc") or session.started_at)
+         absolute = lambda value: None if value is None else take.t0 + float(value)
++        take.pauses = [[absolute(p.get("paused_at")), absolute(p.get("resumed_at"))] for p in record.get("pauses") or []
++                       if p.get("paused_at") is not None]
+         program = record.get("program") or {}
+         for item in program.get("segments", []):
+             seg = Segment(index=int(item["index"]), source_id=str(item["source_id"]), key="",
+@@ -1005,7 +1137,7 @@ class ModeTake:
+                 info = await asyncio.to_thread(probe_media, seg.file)
+                 seg.duration, seg.has_audio = info.get("duration"), bool(info.get("audio"))
+                 if seg.duration:
+-                    seg.first_frame_at = seg.media_offset = seg.spawned_at
++                    seg.first_frame_at = seg.media_offset = take._clock(seg.spawned_at)
+                     seg.stop_requested_at = seg.spawned_at + seg.duration
+                     seg.error = "timing estimated: the server stopped before this piece was closed"
+             take.segments[seg.index] = seg
+@@ -1036,7 +1168,9 @@ class ModeTake:
+             if cut.get("handled") in ("started",) and seg is not None and seg.first_frame_at is not None:
+                 cut["effective_at"] = seg.first_frame_at
+             if cut.get("effective_at") is not None and cut["kind"] == "cut":
+-                cut["late_by_ms"] = max(0, int(round((cut["effective_at"] - cut["requested_at"]) * 1000)))
++                # effective_at from a first frame is take time; the request is wall time, so it is moved the same way.
++                requested = self._clock(cut["requested_at"]) if cut.get("handled") == "started" else cut["requested_at"]
++                cut["late_by_ms"] = max(0, int(round((cut["effective_at"] - requested) * 1000)))
+ 
+     def record(self) -> Dict[str, Any]:
+         self._effective_cuts()
+@@ -1051,7 +1185,10 @@ class ModeTake:
+             "description": MODES[self.mode], "record_data": bool(self.session.record_data),
+             "arm_preview": self.arm_preview, "state": self.state, "take_started_utc": self.t0,
+             "stopped_at": rel(self.stopped_at),
+-            "times": "seconds from take_started_utc, wall clock",
++            "times": "seconds from take_started_utc, wall clock; a segment's media_offset and first_frame_at, and a "
++                     "started cut's effective_at, are take time: wall time with the pauses before them taken out",
++            "pauses": [{"paused_at": rel(start), "resumed_at": rel(end)} for start, end in self.pauses],
++            "paused_seconds": round(self.paused_seconds(), 3),
+             "program": None if self.mode != "main_camera" else {
+                 "cuts": [{**c, "requested_at": rel(c.get("requested_at")), "effective_at": rel(c.get("effective_at"))}
+                          for c in self.cuts],
+@@ -1124,7 +1261,7 @@ class RecordingModeController:
+ 
+     def _on_hub_message(self, kind: str, room: Optional[str], message: Dict[str, Any]) -> None:
+         for take in list(self._takes.values()):
+-            if take.data is None:
++            if take.data is None or take.state == "paused":
+                 continue
+             if kind == "system":
+                 take.data.record("hub.system", message)
+@@ -1209,6 +1346,16 @@ class RecordingModeController:
+                 self._assemblies.pop(done, None)
+         return artifacts if take.mode != "camcorder" else None
+ 
++    async def set_paused(self, session_id: str, paused: bool) -> Optional[List[Dict[str, Any]]]:
++        """Pause or resume what this take's mode records itself (and its show data, in every mode).
++
++        None when no take of that id is recording here. Otherwise the sources that did not pause or resume
++        properly, as {"source_id", "error", "phase"}. Raises when something could not be stopped."""
++        take = self._takes.get(session_id)
++        if take is None:
++            return None
++        return await take.set_paused(paused)
++
+     def start_problems(self, session_id: str) -> List[Dict[str, Any]]:
+         """Anything this mode could not start, in the same shape as the camcorder path's capture errors."""
+         take = self._takes.get(session_id)
+diff --git a/tests/test_capture_engine_safety.py b/tests/test_capture_engine_safety.py
+index 72b7abe..05436c7 100644
+--- a/tests/test_capture_engine_safety.py
++++ b/tests/test_capture_engine_safety.py
+@@ -1,10 +1,12 @@
+-"""The capture engine keeps every recording, pauses for real, and says which camera failed.
++"""The capture engine keeps every recording, pauses for real (nothing is recorded while paused), and says which camera failed.
+ 
+ These run the real FFmpeg (skipped where it is not installed) on short real-time inputs, so each
+ test takes a few seconds.
+ """
+ import asyncio
++import json
+ import os
++import re
+ import shutil
+ import subprocess
+ import time
+@@ -64,68 +66,122 @@ def test_a_file_already_in_the_take_folder_is_never_written_over(tmp_path):
+     assert engine.failures("take") == []
+ 
+ 
+-def test_pause_stops_the_encoder_and_is_not_reported_as_lag(tmp_path):
+-    if os.name == "nt":
+-        pytest.skip("this test signals FFmpeg the POSIX way")
+-    tone = _tone(tmp_path / "tone.wav", 30)
++def _probe(path: Path) -> dict:
++    out = subprocess.run([shutil.which("ffprobe"), "-v", "error", "-show_entries", "format=duration:stream=codec_type",
++                          "-of", "json", str(path)], capture_output=True, check=True).stdout
++    data = json.loads(out)
++    return {"duration": float(data["format"]["duration"]), "streams": sorted(s["codec_type"] for s in data["streams"])}
++
++
++def _live_camera(port: int):
++    """A camera that streams live over UDP whether or not anyone is recording it, as a real one does."""
++    return subprocess.Popen([FFMPEG, "-v", "error", "-re", "-f", "lavfi", "-i", "testsrc=size=320x180:rate=30",
++                             "-f", "lavfi", "-i", "sine=frequency=300", "-c:v", "libx264", "-preset", "ultrafast",
++                             "-tune", "zerolatency", "-g", "30", "-c:a", "aac", "-f", "mpegts",
++                             f"udp://127.0.0.1:{port}?pkt_size=1316"])
++
++
++def _udp_source(source_id, port):
++    return SimpleNamespace(source_id=source_id, transport=SimpleNamespace(value="udp"),
++                           endpoint=f"udp://127.0.0.1:{port}?fifo_size=100000&overrun_nonfatal=1")
++
++
++def _video_profile(tmp_path):
++    return create_recording_service(tmp_path / "svc", create_default_cameras()).get_profile("web_stream")
++
++
++@pytest.mark.skipif(shutil.which("ffprobe") is None, reason="ffprobe is not installed")
++def test_a_paused_stretch_is_not_in_a_live_cameras_file(tmp_path):
++    # Suspending FFmpeg left a 5 s pause in the file: the stream waited and was written on resume.
++    port = 24000 + os.getpid() % 1000
++    camera = _live_camera(port)
+     take = tmp_path / "take"
+     take.mkdir()
+ 
+     async def run():
+         engine = _engine()
+-        [path] = await engine.start("take", [_file_source("mic", tone)], _audio_profile(tmp_path), take)
+-        await asyncio.sleep(2.0)
+-        await engine.pause("take")
++        [path] = await engine.start("take", [_udp_source("cam", port)], _video_profile(tmp_path), take)
++        await asyncio.sleep(7.0)
++        assert await engine.pause("take") == []
+         assert engine.is_paused("take")
+-        await asyncio.sleep(0.5)               # anything already buffered reaches the file
++        await asyncio.sleep(1.0)
+         held = path.stat().st_size
+-        await asyncio.sleep(2.0)
+-        still = path.stat().st_size
+-        await engine.resume("take")
+-        assert not engine.is_paused("take")
+-        await asyncio.sleep(2.0)
++        await asyncio.sleep(4.0)
++        assert path.stat().st_size == held, "the file grew while the take was paused"
++        assert await engine.resume("take") == []
++        await asyncio.sleep(7.0)
+         await engine.stop("take")
+-        return engine, path, held, still
++        return engine, path
+ 
+-    engine, path, held, still = asyncio.run(run())
+-    assert still == held, "the file kept growing while the take was paused"
+-    assert path.stat().st_size > held, "recording did not continue after resume"
++    try:
++        engine, path = asyncio.run(run())
++    finally:
++        camera.terminate()
+     [report] = engine.report("take")
+-    assert report["paused_seconds"] >= 2.0
+-    assert not any("shorter" in w or "behind" in w for w in report["warnings"]), report["warnings"]
+-    assert not report.get("failed")
++    media = _probe(path)
++    assert report["join"]["state"] == "joined", report
++    assert report["paused_seconds"] >= 5.0
++    assert media["streams"] == ["audio", "video"]
++    # 14 s recorded around a 5 s pause: the file holds the recorded time, not the wall time.
++    assert media["duration"] <= report["wall_seconds"] - 4.0, (media, report)
++    assert abs(media["duration"] - report["recorded_seconds"]) < 1.5, (media, report)
++    assert not report["warnings"], report["warnings"]
++    assert sorted(p.name for p in take.iterdir() if not p.name.endswith(".log")) == ["cam.webm"]
++    assert engine.failures("take") == []
+ 
+ 
+-def test_a_pause_that_cannot_reach_every_encoder_changes_none_of_them(tmp_path, monkeypatch):
+-    from modules import capture
+-    tone = _tone(tmp_path / "tone.wav", 10)
++def test_a_take_stopped_while_paused_keeps_what_was_recorded(tmp_path):
++    tone = _tone(tmp_path / "tone.wav", 30)
+     take = tmp_path / "take"
+     take.mkdir()
+-    real_suspend = capture._suspend
+ 
+     async def run():
+         engine = _engine()
+-        await engine.start("take", [_file_source("a", tone), _file_source("b", tone)], _audio_profile(tmp_path), take)
+-        first, second = engine._active["take"]
+-
+-        def suspend(proc, paused):
+-            if proc is second.proc:
+-                raise OSError("refused")
+-            real_suspend(proc, paused)
+-
+-        monkeypatch.setattr(capture, "_suspend", suspend)
+-        with pytest.raises(OSError):
+-            await engine.pause("take")
+-        assert first.paused is False and second.paused is False
+-        monkeypatch.setattr(capture, "_suspend", real_suspend)
++        [path] = await engine.start("take", [_file_source("mic", tone)], _audio_profile(tmp_path), take)
++        await asyncio.sleep(3.0)
++        await engine.pause("take")
++        await asyncio.sleep(1.0)
+         await engine.stop("take")
++        return engine, path
+ 
+-    asyncio.run(run())
++    engine, path = asyncio.run(run())
++    [report] = engine.report("take")
++    assert not report.get("failed"), report
++    assert path.stat().st_size > 0
++    assert report["paused_seconds"] >= 1.0
++
++
++def test_a_file_camera_resumes_where_it_has_got_to(tmp_path):
++    # Five seconds of tone, then silence. Resumed about 6.5 s in, the clip has reached the silence; a camera
++    # that started its clip over would record the tone again.
++    clip = tmp_path / "clip.wav"
++    subprocess.run([FFMPEG, "-v", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=5", "-f", "lavfi",
++                    "-i", "anullsrc=r=44100:cl=mono", "-filter_complex", "[1]atrim=duration=25[s];[0][s]concat=n=2:v=0:a=1",
++                    str(clip)], check=True)
++    take = tmp_path / "take"
++    take.mkdir()
++
++    async def run():
++        engine = _engine()
++        [path] = await engine.start("take", [_file_source("clip", clip)], _audio_profile(tmp_path), take)
++        await asyncio.sleep(3.0)
++        await engine.pause("take")
++        await asyncio.sleep(3.0)
++        await engine.resume("take")
++        await asyncio.sleep(3.0)
++        await engine.stop("take")
++        return engine, path
++
++    engine, path = asyncio.run(run())
++    [report] = engine.report("take")
++    assert report["join"]["state"] == "joined", report
++    after = subprocess.run([FFMPEG, "-hide_banner", "-ss", "5.0", "-i", str(path), "-af", "volumedetect", "-f", "null", "-"],
++                           capture_output=True, text=True).stderr
++    level = float(re.search(r"max_volume: (-?[0-9.]+) dB", after).group(1))
++    assert level < -60, f"the resumed piece holds the start of the clip again (max {level} dB)"
+ 
+ 
+ def test_an_encoder_that_already_ended_does_not_block_the_pause(tmp_path):
+-    if os.name == "nt":
+-        pytest.skip("this test signals FFmpeg the POSIX way")
+     tone = _tone(tmp_path / "tone.wav", 10)
+     take = tmp_path / "take"
+     take.mkdir()
+@@ -142,6 +198,34 @@ def test_an_encoder_that_already_ended_does_not_block_the_pause(tmp_path):
+     asyncio.run(run())
+ 
+ 
++def test_a_camera_that_cannot_come_back_after_a_pause_is_named(tmp_path):
++    tone = _tone(tmp_path / "tone.wav", 30)
++    gone = tmp_path / "gone.wav"
++    shutil.copy(tone, gone)
++    take = tmp_path / "take"
++    take.mkdir()
++
++    async def run():
++        engine = _engine()
++        await engine.start("take", [_file_source("stays", tone), _file_source("unplugged", gone)],
++                           _audio_profile(tmp_path), take)
++        await asyncio.sleep(2.0)
++        await engine.pause("take")
++        gone.unlink()                       # the camera is unplugged while the take is paused
++        problems = await engine.resume("take")
++        await asyncio.sleep(1.0)
++        paths = await engine.stop("take")
++        return engine, problems, paths
++
++    engine, problems, paths = asyncio.run(run())
++    assert [p["source_id"] for p in problems] == ["unplugged"]
++    assert problems[0]["phase"] == "resume"
++    assert {"source_id": "unplugged", "phase": "resume"}.items() <= next(
++        f for f in engine.failures("take") if f["phase"] == "resume").items()
++    # What it recorded before the pause is kept.
++    assert sorted(p.name for p in paths) == ["stays.wav", "unplugged.wav"]
++
++
+ def test_one_broken_camera_is_named_and_the_others_still_record(tmp_path):
+     tone = _tone(tmp_path / "tone.wav", 10)
+     take = tmp_path / "take"
+diff --git a/tests/test_recording_modes_e2e.py b/tests/test_recording_modes_e2e.py
+index d6468f2..bd7a869 100644
+--- a/tests/test_recording_modes_e2e.py
++++ b/tests/test_recording_modes_e2e.py
+@@ -20,6 +20,8 @@ What is proved:
+   whole take;
+ * main camera only with the preview armed: a take (preview to program) lands with no delay;
+ * a camera in the dressing room is never recorded: its stretch is black and no file of it exists;
++* pause in every mode records nothing while paused: the files leave the paused stretch out (the cameras' clocks
++  jump by the pause), the show data keeps nothing from it, and a main-camera take comes back on the camera cut to;
+ * requests a mode cannot honour are refused with a reason;
+ * the show data and mode record travel with an exported take.
+ 
+@@ -403,6 +405,122 @@ def test_an_armed_preview_takes_to_the_live_screen_with_no_delay(host):
+         assert cut["handled"] == "armed" and cut["late_by_ms"] == 0, cut
+ 
+ 
++# --- pause: a paused take records nothing ------------------------------------------------------------------------
++def paused_length_ok(path, report, paused):
++    """A paused file holds the encoder's run less the pause: one joined file, the paused stretch left out."""
++    seconds = probe(path)["seconds"]
++    assert report["join"]["state"] == "joined" and report["pieces"] == 2, report
++    assert abs(report["paused_seconds"] - paused) < 0.5, report
++    assert abs(seconds - (report["wall_seconds"] - report["paused_seconds"])) < 0.6, (path.name, seconds, report)
++    return seconds
++
++
++def report_for(stopped, name):
++    [report] = [r for r in stopped["capture_report"] if (r.get("join") or {}).get("file") == name]
++    return report
++
++
++def pause(host, session_id, paused=True):
++    r = host.client.post(f"/api/recording/{session_id}/pause", json={"paused": paused})
++    assert r.status_code == 200, r.text
++    assert r.json()["state"] == ("paused" if paused else "active"), r.json()
++    assert not r.json().get("pause_problems"), r.json()["pause_problems"]
++    return r.json()
++
++
++def test_a_paused_camcorder_take_leaves_the_pause_out_of_its_files(host):
++    program(host, "live_red")
++    _, t0 = start(host, "pause_camcorder", "camcorder", sources=["live_red"])
++    at(t0, 4.0)
++    pause(host, "pause_camcorder")
++    at(t0, 8.0)
++    pause(host, "pause_camcorder", False)
++    at(t0, 12.0)
++    stopped = stop(host, "pause_camcorder")
++    folder = session_dir(host, "pause_camcorder")
++    [video] = [a["name"] for a in stopped["artifacts"] if a["name"].endswith(".webm")]
++    # 12 s of take with a 4 s pause: about 8 s recorded, plus the moments the start and stop take, not 12.
++    paused_length_ok(folder / video, report_for(stopped, video), 4.0)
++    assert not [p.name for p in folder.iterdir() if ".part0" in p.name and not p.name.endswith(".log")]
++    # The camera's clock in the picture jumps by the pause: what it showed while paused is not in the file.
++    sampled = [(t, g) for t, colour, g in frames(folder / video) if colour == "R"]
++    jumps = [circular((b[1] - a[1]) / RAMP - (b[0] - a[0])) for a, b in zip(sampled, sampled[1:])]
++    assert max(jumps) > 3.0, f"no jump in the camera's clock: {max(jumps):.2f} s"
++    header, events, _ = show_data(folder / "show_data.jsonl.gz")
++    kinds = [e["kind"] for e in events]
++    assert kinds.count("take.paused") == 1 and kinds.count("take.resumed") == 1
++
++
++def test_a_paused_data_only_take_keeps_nothing_from_the_pause(host):
++    program(host, "live_red"); preview(host, "live_blue")
++    _, t0 = start(host, "pause_data", "data_only", sources=["live_red", "live_blue"])
++    at(t0, 2.0)
++    program(host, "live_blue")                 # kept: the take is recording
++    at(t0, 3.0)
++    pause(host, "pause_data")
++    at(t0, 4.0)
++    program(host, "live_red")                  # not kept: the take is paused
++    at(t0, 7.0)
++    pause(host, "pause_data", False)
++    at(t0, 10.0)
++    stopped = stop(host, "pause_data")
++    folder = session_dir(host, "pause_data")
++    record = mode_record(host, "pause_data")
++    reports = {s["file"]: s["report"] for s in record["sound"]}
++    for name, hz in (("sound_live_red.wav", 440), ("sound_live_blue.wav", 880)):
++        paused_length_ok(folder / name, reports[name], 4.0)
++        assert abs(dominant_hz(folder / name) - hz) < 10
++    assert sorted(a["name"] for a in stopped["artifacts"]) == ["sound_live_blue.wav", "sound_live_red.wav"]
++    header, events, footer = show_data(folder / "show_data.jsonl.gz")
++    paused_at = next(e["t"] for e in events if e["kind"] == "take.paused")
++    resumed = next(e for e in events if e["kind"] == "take.resumed")
++    assert not [e for e in events if paused_at < e["t"] < resumed["t"] and not e["kind"].startswith("take.")], \
++        "nothing that happened during the pause is in the show data"
++    assert resumed["data"]["program"] == "live_red", "the record says where the cameras stood when it resumed"
++    cuts = [e["data"]["source_id"] for e in events if e["kind"] == "camera.switch" and e["data"]["destination"] == "program"]
++    assert cuts == ["live_blue"], cuts
++    assert len(record["pauses"]) == 1 and 3.5 <= record["paused_seconds"] <= 4.5, record["pauses"]
++
++
++def test_a_paused_main_camera_take_leaves_the_pause_out_of_the_program(host):
++    program(host, "live_red"); preview(host, "live_blue")
++    _, t0 = start(host, "pause_main", "main_camera", sources=["live_red", "live_blue"])
++    at(t0, 3.0)
++    program(host, "live_blue")
++    at(t0, 6.0)
++    pause(host, "pause_main")
++    at(t0, 7.0)
++    program(host, "live_red")                  # cut while paused: red is on the live screen when it resumes
++    at(t0, 10.0)
++    pause(host, "pause_main", False)
++    at(t0, 14.0)
++    stop(host, "pause_main")
++    record = mode_record(host, "pause_main", joined=True)
++    assert record["assembly"]["state"] == "complete", record["assembly"]
++    assert not record["assembly"]["warnings"], record["assembly"]["warnings"]
++    path = session_dir(host, "pause_main") / record["assembly"]["file"]
++    info = probe(path)
++    paused = record["paused_seconds"]
++    assert 3.5 <= paused <= 4.5
++    expected = record["stopped_at"] - record["assembly"]["origin"] - paused
++    assert abs(info["seconds"] - expected) < 0.4, f"program {info['seconds']:.2f} s, take less pause {expected:.2f} s"
++    sampled = frames(path)
++    colours = "".join(c for _, c, _ in sampled if c in "RB")
++    runs = [c for i, c in enumerate(colours) if i == 0 or colours[i - 1] != c]
++    assert runs == ["R", "B", "R"], f"the program shows {runs}"
++    # Blue ended where the pause began; red is back with the camera's clock jumped by the pause.
++    blue = [(t, g) for t, c, g in sampled if c == "B"]
++    red_after = [(t, g) for t, c, g in sampled if c == "R" and t > blue[-1][0]]
++    pause_began = record["pauses"][0]["paused_at"]
++    assert blue[-1][0] <= pause_began + 0.2, f"blue lasts to {blue[-1][0]:.2f} s of the program, pause at {pause_began:.2f}"
++    # Each camera's sound runs from its encoder's start to its stop, less the pause, and is one joined file.
++    for sound in record["sound"]:
++        paused_length_ok(session_dir(host, "pause_main") / sound["file"], sound["report"], paused)
++    assert red_after, "red is not back after the pause"
++    cuts = [c for c in record["program"]["cuts"] if c["kind"] == "cut"]
++    assert [c["to"] for c in cuts] == ["live_blue", "live_red"], cuts
++
++
+ def test_a_camera_in_the_dressing_room_is_never_recorded(host):
+     program(host, "live_red"); preview(host, "live_blue")
+     refused = host.client.post("/api/recording/start", json={"mode": "main_camera", "profile_id": PROFILE,
+-- 
+2.43.0
+
