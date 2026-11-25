@@ -11,6 +11,7 @@ and future integration with Rust rendering core for 3D voxel cameras.
 
 from __future__ import annotations
 
+import math
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -111,9 +112,18 @@ class CameraManager:
             )
 
     def remove(self, source_id: str) -> None:
-        """Remove a camera source."""
+        """Remove a camera source.
+
+        A removed camera can no longer be Program or Preview. Leaving its id
+        behind made ``take()`` swap in a source that no longer exists and emit
+        switch events for it.
+        """
         self._sources.pop(source_id, None)
         self._status.pop(source_id, None)
+        if self._program_source == source_id:
+            self._program_source = None
+        if self._preview_source == source_id:
+            self._preview_source = None
 
     def list_sources(self) -> List[CameraSource]:
         """Get all registered camera sources."""
@@ -172,12 +182,16 @@ class CameraManager:
             pos = [float(v) for v in position]
             if len(pos) != 3:
                 raise ValueError("position must contain x,y,z")
+            if not all(math.isfinite(v) for v in pos):
+                raise ValueError("position must be finite numbers")
             if pos != source.position:
                 source.position = pos; changed = True
         if rotation is not None:
             rot = [float(v) for v in rotation]
             if len(rot) != 3:
                 raise ValueError("rotation must contain x,y,z")
+            if not all(math.isfinite(v) for v in rot):
+                raise ValueError("rotation must be finite numbers")
             if rot != source.rotation:
                 source.rotation = rot; changed = True
         if fov is not None:

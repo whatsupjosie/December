@@ -26,6 +26,7 @@ class RustCameraRuntime:
         if self.enabled and not self.token:
             raise RuntimeError("PUBCAST_CAMERA_CONTROL_TOKEN is required when Rust camera control is enabled")
         self._ws=None; self._lock=asyncio.Lock(); self._sub=None; self._last_revision=0
+        self._tasks:set=set()  # strong references: a bare create_task can be garbage collected mid-flight
         self.last_ack:Optional[dict]=None; self.last_error:Optional[str]=None
         self.ensure_minimum_voxel_cameras()
 
@@ -57,27 +58,37 @@ class RustCameraRuntime:
 
     async def stop(self)->None:
         if self._sub is not None: self.cameras.unsubscribe(self._sub); self._sub=None
+        pending=list(self._tasks)
+        for task in pending: task.cancel()
+        if pending: await asyncio.gather(*pending,return_exceptions=True)
         if self._ws is not None: await self._ws.close(); self._ws=None
 
     def _on_camera_event(self,event:Any)->None:
         if not self.enabled: return
-        try: asyncio.get_running_loop().create_task(self._mirror(event))
-        except RuntimeError: pass
+        try: task=asyncio.get_running_loop().create_task(self._mirror(event))
+        except RuntimeError: return
+        self._tasks.add(task); task.add_done_callback(self._tasks.discard)
 
     async def _mirror(self,event:Any)->None:
+        """Mirror one event; a failure is recorded in status, not lost as an unretrieved task error."""
+        try: await self._mirror_event(event)
+        except asyncio.CancelledError: raise
+        except Exception as exc: self.last_error=f"camera mirror failed: {exc}"
+
+    async def _mirror_event(self,event:Any)->None:
         source=self.cameras.get(getattr(event,"source_id",""))
         if source is None or source.transport!=CameraTransport.VOXEL_3D: return
         if isinstance(event,CameraSwitchEvent):
             mode="Program" if event.destination=="program" else "Preview"
             await self._request("set_mode",camera_id=source.source_id,revision=self._revision(),mode=mode,
-                                position=source.position,rotation=source.rotation,fov=source.fov)
+                                position=source.position,rotation=source.rotation,fov=source.fov,focus=source.focus)
         elif isinstance(event,CameraPoseEvent):
             await self._request("update_pose",camera_id=source.source_id,revision=self._revision(),
-                                position=event.position,rotation=event.rotation,fov=event.fov)
+                                position=event.position,rotation=event.rotation,fov=event.fov,focus=event.focus)
 
     async def _register(self,source:CameraSource)->dict:
         return await self._request("register",camera_id=source.source_id,revision=self._revision(),name=source.name,
-                                   position=source.position,rotation=source.rotation,fov=source.fov)
+                                   position=source.position,rotation=source.rotation,fov=source.fov,focus=source.focus)
 
     async def _request(self,action:str,**payload)->dict:
         if self._ws is None: raise RuntimeError("Rust camera control is not connected")

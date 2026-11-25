@@ -23,6 +23,7 @@ import json
 import logging
 import os
 import time
+from pathlib import Path
 from zipfile import BadZipFile
 from typing import Any, Dict, List, Optional
 
@@ -196,10 +197,16 @@ def create_production_router(
         if not capture_engine.is_capturing(session_id):
             return []
         paths = await capture_engine.stop(session_id)
+        synthetic_lookup = getattr(capture_engine, "synthetic_outputs", None)
+        synthetic = {Path(p).as_posix() for p in synthetic_lookup(session_id)} if callable(synthetic_lookup) else set()
         artifacts: List[Dict[str, Any]] = []
         for path in paths:
+            is_synthetic = Path(path).as_posix() in synthetic
             try:
-                artifact = recording.register_artifact(session_id, path)
+                # The flag is only passed when set, so recording-service stand-ins
+                # without the keyword keep working.
+                artifact = (recording.register_artifact(session_id, path, synthetic=True)
+                            if is_synthetic else recording.register_artifact(session_id, path))
             except Exception as exc:
                 logger.warning("Could not register capture artifact %s for %s: %s", path, session_id, exc)
                 continue
@@ -208,6 +215,8 @@ def create_production_router(
                 "format": artifact.format.value,
                 "file_path": artifact.file_path.as_posix(),
                 "size_bytes": artifact.size_bytes,
+                # True when the file is an FFmpeg test pattern, not camera or PubWorld video.
+                "synthetic": is_synthetic,
             })
         return artifacts
 

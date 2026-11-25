@@ -23,6 +23,12 @@ import uuid
 import numpy as np
 
 from modules.persistence import write_json
+from modules.camera_config_io import (
+    metadata_from_record,
+    preserve_unreadable_config,
+    rtsp_url,
+    usb_ffmpeg_format,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -108,9 +114,15 @@ class CameraMetadata:
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'CameraMetadata':
-        """Create from dictionary"""
-        return cls(**data)
+    def from_dict(cls, data: Dict[str, Any], *, reset_runtime_state: bool = False) -> 'CameraMetadata':
+        """Create from dictionary.
+
+        Tolerates the ``id`` key that ``save_configuration`` writes beside the
+        metadata, and restores enums and tuples from their JSON forms. With
+        ``reset_runtime_state`` a saved connecting/online/recording status is
+        loaded as offline, because nothing is connected after a restart.
+        """
+        return metadata_from_record(cls, data, reset_runtime_state=reset_runtime_state)
 
 class CameraSource:
     """Individual camera source with real-time monitoring"""
@@ -193,7 +205,7 @@ class CameraSource:
             cmd = [
                 "ffprobe", 
                 "-v", "quiet",
-                "-f", "video4linux2" if "linux" in device_path else "dshow",
+                "-f", usb_ffmpeg_format(device_path),
                 "-i", device_path,
                 "-show_streams",
                 "-select_streams", "v:0"
@@ -223,10 +235,7 @@ class CameraSource:
         """Connect to IP camera via RTSP/HTTP"""
         try:
             # Build RTSP URL
-            if self.metadata.username and self.metadata.password:
-                url = f"rtsp://{self.metadata.username}:{self.metadata.password}@{self.metadata.connection_string}"
-            else:
-                url = f"rtsp://{self.metadata.connection_string}"
+            url = rtsp_url(self.metadata.connection_string, self.metadata.username, self.metadata.password)
             
             if self.metadata.port:
                 url += f":{self.metadata.port}"
@@ -440,10 +449,7 @@ class CameraSource:
             input_format = "video4linux2" if device.startswith("/dev/") else "dshow"
             return ["-f", input_format, "-i", device]
         if transport == CameraTransport.IP_CAMERA:
-            if self.metadata.username and self.metadata.password:
-                url = f"rtsp://{self.metadata.username}:{self.metadata.password}@{source}"
-            else:
-                url = f"rtsp://{source}"
+            url = rtsp_url(source, self.metadata.username, self.metadata.password)
             if self.metadata.port:
                 url += f":{self.metadata.port}"
             return ["-rtsp_transport", "tcp", "-i", url]
@@ -617,16 +623,37 @@ class AdvancedCameraManager:
                 with open(self.config_path, 'r') as f:
                     config = json.load(f)
                 
+                skipped = []
                 for camera_data in config.get('cameras', []):
-                    metadata = CameraMetadata.from_dict(camera_data)
-                    camera = CameraSource(camera_data['id'], metadata)
-                    self.sources[camera_data['id']] = camera
+                    try:
+                        camera_id = str(camera_data['id'])
+                        metadata = CameraMetadata.from_dict(camera_data, reset_runtime_state=True)
+                    except Exception as camera_error:
+                        # One bad entry must not discard the other cameras.
+                        skipped.append(camera_error)
+                        logger.error("Skipping unreadable camera entry: %s", camera_error)
+                        continue
+                    camera = CameraSource(camera_id, metadata)
+                    self.sources[camera_id] = camera
                 
-                # Load production state
+                # Load production state, dropping references to cameras that
+                # were not loaded so the manager never points at a missing source.
                 production_state = config.get('production_state', {})
-                self.program_source = production_state.get('program_source')
-                self.preview_source = production_state.get('preview_source')
-                self.recording_sources = production_state.get('recording_sources', [])
+                program = production_state.get('program_source')
+                preview = production_state.get('preview_source')
+                self.program_source = program if program in self.sources else None
+                self.preview_source = preview if preview in self.sources else None
+                self.recording_sources = [
+                    camera_id for camera_id in production_state.get('recording_sources', [])
+                    if camera_id in self.sources
+                ]
+                self.auto_switch_rules = config.get('auto_switch_rules', {})
+                
+                if skipped:
+                    # The next save would overwrite the entries we could not read.
+                    preserve_unreadable_config(self.config_path)
+                if skipped and not self.sources:
+                    self._create_default_cameras()
                 
                 logger.info(f"Loaded configuration for {len(self.sources)} cameras")
             else:
@@ -635,6 +662,11 @@ class AdvancedCameraManager:
                 
         except Exception as e:
             logger.error(f"Failed to load camera configuration: {e}")
+            preserve_unreadable_config(self.config_path)
+            self.sources.clear()
+            self.program_source = None
+            self.preview_source = None
+            self.recording_sources = []
             self._create_default_cameras()
     
     def _create_default_cameras(self):
@@ -719,7 +751,8 @@ class AdvancedCameraManager:
             logger.info("Camera configuration saved")
             
         except Exception as e:
-            logger.error(f"Failed to save camera configuration: {e}")
+            logger.exception("Failed to save camera configuration")
+            raise
     
     async def initialize_all_cameras(self) -> Dict[str, bool]:
         """Initialize all configured cameras"""
@@ -887,8 +920,19 @@ class AdvancedCameraManager:
             return False
         
         # Disconnect if connected
-        _t = asyncio.create_task(self.disconnect_camera(camera_id))
-        _t.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+        try:
+            _t = asyncio.get_running_loop().create_task(self.disconnect_camera(camera_id))
+        except RuntimeError:
+            # Called from synchronous code: no event loop is running, so there is
+            # nothing to schedule. Stop an owned capture process directly instead
+            # of failing before the camera is removed.
+            _source = self.sources[camera_id]
+            _source.is_capturing = False
+            _proc = getattr(_source, "capture_process", None)
+            if _proc is not None and _proc.poll() is None:
+                _proc.terminate()
+        else:
+            _t.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
         
         # Update production state
         if self.program_source == camera_id:

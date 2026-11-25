@@ -58,6 +58,10 @@ class RecordingArtifact:
     format: ContainerFormat
     file_path: Path
     size_bytes: int = 0
+    # True when the file is an FFmpeg test pattern (a ``virtual`` camera), not
+    # camera or rendered PubWorld video. Only written to disk when True, so
+    # existing session files and exports are unchanged.
+    synthetic: bool = False
 
 
 @dataclass
@@ -115,6 +119,7 @@ class RecordingSession:
                     "format": art.format.value,
                     "file_path": art.file_path.as_posix(),
                     "size_bytes": art.size_bytes,
+                    **({"synthetic": True} if art.synthetic else {}),
                 }
                 for art in self.artifacts
             ],
@@ -520,8 +525,12 @@ class RecordingService:
         *,
         name: Optional[str] = None,
         format: Optional[ContainerFormat] = None,
+        synthetic: bool = False,
     ) -> RecordingArtifact:
-        """Register a captured media file on a recording session."""
+        """Register a captured media file on a recording session.
+
+        ``synthetic`` marks a test-pattern recording so it is not mistaken for real video.
+        """
         session = self.get_session(session_id)
         path = Path(file_path)
         if not path.exists() or not path.is_file():
@@ -540,6 +549,7 @@ class RecordingService:
             format=artifact_format,
             file_path=path,
             size_bytes=path.stat().st_size,
+            synthetic=bool(synthetic),
         )
         session.artifacts = [
             existing for existing in session.artifacts
@@ -752,7 +762,8 @@ class RecordingService:
                         raise ValueError("Original encoded take failed its saved integrity check")
                     metadata["artifacts"].append({"name": artifact.name, "format": artifact.format.value,
                                                   "file_path": source_member,
-                                                  "size_bytes": size})
+                                                  "size_bytes": size,
+                                                  **({"synthetic": True} if artifact.synthetic else {})})
                     if profile and encoder_available and not (session.profile_id == "browser_original" and artifact.format == container):
                         name = f"{index:04d}_{Path(safe_name).stem}.{container.value}"
                         out_path = staging / name
@@ -971,6 +982,7 @@ class RecordingService:
                 format=ContainerFormat(item["format"]),
                 file_path=self._session_dir(session.session_id) / Path(str(item["file_path"]).replace("\\", "/")).name,
                 size_bytes=item.get("size_bytes", 0),
+                synthetic=bool(item.get("synthetic", False)),
             )
             for item in payload.get("artifacts", [])
         ]
