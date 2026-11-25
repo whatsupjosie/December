@@ -1,6 +1,6 @@
 # Installed: Director Dock restore and Control Room routing (Nov 21) (2026-11-25)
 
-**Status: installed in main-assembly and proven. Copied to Parts-Live-Archive as `director-dock/`.**
+**Status: WITHDRAWN (Nov 25, 05:08 UTC). Moved back out of main-assembly by a revert commit, removed from Parts-Live-Archive, and put in parts-assembly. It was not proven: it has no tests of its own, and serving its pages is not the same as using them. What would prove it: opening the Control Room and the director switcher in a real browser and using the Director Dock. The text below is the original install note, kept as it was.**
 
 ## What it is
 
