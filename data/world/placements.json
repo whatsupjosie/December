@@ -14629,6 +14629,22 @@
    ],
    "hotspots": [
     {
+     "id": "booth-table-dice",
+     "label": "Booth table: Liar's Dice",
+     "at": [
+      240,
+      585
+     ],
+     "r": 45,
+     "status": "proposed",
+     "note": "MY PROPOSAL, not yours: Josie asked for Liar's Dice at the bar and to click the table to play. I put the spot on the table of the nearest striped booth; the exact table is my reading of the picture, tell me if she meant another.",
+     "action": {
+      "type": "custom",
+      "event": "Sit down to a game of Liar's Dice against one to three opponents.",
+      "minigame": "liarsdice"
+     }
+    },
+    {
      "id": "booth-sit",
      "label": "Sit (booth)",
      "at": [
