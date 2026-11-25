@@ -13,6 +13,7 @@ Every file here is copied exactly from pre-dec branch `claude/integrate-stronges
 3. **VDI engine:** modules/vdi_engine.py. Same commit 613792a, not wired. Waiting on her: which API it exposes.
 4. **Renderer crates, vendored:** rust_crate/vendor/ (95 Rust crates). From pre-dec branch `claude/renderer-crates-vendored-2026-11-24`. Vendored, not built. Note: pre-dec's assembly ledger says ws_renderer was rebuilt offline from these crates; the instruction for December is that they are vendored and not built, so they wait here.
 5. **Camera pause rebuild:** patches/camera-pause-rebuild/. A patch, not files; see its README. Waiting on a try on Windows.
+6. **Director Dock restore and Control Room routing:** patches/director-dock/. A patch, not files; see its README. Moved back here from main-assembly on Nov 25 because it was not proven. Waiting on being used in a real browser.
 
 PEQ and cre_eq are EQ work, so they are in the alex branch, not here.
 
