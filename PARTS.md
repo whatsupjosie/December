@@ -18,6 +18,13 @@ Every file here is copied exactly from pre-dec branch `claude/integrate-stronges
 8. **PubPartner connector baseline:** patches/pubpartner-connector-baseline/. A patch; see its README. Moved back here from main-assembly on Nov 25: its connection routes passed, but the connector itself and its screens were never run. Waiting on the MCP SDK and a real browser.
 9. **Sir Purfluous:** patches/sir-purfluous/. Two patches; see its README. Her words: "Superfluous right now goes into parts assembly." His tests passed while he was installed.
 
+The next four are collections, not installable parts. They keep each file at its original repo path under a repos/ folder (Drive files under drive/), so they are not laid out at main-assembly paths. Each has a SOURCES.md listing where every file came from. All copied on Nov 25; nothing was deleted anywhere and nothing was taken out of main-assembly.
+
+10. **Sir Purfluous, everything else:** characters/sir-purfluous/. His files from every branch of pre-dec and Beyond-October (runtime, waiting room, character profile, cue cards, bots, salvage proposals, diagnostics, tests, recovery zips, Blender model, early nudge code) plus older versions from Drive. His monologues are in drive/BELLE_EPOQUE_CHARACTER_BIBLES/. Her words: "along with any of the other superfluous files, his monologues, the chats discussing him and his design and development. The bot, the AI instructions, whatever."
+11. **Pete and RePete:** characters/pete-and-repeat/. History and monologues (Drive character bibles), bots, character data, runtimes, Pete director page, sprites, reference sheets, models and Blender builds, plus older versions from Drive. Her words: "Pete and Repeat's history and their monologues and their anything we have on their avatars or bots, their design art, their reference art."
+12. **Story bible and storylines:** story/. The story bible (TikTok movie arc, Poppy), cast files, the PubCast Character Bible docx and the Belle Epoque character bibles from Drive. Snow Day was not found anywhere this session can read; see story/SOURCES.md.
+13. **Avatars and motion capture:** avatars-and-mocap/. Avatar and mocap code, pages, tests, test models, and the avatar, motion capture and animation recovery folders, plus a few Drive-only files. Her words: "because avatars are going to be the next thing we work on. And motion capture with that." Many of these files are also in main-assembly (marked in its SOURCES.md); they were copied, not moved.
+
 PEQ and cre_eq are EQ work, so they are in the alex branch, not here.
 
 ## What these parts still need from other branches
