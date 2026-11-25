@@ -1108,12 +1108,6 @@ async def lifespan(application: FastAPI):
         cricket_keeper=cricket_keeper, vessel_runtime=partner_vessel, scoped_memory=True,
     )
     application.state.pubpartner_spine.provider_dispatcher.runtime_repo_root = Path(__file__).resolve().parent
-    from modules.pubpartner_chatgpt_link import callback_access_filter
-    logging.getLogger("uvicorn.access").addFilter(callback_access_filter)
-    from modules.pubpartner_connector_host import ConnectorHost
-    from modules.pubpartner_local_setup import LocalOllama
-    application.state.pubpartner_local_ollama = LocalOllama()
-    application.state.pubpartner_connector = ConnectorHost(DATA_DIR)
     application.include_router(pubpartner_routes.router)
     from modules.writers_room import create_writers_room_router
     application.include_router(create_writers_room_router(DATA_DIR))
@@ -1945,8 +1939,6 @@ async def lifespan(application: FastAPI):
             await evo_orchestrator.stop()
         except Exception:
             pass
-    await application.state.pubpartner_local_ollama.stop()
-    await application.state.pubpartner_connector.stop()
     if pete_enhanced and hasattr(pete_enhanced, "shutdown_twin_engine_system"):
         try:
             await pete_enhanced.shutdown_twin_engine_system()

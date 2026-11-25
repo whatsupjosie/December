@@ -52,7 +52,3 @@ cryptography>=48.0.1,<49.0
 openpyxl>=3.1.5,<4
 pypdf>=5.0,<7
 pillow>=10.0,<13
-
-PyJWT[crypto]>=2.10,<3  # OpenAI account consent ID-token verification
-mcp>=1.29,<2
-sse-starlette>=2,<3  # compatible with Reach's Starlette line

@@ -45,9 +45,6 @@ def _character_block(cartridge: Cartridge) -> str:
     lines.append(f"Vocabulary: {d.voice.vocabulary}")
     lines.append(f"Sentence length: {d.voice.sentence_length}")
     lines.append(f"Formality: {d.voice.formality}")
-    if d.voice.spoken_voice_preference:
-        lines.append("Preferred spoken voice (when supported): " + ", ".join(
-            f"{key.replace('_', ' ')} = {value}" for key, value in d.voice.spoken_voice_preference))
     if d.voice.verbal_tics:
         lines.append("Verbal tics: " + "; ".join(d.voice.verbal_tics))
     lines.append("")

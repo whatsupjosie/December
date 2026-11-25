@@ -15,7 +15,6 @@ dependencies = [
 
 [project.optional-dependencies]
 chat = ["anthropic>=0.30"]
-connector = ["mcp>=1.29,<2"]
 
 [project.scripts]
 pubpartner = "pubpartner.cli:main"

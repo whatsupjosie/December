@@ -102,13 +102,7 @@
 
 
   function setAuthToken(result) {
-    if (authState.token !== (result.access_token || "")) {
-      resetChat();
-      sessionOpened = false;
-      ++lookupNumber;
-      if (connectionDialog.open) connectionDialog.close();
-      $('connectionKey').value = $('claudeBrief').value = $('providerApiKey').value = '';
-    }
+    if (authState.token !== (result.access_token || "")) { resetChat(); sessionOpened = false; }
     authState.token = result.access_token || '';
     authState.user = result.username || '';
     authState.role = result.role || '';
@@ -181,16 +175,6 @@
           if ($('allowFallback')) $('allowFallback').checked = false;
         }
         appStarted = true;
-        if (location.hash === '#connections') {
-          if (hasCallback) {
-            try { await api('/api/pubpartner/chatgpt/finish',{method:'POST',body:JSON.stringify(Object.fromEntries(callback))}); }
-            catch (error) {
-              $('connectionError').textContent = error.message;
-              $('connectionError').hidden = false;
-            }
-          }
-          if (!connectionDialog.open) openConnections();
-        }
         startLivingTelemetry();
         refreshCartridges();
         refreshZenCredentials(false);
@@ -282,14 +266,14 @@
     if (x.provider === 'ollama') {
       cfg.host = x.host;
       cfg.temperature = 0.72;
-      cfg.max_tokens = x.model === "smollm2:360m-instruct-q4_K_M" ? 128 : 512;
-      cfg.timeout = 180;
+      cfg.max_tokens = 512;
+      cfg.timeout = 60;
     } else if (x.provider === 'openai_compatible') {
       cfg.base_url = x.host;
       cfg.require_api_key = false;
       cfg.temperature = 0.72;
       cfg.timeout = 60;
-    } else if (['openai','anthropic','gemini','mistral','groq','xai','opencode_zen'].includes(x.provider)) {
+    } else if (['openai','anthropic','gemini','mistral','groq','opencode_zen'].includes(x.provider)) {
       if (x.provider_credential) cfg.credential_model_id = x.provider_credential;
     }
     return cfg;
@@ -299,7 +283,7 @@
     const x = ids();
     const select = $('providerCredential');
     if (!select) return;
-    const cloud = ['openai','anthropic','gemini','mistral','groq','xai','opencode_zen'].includes(x.provider);
+    const cloud = ['openai','anthropic','gemini','mistral','groq','opencode_zen'].includes(x.provider);
     select.disabled = !cloud;
     if (!cloud) {
       select.innerHTML = '<option value="">Not required for this provider</option>';
@@ -329,7 +313,7 @@
     const x = ids();
     const input = $('providerApiKey');
     const key = input ? input.value.trim() : '';
-    const allowed = ['openai','anthropic','gemini','mistral','groq','xai','opencode_zen'];
+    const allowed = ['openai','anthropic','gemini','mistral','groq','opencode_zen'];
     if (!allowed.includes(x.provider)) return toast('Choose a hosted provider before saving a key.');
     if (!x.model) return toast('Enter the exact provider model ID first.');
     if (!key) return toast('Paste the provider API key first.');
@@ -1340,7 +1324,6 @@
   $('showFcp1').addEventListener('click', () => setDebug(last || 'No turn yet.'));
   $('providerTest').addEventListener('click', providerTest);
     ['provider','modelName','providerHost','providerCredential'].forEach(id => { const el = $(id); if (el) el.addEventListener('change', async () => { sessionOpened = false; if (id === 'provider') await refreshProviderCredentials(false); refreshStatus(); }); });
-  $('saveProviderKey').addEventListener('click', saveProviderKey);
   $('saveGuidance').addEventListener('click', saveGuidance);
   const refreshRelationshipBtn = $('refreshRelationship'); if (refreshRelationshipBtn) refreshRelationshipBtn.addEventListener('click', () => refreshRelationship(true));
   const showEncountersBtn = $('showEncounters'); if (showEncountersBtn) showEncountersBtn.addEventListener('click', () => refreshRelationship(true));
@@ -1393,295 +1376,6 @@
   const accountButton = $('accountButton'); if (accountButton) accountButton.addEventListener('click', toggleAccount);
   $('friendId').addEventListener('change', () => { resetChat(); sessionOpened = false; });
   $('sessionId').addEventListener('change', () => { resetChat(); sessionOpened = false; });
-
-  const connectionDialog = $('connections');
-  let lookupNumber = 0;
-  let found = [];
-  let planModels = [];
-  let localChoices = [];
-  const callback = new URLSearchParams(location.search);
-  const hasCallback = callback.has('state') && (callback.has('code') || callback.has('error'));
-  if (hasCallback) history.replaceState(null, '', location.pathname + '#connections');
-
-  async function inspectConnection() {
-    const sequence = ++lookupNumber;
-    const provider = $('connectProvider').value;
-    for (const id of ['claudeHandoff','claudePreview','localChoiceRow','rescanLocal','startOllama','installOllama','localStarter','setupClaude','connectionModelRow','connectionAccountRow','connectionKeyRow','applyConnection','connectAccount','disconnectAccount']) $(id).hidden = true;
-    $('connectionKey').value = '';
-    $('connectionModel').readOnly = false;
-    $('connectionModel').value = '';
-    $('connectionModels').replaceChildren();
-    $('connectionStatus').textContent = 'Checking this host…';
-    found = [];
-    $('claudeBrief').value = '';
-    try {
-      if (provider === 'chatgpt_plan') {
-        const account = await api('/api/pubpartner/chatgpt/account');
-        if (sequence !== lookupNumber) return;
-        planModels = account.models;
-        $('connectAccount').hidden = !account.configured || !authState.token;
-        $('disconnectAccount').hidden = !account.linked;
-        if (account.linked && !account.models.length) {
-          const detail = account.plan_enabled ? 'No eligible models are available.' : 'ChatGPT plan usage was not granted.';
-          $('connectionStatus').textContent = 'Signed in as ' + account.label + '. ' + detail + ' Reconnect or choose another provider.';
-        } else if (account.linked) {
-          $('connectionStatus').textContent = 'Connected as ' + account.label + '. Eligible requests use this ChatGPT plan.';
-          $('connectionModels').replaceChildren(...account.models.map(m => new Option(m,m)));
-          $('connectionModel').value = account.models[0];
-          $('connectionModelRow').hidden = $('applyConnection').hidden = false;
-        } else {
-          $('connectionStatus').textContent = !account.configured ? 'ChatGPT sign-in needs app registration on this host. Choose OpenAI API to use a saved key.' :
-            authState.token ? 'Choose an account on OpenAI and approve eligible use of your ChatGPT plan.' : 'Sign in to PubCast first.';
-        }
-        return;
-      }
-      if (provider === 'claude_web') {
-        $('claudeHandoff').hidden = false;
-        $('connectionStatus').textContent = 'Use your usual Claude sign-in. Preview the cartridge, then paste it into a Claude chat.';
-        return;
-      }
-      if (provider === 'claude_desktop') {
-        $('connectionStatus').textContent = 'Chat in Claude Desktop on the same computer. Claude can read the cartridge you share while Local MCP is running.';
-        $('setupClaude').hidden = false;
-        return;
-      }
-      if (provider === 'local') {
-        const result = await api('/api/pubpartner/providers/local-discovery');
-        if (sequence !== lookupNumber) return;
-        localChoices = result.choices;
-        $('localChoice').replaceChildren(...localChoices.map((item, i) => new Option(item.model, String(i))));
-        $('localChoiceRow').hidden = $('applyConnection').hidden = !localChoices.length;
-        $('rescanLocal').hidden = false;
-        $('localStarter').hidden = !!localChoices.length || !result.ollama || !!result.incomplete;
-        $('startOllama').hidden = !result.can_start;
-        $('installOllama').hidden = !!localChoices.length || result.ollama || result.can_start;
-        $('connectionStatus').textContent = localChoices.length ? 'Found on this computer. No account required.' :
-          result.incomplete ? 'Ollama could not identify the installed models. Choose Check again to retry.' :
-          result.ollama ? 'Ollama is running. Download a starter model once to chat offline.' :
-          result.can_start ? 'Ollama is installed on this computer. Start it to look for your models.' :
-          'Install Ollama on the computer running PubPartner, then choose Check again.';
-        if (result.notice) $('connectionStatus').textContent = result.notice + ' ' + $('connectionStatus').textContent;
-        return;
-      }
-      if (provider === 'openai_compatible') {
-        $('connectionStatus').textContent = 'Set the model and endpoint in Friend Setup.';
-        $('applyConnection').hidden = false;
-        return;
-      }
-      const query = new URLSearchParams({provider, user_id:ids().user_id});
-      const [keys, status] = await Promise.all([api('/api/pubpartner/providers/credentials?' + query),api('/api/pubpartner/providers/status?' + query)]);
-      if (sequence !== lookupNumber) return;
-      found = keys.configured || [];
-      const options = found.map(row => new Option(row.display_name || row.model_name, row.model_id));
-      if (status.available) options.push(new Option('Host credential',''));
-      $('connectionAccount').replaceChildren(...options);
-      $('connectionAccountRow').hidden = options.length < 2;
-      $('connectionKeyRow').hidden = options.length > 0;
-      $('connectionStatus').textContent = found.length ? 'Found a saved connection.' : status.available ? 'Found a credential on this host.' : 'Enter a provider key once to save it encrypted on this host.';
-      $('connectionModel').readOnly = !!found[0]?.model_name;
-      $('connectionModel').value = found[0]?.model_name || '';
-      $('connectionModelRow').hidden = $('applyConnection').hidden = false;
-    } catch (e) {
-      if (sequence === lookupNumber) $('connectionStatus').textContent = e.message;
-    }
-  }
-
-  let connectorActive = false;
-  let createTunnel = false;
-  async function refreshConnector() {
-    const button = $('connectorToggle');
-    button.disabled = true;
-    try {
-      const state = await api('/api/pubpartner/connector');
-      connectorActive = state.running;
-      const tunnel = $('connectorRoute').value === 'openai-tunnel';
-      createTunnel = tunnel && !state.tunnel_configured && state.can_create_tunnel;
-      const ready = state.cartridge_configured && state.sdk_installed && (!tunnel || (state.tunnel_installed && (state.tunnel_configured || createTunnel)));
-      $('connectorInfo').textContent = state.starting ? 'Starting local MCP…' : state.running ? 'Process running: ' + state.route + (state.route === 'openai-tunnel' ? ' · ' + state.tunnel_id : ' · http://127.0.0.1:8768/mcp') :
-        !state.cartridge_configured ? 'Choose the cartridge ZIP to share.' :
-        !state.sdk_installed ? 'Install the PubPartner connector extra on the host.' :
-        tunnel && !state.tunnel_installed ? 'Install OpenAI tunnel-client on this host.' :
-        tunnel && state.tunnel_needs_recovery ? 'Check the workspace tunnel list and set CONTROL_PLANE_TUNNEL_ID to resume.' :
-        createTunnel ? 'Create a private tunnel in the configured OpenAI workspace.' :
-        tunnel && !state.tunnel_configured ? 'Configure a workspace tunnel ID and runtime credential.' :
-        state.exit_code ? 'Connector exited with code ' + state.exit_code : 'Ready to start.';
-      button.textContent = state.running ? 'Stop connector' : createTunnel ? 'Create tunnel and start' : 'Start connector';
-      button.disabled = state.starting || (!state.running && !ready);
-    } catch (e) { $('connectorInfo').textContent = e.message; }
-  }
-  async function prepareClaude() {
-    const sequence = lookupNumber;
-    try {
-      const {brief} = await api('/api/pubpartner/connector/brief');
-      if (sequence !== lookupNumber) return;
-      $('claudeBrief').value = brief;
-      $('claudePreview').hidden = false;
-    } catch (error) {
-      if (sequence !== lookupNumber) return;
-      $('connectionStatus').textContent = error.message;
-      if (error.status === 409) {
-        $('connectorCartridge').closest('details').open = true;
-        $('connectorCartridge').focus();
-      }
-    }
-  }
-  $('prepareClaude').onclick = prepareClaude;
-  $('copyClaude').onclick = async () => {
-    try {
-      await navigator.clipboard.writeText($('claudeBrief').value);
-      $('connectionStatus').textContent = 'Copied. Open Claude and paste into a new chat.';
-    } catch {
-      $('claudeBrief').focus();
-      $('claudeBrief').select();
-      $('connectionStatus').textContent = 'Cartridge text selected. Use Copy, then open Claude and paste.';
-    }
-  };
-  $('rescanLocal').onclick = inspectConnection;
-  async function localAction(button, endpoint, message) {
-    const sequence = lookupNumber;
-    button.disabled = true;
-    $('connectionStatus').textContent = message;
-    try {
-      await api('/api/pubpartner/providers/' + endpoint, {method:'POST'});
-      if (sequence === lookupNumber) await inspectConnection();
-    } catch (error) {
-      if (sequence === lookupNumber) $('connectionStatus').textContent = error.message;
-    } finally { button.disabled = false; }
-  };
-  $('localStarter').onclick = () => localAction($('localStarter'), 'local-starter', 'Downloading the starter model to this computer…');
-  $('startOllama').onclick = () => localAction($('startOllama'), 'local-start', 'Starting Ollama on this computer…');
-  async function setupClaude() {
-    const button = $('setupClaude');
-    const sequence = lookupNumber;
-    button.disabled = true;
-    try {
-      const state = await api('/api/pubpartner/connector');
-      if (sequence !== lookupNumber || !connectionDialog.open) return;
-      if (!state.cartridge_configured) {
-        $('connectorCartridge').closest('details').open = true;
-        $('connectionStatus').textContent = 'Choose your cartridge ZIP below to continue setup.';
-        $('connectorCartridge').focus();
-        return;
-      }
-      await api('/api/pubpartner/connector', {method:'POST', body:JSON.stringify({route:'http'})});
-      await refreshConnector();
-      if (sequence !== lookupNumber || !connectionDialog.open) return;
-      const a = document.createElement('a');
-      a.href = '/api/pubpartner/connector/claude-desktop.mcpb';
-      a.download = 'PubPartner.mcpb';
-      // Reach requires an owner token on API routes, including file downloads.
-      const response = await fetch(a.href, {headers:{Authorization:'Bearer ' + authState.token}});
-      if (!response.ok) throw Error('Could not download the Claude Desktop extension.');
-      const url = URL.createObjectURL(await response.blob());
-      if (sequence !== lookupNumber || !connectionDialog.open) { URL.revokeObjectURL(url); return; }
-      a.href = url;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-      $('connectionStatus').textContent = 'Open PubPartner.mcpb in Claude Desktop on this computer and approve installation. Ask Claude to use your PubPartner cartridge. Stop Local MCP here to disconnect.';
-    } catch (error) { if (sequence === lookupNumber) $('connectionStatus').textContent = error.message; }
-    finally { button.disabled = false; }
-  }
-  $('setupClaude').onclick = setupClaude;
-  $('connectorCartridge').onchange = async () => {
-    const sequence = lookupNumber;
-    const selectedProvider = $('connectProvider').value;
-    const file = $('connectorCartridge').files[0];
-    if (!file) return;
-    try {
-      if (file.size > 8*1024*1024) throw Error('Choose a cartridge under 8 MiB.');
-      await api('/api/pubpartner/connector/cartridge',{method:'PUT',headers:{'Content-Type':'application/zip'},body:file});
-      await refreshConnector();
-      if (sequence !== lookupNumber || !connectionDialog.open) return;
-      if (selectedProvider === 'claude_desktop') await setupClaude();
-      if (selectedProvider === 'claude_web') await prepareClaude();
-    } catch (e) { $('connectorInfo').textContent = e.message; }
-    finally { $('connectorCartridge').value = ''; }
-  };
-  $('connectorRoute').onchange = refreshConnector;
-  $('connectorToggle').onclick = async () => {
-    $('connectorToggle').disabled = true;
-    try {
-      const options = connectorActive ? {method:'DELETE'} :
-        {method:'POST',body:JSON.stringify({route:$('connectorRoute').value,create:createTunnel})};
-      await api('/api/pubpartner/connector',options);
-      await refreshConnector();
-      setTimeout(() => { if (connectionDialog.open) refreshConnector(); }, 2000);
-    } catch (e) { $('connectorInfo').textContent = e.message; $('connectorToggle').disabled = false; }
-  };
-  function openConnections() {
-    if (!connectionDialog.open) connectionDialog.showModal();
-    inspectConnection();
-    refreshConnector();
-  }
-  $('openConnections').onclick = openConnections;
-  $('connectProvider').onchange = inspectConnection;
-  connectionDialog.addEventListener('close', () => {
-    ++lookupNumber;
-    $('connectionKey').value = '';
-    $('claudeBrief').value = '';
-    $('connectionError').hidden = true;
-    $('connectionError').textContent = '';
-  });
-  $('connectionAccount').onchange = () => {
-    const model = found.find(row => row.model_id === $('connectionAccount').value)?.model_name || '';
-    $('connectionModel').readOnly = !!model;
-    $('connectionModel').value = model;
-  };
-  $('connectAccount').onclick = async () => {
-    const sequence = lookupNumber;
-    try {
-      const account = await api('/api/pubpartner/chatgpt/connect',{method:'POST'});
-      if (sequence === lookupNumber && connectionDialog.open) location.assign(account.url);
-    } catch (e) { if (sequence === lookupNumber) $('connectionStatus').textContent = e.message; }
-  };
-  $('disconnectAccount').onclick = async () => {
-    const sequence = lookupNumber;
-    try {
-      await api('/api/pubpartner/chatgpt/account',{method:'DELETE'});
-      if (sequence === lookupNumber && connectionDialog.open) await inspectConnection();
-    } catch (e) { if (sequence === lookupNumber) $('connectionStatus').textContent = e.message; }
-  };
-  $('applyConnection').onclick = async () => {
-    const action = $('applyConnection');
-    action.disabled = true;
-    const sequence = lookupNumber;
-    try {
-      let provider = $('connectProvider').value;
-      const local = provider === 'local';
-      const localChoice = local ? localChoices[Number($('localChoice').value)] : null;
-      if (local && !localChoice) throw Error('Check for installed models first.');
-      if (local) provider = localChoice.provider;
-      const advanced = provider === 'openai_compatible' && !local;
-      const model = $('connectionModel').value.trim();
-      if (!local && !advanced && !model) throw Error('Enter the model ID.');
-      if (provider === 'chatgpt_plan' && !planModels.includes(model)) throw Error('Choose a model offered by this account.');
-      let credential = $('connectionAccount').value;
-      if (!$('connectionKeyRow').hidden) {
-        const api_key = $('connectionKey').value.trim();
-        if (!api_key) throw Error('Enter the provider API key.');
-        const saved = await api('/api/pubpartner/providers/credentials',{method:'POST',body:JSON.stringify({provider,model,api_key,user_id:ids().user_id,run_fidelity:false})});
-        if (sequence !== lookupNumber || !connectionDialog.open) return;
-        credential = saved.credential_model_id;
-        $('connectionKey').value = '';
-      }
-      $('provider').value = provider;
-      $('provider').dispatchEvent(new Event('change'));
-      if (!local && !advanced) $('modelName').value = model;
-      if (local) {
-        $('modelName').value = localChoice.model;
-        $('providerHost').value = localChoice.base_url;
-        $('knowledgeMode').value = 'off';
-      }
-      await refreshProviderCredentials(false);
-      if (sequence !== lookupNumber || !connectionDialog.open) return;
-      if (!local && !advanced && provider !== 'chatgpt_plan') $('providerCredential').value = credential;
-      $('allowFallback').checked = false;
-      connectionDialog.close();
-      if (advanced) focusPanel('setup');
-      else toast('Selected ' + $('provider').selectedOptions[0].text + ' for this conversation.');
-    } catch (e) { if (sequence === lookupNumber) $('connectionStatus').textContent = e.message; }
-    finally { action.disabled = false; }
-  };
 
   WorkspaceRuntime.initDefaults();
   decorateTrays();

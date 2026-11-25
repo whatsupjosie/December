@@ -32,12 +32,10 @@ _CAPABILITIES = [
     ProviderCapability("echo", "Echo", "built_in", streaming=False, model_discovery="fixed", roles=["testing"]),
     ProviderCapability("offline", "Offline Rules", "built_in", local=True, streaming=False, model_discovery="fixed", roles=["offline_fallback"]),
     ProviderCapability("ollama", "Ollama", "ollama_http", aliases=["local"], local=True, model_discovery="runtime", roles=["primary_conversation", "alex_personalization", "offline_fallback"]),
-    ProviderCapability("chatgpt_plan", "ChatGPT account", "responses_oauth", roles=["primary_conversation"]),
     ProviderCapability("openai", "OpenAI", "native_http", aliases=["gpt", "chatgpt"], credential_env="OPENAI_API_KEY", byok=True, model_discovery="provider"),
     ProviderCapability("anthropic", "Anthropic", "native_http", aliases=["claude"], credential_env="ANTHROPIC_API_KEY", byok=True, model_discovery="provider"),
     ProviderCapability("gemini", "Google Gemini", "native_http", aliases=["google"], credential_env="GEMINI_API_KEY", byok=True, model_discovery="provider"),
     ProviderCapability("mistral", "Mistral", "native_http", credential_env="MISTRAL_API_KEY", byok=True, model_discovery="provider"),
-    ProviderCapability("xai", "xAI (Grok)", "openai_compatible", aliases=["grok"], credential_env="XAI_API_KEY", byok=True, model_discovery="provider"),
     ProviderCapability("groq", "Groq", "openai_compatible", credential_env="GROQ_API_KEY", byok=True, model_discovery="provider"),
     ProviderCapability("opencode_zen", "OpenCode Zen", "openai_compatible", aliases=["zen", "big_pickle"], credential_env="OPENCODE_ZEN_API_KEY", byok=True, model_discovery="provider", roles=["reference_desk", "background_reasoning"]),
     ProviderCapability(

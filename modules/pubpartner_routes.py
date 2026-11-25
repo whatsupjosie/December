@@ -2,14 +2,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from zipfile import BadZipFile
-from yaml import YAMLError
 import os
 from contextvars import ContextVar
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from . import pubpartner_chatgpt_link as chatgpt_link
 from .pubpartner_rate_limit import RateLimiter
 from fastapi.responses import FileResponse, PlainTextResponse
 
@@ -25,15 +22,13 @@ from .local_model_config import default_provider
 _request_spine = ContextVar("pubpartner_request_spine", default=None)
 
 
-async def _bind_host_spine(request: Request, identity: Dict[str, Any] = Depends(current_identity)):
+async def _bind_host_spine(request: Request):
     # Each host owns its runtime; standalone tests may still configure _spine.
     # A second TestClient must never redirect a running host into its test store.
     token = _request_spine.set(getattr(request.app.state, "pubpartner_spine", None))
-    account = chatgpt_link.current_session.set(chatgpt_link.session_id(identity))
     try:
         yield
     finally:
-        chatgpt_link.current_session.reset(account)
         _request_spine.reset(token)
 
 
@@ -275,10 +270,7 @@ def _public_provider(value):
 def _turn_kwargs(body: Dict[str, Any], request: Request, identity: Dict[str, Any]) -> Dict[str, Any]:
     body = dict(body)
     if not body.get("provider") and getattr(request.app.state, "pubpartner_spine", None) is not None:
-        try:
-            body["provider"] = default_provider()
-        except ValueError:
-            raise HTTPException(409, "Repair the local launcher or select a provider in Connections.") from None
+        body["provider"] = default_provider()
     if "allow_fallback" in body and not isinstance(body["allow_fallback"], bool):
         raise HTTPException(400, "allow_fallback must be a boolean")
     # v20/2i uses messages[]; the vessel client uses message + history. Both
@@ -361,6 +353,7 @@ async def live_turn(request: Request, identity: Dict[str, Any] = Depends(current
     spine = get_spine()
     if getattr(request.app.state, "pubpartner_spine", None) is not None:
         # Full Reach never defaults a real user to the deterministic test model.
+        body.setdefault("provider", default_provider())
         body.setdefault("allow_fallback", False)
     kwargs = _turn_kwargs(body, request, identity)
     _limit_or_429(kwargs["user_id"])
@@ -508,7 +501,7 @@ async def register_provider_credential(
     scoped_user = _scoped_user_id(request=request, identity=identity, explicit_value=body.get("user_id"))
     _limit_or_429(f"provider-key:{scoped_user}")
     provider = canonical_provider(str(body.get("provider") or ""))
-    allowed = {"openai", "anthropic", "gemini", "mistral", "groq", "xai", "opencode_zen"}
+    allowed = {"openai", "anthropic", "gemini", "mistral", "groq", "opencode_zen"}
     if provider not in allowed:
         raise HTTPException(status_code=400, detail=f"provider must be one of {sorted(allowed)}")
     model = str(body.get("model") or body.get("model_name") or "").strip()[:180]
@@ -537,84 +530,6 @@ async def register_provider_credential(
         "api_key_stored": True,
         "api_key": None,
     }
-
-
-def _owner_connector(request, identity):
-    if not identity.get("authenticated") or identity.get("role") != "owner":
-        raise HTTPException(403, "Sign in as the host owner to manage its connector.")
-    host = getattr(request.app.state, "pubpartner_connector", None)
-    if host is None:
-        raise HTTPException(503, "The connector launcher is unavailable on this host.")
-    return host
-
-
-@router.get("/connector")
-async def connector_status(request: Request, identity: Dict[str, Any] = Depends(current_identity)):
-    return _owner_connector(request, identity).status()
-
-
-@router.put("/connector/cartridge")
-async def select_connector_cartridge(request: Request, identity: Dict[str, Any] = Depends(current_identity)):
-    host = _owner_connector(request, identity)
-    payload = bytearray()
-    async for chunk in request.stream():
-        if len(payload) + len(chunk) > 8 * 1024 * 1024:
-            raise HTTPException(413, "Choose a cartridge under 8 MiB compressed.")
-        payload.extend(chunk)
-    try:
-        return await host.select(payload)
-    except (ValueError, RuntimeError, KeyError, TypeError, AttributeError, OSError,
-            BadZipFile, YAMLError):
-        raise HTTPException(400, "Stop the connector and choose a valid PubPartner cartridge ZIP.") from None
-
-
-@router.post("/connector")
-async def connector_start(request: Request, identity: Dict[str, Any] = Depends(current_identity)):
-    host = _owner_connector(request, identity)
-    body = await _json_dict(request)
-    try:
-        return await host.start(body.get("route"), create=body.get("create") is True)
-    except (ValueError, OSError) as error:
-        raise HTTPException(409, str(error)) from None
-
-
-@router.delete("/connector")
-async def connector_stop(request: Request, identity: Dict[str, Any] = Depends(current_identity)):
-    return await _owner_connector(request, identity).stop()
-
-
-@router.get("/chatgpt/account")
-async def chatgpt_account(identity: Dict[str, Any] = Depends(current_identity)):
-    return chatgpt_link.status(chatgpt_link.session_id(identity))
-
-
-@router.post("/chatgpt/connect")
-async def chatgpt_connect(request: Request, identity: Dict[str, Any] = Depends(current_identity)):
-    try:
-        return await chatgpt_link.begin(identity, host_id=request.app.state.guest_admission.host_id,
-                                        origin=request.headers.get("origin") or str(request.base_url).rstrip("/"))
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(502, "OpenAI sign-in discovery failed.") from None
-
-
-@router.post("/chatgpt/finish")
-async def chatgpt_finish(request: Request, identity: Dict[str, Any] = Depends(current_identity)):
-    try:
-        return await chatgpt_link.finish(identity, await _json_dict(request))
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(502, "OpenAI account verification or model discovery failed. Reconnect to retry.") from None
-
-
-@router.delete("/chatgpt/account")
-async def chatgpt_disconnect(identity: Dict[str, Any] = Depends(current_identity)):
-    session = chatgpt_link.require_session(identity)
-    chatgpt_link.accounts.pop(session, None)
-    chatgpt_link.pending.pop(session, None)
-    return {"ok": True}
 
 
 @router.get("/providers/catalog")
@@ -975,79 +890,9 @@ async def provider_test(request: Request, identity: Dict[str, Any] = Depends(cur
     }
 
 
-@router.get("/providers/local-discovery")
-async def discover_local_models():
-    from .pubpartner_local_setup import discover
-    return await discover()
-
-
-@router.post("/providers/local-start")
-async def start_local_ollama(request: Request, identity=Depends(current_identity)):
-    _owner_connector(request, identity)
-    try:
-        await request.app.state.pubpartner_local_ollama.start()
-    except (ValueError, OSError) as error:
-        raise HTTPException(409, str(error)) from None
-    return {"ok": True}
-
-
-@router.post("/providers/local-starter")
-async def install_local_starter(request: Request, identity=Depends(current_identity)):
-    import httpx
-    _owner_connector(request, identity)
-    try:
-        await request.app.state.pubpartner_local_ollama.install_starter()
-    except (httpx.HTTPError, ValueError):
-        raise HTTPException(409, "Ollama could not finish the download. Check the connection and retry.") from None
-    return {"ok": True}
-
-
-@router.get("/connector/brief")
-async def preview_cartridge_brief(request: Request, identity=Depends(current_identity)):
-    import asyncio
-    import tempfile
-    from zipfile import ZipFile
-    from fastapi.responses import JSONResponse
-    from pubpartner.cartridge import load_cartridge
-    from pubpartner.prompt_assembler import assemble_prompt
-    host = _owner_connector(request, identity)
-    def read_brief():
-        # Only use the owner-selected, previously validated ZIP.
-        with tempfile.TemporaryDirectory() as directory, ZipFile(host.selected) as archive:
-            archive.extractall(directory)
-            root = Path(directory)
-            entries = list(root.iterdir())
-            if len(entries) == 1 and entries[0].is_dir():
-                root = entries[0]
-            with load_cartridge(root) as cartridge:
-                return assemble_prompt(cartridge).text
-    try:
-        brief = await asyncio.to_thread(read_brief)
-    except FileNotFoundError:
-        raise HTTPException(409, "Choose your cartridge ZIP first.") from None
-    return JSONResponse({"brief": brief}, headers={"Cache-Control":"no-store"})
-
-
-@router.get("/connector/claude-desktop.mcpb")
-async def claude_desktop_extension():
-    from io import BytesIO
-    from zipfile import ZipFile
-    from fastapi.responses import Response
-    folder = Path(__file__).resolve().parents[1] / "pubpartner" / "claude_desktop"
-    data = BytesIO()
-    with ZipFile(data, "w") as bundle:
-        for name in ("server.js", "manifest.json"):
-            bundle.write(folder / name, name)
-    return Response(data.getvalue(), media_type="application/octet-stream",
-                    headers={"Content-Disposition": 'attachment; filename="PubPartner.mcpb"'})
-
-
 @router.get("/providers/local-config")
 async def local_model_defaults():
-    try:
-        return {"enabled": bool(os.getenv("PUBCAST_LOCAL_MODEL_URL")), "provider": default_provider()}
-    except ValueError:
-        return {"enabled": False, "provider": None, "error": "Local launcher settings are incomplete."}
+    return {"enabled": bool(os.getenv("PUBCAST_LOCAL_MODEL_URL")), "provider": default_provider()}
 
 
 # ── Project work notes ──────────────────────────────────────────────────────
