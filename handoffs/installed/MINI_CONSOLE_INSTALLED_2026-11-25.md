@@ -1,6 +1,6 @@
 # Installed: On-set mini console (Nov 21) (2026-11-25)
 
-**Status: installed in main-assembly and proven. Copied to Parts-Live-Archive as `mini-console/`.**
+**Status: WITHDRAWN (Nov 25, 05:09 UTC). Moved back out of main-assembly by a revert commit, removed from Parts-Live-Archive, and put in parts-assembly. It was not proven: it has no tests of its own, and serving its page is not the same as using it. Her words: "the mini console goes in pub world. So the director can operate from inside there if they need to." It still needs to be wired into Pub World and used in a real browser. The text below is the original install note, kept as it was.**
 
 ## What it is
 
