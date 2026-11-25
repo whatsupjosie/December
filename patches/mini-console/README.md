@@ -4,6 +4,8 @@ Moved back here from main-assembly on Nov 25 because it had not been proven to w
 
 Where it belongs, in her words: "the mini console goes in pub world. So the director can operate from inside there if they need to."
 
+Why she made it, in her words: "I made the mini console because you might need the video switcher and director's console inside of Pub World. So everybody's together, as opposed to some people being in the control room and some people not."
+
 What it is now: a small console page (static/mini_console.html and mini_console.js, with its reference picture static/control_room_assets/mini_console_reference.png), recovered and wired to the current switcher. Right now it is reached only by an "On-set Mini Console" link on the director switcher's rail. It is not in Pub World yet.
 
 Where it came from: pre-dec branch `codex/restore-mini-console` (59675d6), as merged on pre-dec's studio line in c805cca9 (Nov 22). The patch here is exactly what that merge changed in main-assembly (install merge ce44f0b1, since reverted). Nothing in it was changed.
