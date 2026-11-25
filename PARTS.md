@@ -16,6 +16,7 @@ Every file here is copied exactly from pre-dec branch `claude/integrate-stronges
 6. **Director Dock restore and Control Room routing:** patches/director-dock/. A patch, not files; see its README. Moved back here from main-assembly on Nov 25 because it was not proven. Waiting on being used in a real browser.
 7. **On-set mini console:** patches/mini-console/. A patch; see its README. Moved back here from main-assembly on Nov 25 because it was not proven. Her words: "the mini console goes in pub world. So the director can operate from inside there if they need to." Waiting on being wired into Pub World and used in a real browser.
 8. **PubPartner connector baseline:** patches/pubpartner-connector-baseline/. A patch; see its README. Moved back here from main-assembly on Nov 25: its connection routes passed, but the connector itself and its screens were never run. Waiting on the MCP SDK and a real browser.
+9. **Sir Purfluous:** patches/sir-purfluous/. Two patches; see its README. Her words: "Superfluous right now goes into parts assembly." His tests passed while he was installed.
 
 PEQ and cre_eq are EQ work, so they are in the alex branch, not here.
 
