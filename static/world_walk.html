@@ -218,6 +218,7 @@ textarea { width: 100%; height: 90px; background: var(--bg); color: var(--ink); 
 <script type="importmap">{"imports":{"three":"/static/vendor/three-0.160.0/build/three.module.js","three/addons/":"/static/vendor/three-0.160.0/examples/jsm/"}}</script>
 <script type="module" src="/static/world_walk_glb.js"></script>
 <script src="/static/world_walk_live.js"></script>
+<script src="/static/world_walk_liarsdice.js"></script>
 <script src="/static/production_notes.js"></script>
 <script src="/static/2i_studio_bridge.js"></script>
 <script src="/static/keymap.js"></script>
@@ -935,7 +936,7 @@ function nearestWalkable(v, p, maxR) {
 const atStation = () => !!(window.PubCastKeymap && window.PubCastKeymap.isOpen && window.PubCastKeymap.isOpen());
 /* The host can also take the avatar (possession) or put this person in the disciplinary waiting room (timeout): then their own keys and clicks do not walk either. */
 S.host = { possessed: false, until: 0, timeout: null, banned: false };
-const inputLocked = () => atStation() || S.host.possessed || !!S.host.timeout || S.host.banned;
+const inputLocked = () => atStation() || S.host.possessed || !!S.host.timeout || S.host.banned || !!(window.PubCastLiarsDice && window.PubCastLiarsDice.isOpen());
 function setTarget(pt, byHost) {
   if (pt && !byHost && inputLocked()) return;
   S.stall = null;
@@ -1050,9 +1051,12 @@ function showHotspotBubble(h) {
   for (const n of stuck) btns.push(makeButton("Read note: " + n.subject, () => { hideBubble(); window.PubCastNotes.openNote(n.id, true); }));
   if (a.type === "view") btns.push(makeButton(a.view==="typewriter_sitting"?"Sit and write":"Open " + h.label, () => { hideBubble(); openCloseup(a.view); }));
   if (live) btns.push(makeButton(a.type === "view" ? "Use it here" : "Use", () => runLive(h, live, null)));
+  // a table with a game behind it (Liar's Dice): the game is the host's, the walker only opens the table
+  const game = a.minigame === "liarsdice" && window.PubCastLiarsDice ? window.PubCastLiarsDice : null;
+  if (game) btns.push(makeButton("Play Liar\u2019s Dice", () => { hideBubble(); HELD.clear(); S.target = null; S.path = []; game.open(); }));
   btns.push(makeButton("Close", () => hideBubble()));
   const text = a.type === "view" ? (a.event || "Opens a close-up view.") : (a.event || a.animation || a.program || "");
-  showBubble(h.label, (a.type === "view" || live ? "" : "Not wired yet. It would: ") + text, btns, h.at);
+  showBubble(h.label, (a.type === "view" || live || game ? "" : "Not wired yet. It would: ") + text, btns, h.at);
 }
 /* Run a hotspot's action on the PubCast host and show the answer, with any follow-up choices it offers. */
 async function runLive(h, action, data) {

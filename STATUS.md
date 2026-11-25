@@ -19,6 +19,14 @@ Check the release candidate across Studio and Control Room, capture and export, 
 
 Local synthesized speech drives the bundled Pete rig through the Studio's dialogue mixer. Chromium with local Flite has verified rendered mouth movement, signal on the Program mixer, and neutral reset on Stop, normal completion, and production shutdown. This is audio-level mouth movement. Phoneme timing, phoneme-specific shapes, real device checks, and casting through the shared camera pool remain open. The original Studio cast remains the default.
 
+## 2026-11-24: Liar's Dice at the Vortex Bar booth
+
+Ledger: `handoffs/LIARS_DICE_2026-11-24.md`.
+
+- Click the booth table in the Vortex Bar in `/walk` and choose "Play Liar's Dice". Rules, dice and opponents run on the host (`modules/liars_dice.py`, `modules/liars_dice_api.py`); one saved game per signed-in person, kept across restarts. The table is `static/world_walk_liarsdice.js`.
+- Tested: 79 engine tests, 25 route tests, and one real-browser test against `run_reach.py` (click the table, play, leave, restart PubCast, resume, host unreachable, forget). Not tested: how the sound sounds, phones, a screen reader. Not built: first-person hands and cup art, 3D dice, opponent avatars and voices.
+- The table spot is my placement (status "proposed"). `tools/world_src/gen_placements.py` is behind the committed `data/world/placements.json` (it would delete the 2026-11-02 floor-painting hotspot); do not regenerate from it until it is brought up to date.
+
 ## 2026-11-02: Production notes (sticky notes) and the PubCast profile
 
 Ledger: `handoffs/PRODUCTION_NOTES_2026-11-02.md`.

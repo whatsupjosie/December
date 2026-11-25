@@ -2023,6 +2023,9 @@ app.include_router(_avatar_imports)
 # Bella Faux Pas Studio progress (room, spot, who you walk as, your avatars, size tuning), per owner on this host.
 from modules.studio_progress import create_studio_progress_router  # noqa: E402
 app.include_router(create_studio_progress_router(DATA_DIR))
+# Liar's Dice at the Vortex Bar booth: server-side game, one per signed-in person (modules/liars_dice.py).
+from modules.liars_dice_api import create_liars_dice_router  # noqa: E402
+app.include_router(create_liars_dice_router(DATA_DIR))
 from modules.keymap_store import create_keymap_router  # noqa: E402
 app.include_router(create_keymap_router(DATA_DIR))          # per-person key assignments (static/keymap.js)
 from modules.camera_moves import create_camera_moves_router  # noqa: E402
