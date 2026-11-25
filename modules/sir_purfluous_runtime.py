@@ -16,13 +16,11 @@ import hashlib
 import re
 from typing import Mapping, Sequence
 
-from . import offline_brain, purfluous_cue_cards
+from . import offline_brain
 from .sir_purfluous_waiting_room import load_profile
 
 _OFFLINE_NOTE = ("My full powers wait on the speaking model, Sancho. Offline I keep to the door, "
                  "the craft, and my own history.")
-# Public name read by BotManager to say so in the room when he falls back to these lines.
-OFFLINE_NOTE = _OFFLINE_NOTE
 
 
 def _pick(options: Sequence[str], message: str) -> str:
@@ -77,11 +75,6 @@ def respond(message: str, history: Sequence[Mapping[str, str]] = ()) -> str:
     social = offline_brain.match_intent("sir_purfluous", message)
     if social:
         return offline_brain.respond("sir_purfluous", message, history)
-    if re.search(r"\b(who are you|your name|who is this|what are you(?=\s*\??\s*$)|introduce yourself)\b", text) is None:
-        # His own cue cards: composed lines for the studio and the bar, plain warmth for hurt.
-        composed = purfluous_cue_cards.compose(message, history)
-        if composed:
-            return composed
     if re.search(r"\b(consent|waiver|sign|signature|terms|agree)\b", text):
         return _state(profile, "consent", message)
     if re.search(r"\b(avatar|identity|my name|what name|display name|nickname|persona)\b", text):
@@ -89,7 +82,7 @@ def respond(message: str, history: Sequence[Mapping[str, str]] = ()) -> str:
     if re.search(r"\b(proving ground|body|walk|motion|calibrat)", text):
         return _state(profile, "proving_ground", message)
 
-    if re.search(r"\b(who are you|your name|who is this|what are you(?=\s*\??\s*$)|introduce yourself)\b", text):
+    if re.search(r"\b(who are you|your name|who is this|what are you|introduce yourself)\b", text):
         return ("Sir Purfluous, Sancho: self-appointed knight of cinema, host of this threshold, "
                 "and the only man here who knighted himself and kept the receipt. " + _OFFLINE_NOTE)
     if re.search(r"\bjeremy\b|\bsystem guidance\b", text):

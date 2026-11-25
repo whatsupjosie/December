@@ -444,7 +444,6 @@ class LLMOrchestrator:
         temperature: float = 0.85,
         max_tokens: int = 160,
         studio_model: Optional[str] = None,
-        num_ctx: Optional[int] = None,
     ) -> OrchestratorResult:
         """
         Route a generation request. Never raises. Always returns OrchestratorResult.
@@ -453,11 +452,6 @@ class LLMOrchestrator:
             "studio"               — Studio only
             "architect"            — Architect only (falls back to Studio if unavailable)
             "architect_then_studio" — Two-pass: Architect plans, Studio voices
-
-        num_ctx:
-            Studio context window for the studio-only routes. None keeps the
-            long-standing 2048; callers with a long character prompt pass a larger
-            window so the prompt is not cut. Architect routes are unchanged.
         """
         requested_role = role
         if role not in VALID_ROLES:
@@ -472,14 +466,14 @@ class LLMOrchestrator:
 
         if role in ("architect", "architect_then_studio") and not self._architect_enabled:
             result = await self._studio(
-                prompt, ctx, temperature, max_tokens, studio_model=studio_model, num_ctx=num_ctx
+                prompt, ctx, temperature, max_tokens, studio_model=studio_model
             )
             result.role_requested = requested_role
             result.fallback_occurred = True
             result.fallback_reason = "profile_architect_disabled"
         elif role == "studio":
             result = await self._studio(
-                prompt, ctx, temperature, max_tokens, studio_model=studio_model, num_ctx=num_ctx
+                prompt, ctx, temperature, max_tokens, studio_model=studio_model
             )
 
         elif role == "architect":
@@ -510,7 +504,6 @@ class LLMOrchestrator:
         *,
         extra_system: str = "",
         studio_model: Optional[str] = None,
-        num_ctx: Optional[int] = None,
     ) -> OrchestratorResult:
         self._studio_calls += 1
         t0 = time.monotonic()
@@ -534,7 +527,7 @@ class LLMOrchestrator:
                         "messages": messages,
                         "stream": False,
                         "keep_alive": _OLLAMA_KEEP_ALIVE,
-                        "options": {"temperature": temperature, "num_ctx": int(num_ctx or 2048), "num_predict": max_tokens},
+                        "options": {"temperature": temperature, "num_ctx": 2048, "num_predict": max_tokens},
                     },
                 )
                 r.raise_for_status()
