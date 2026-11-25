@@ -1,6 +1,6 @@
 # Installed: Sir Purfluous: salvage, AI wiring, canon and cue cards (Nov 24) (2026-11-25)
 
-**Status: installed in main-assembly and proven. Copied to Parts-Live-Archive as `purfluous/`.**
+**Status: WITHDRAWN (Nov 25, 05:13 UTC). Moved out of main-assembly by a revert commit, removed from Parts-Live-Archive, and put in parts-assembly. Her words: "Superfluous right now goes into parts assembly." The text below is the original install note, kept as it was.**
 
 ## What it is
 
