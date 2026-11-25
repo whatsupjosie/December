@@ -1,6 +1,6 @@
 # Installed: PubPartner connector baseline (Nov 21) (2026-11-25)
 
-**Status: installed in main-assembly and proven. Copied to Parts-Live-Archive as `connector-baseline/`.**
+**Status: WITHDRAWN (Nov 25, 05:10 UTC). Moved back out of main-assembly by a revert commit, removed from Parts-Live-Archive, and put in parts-assembly. Not proven: 25 connection-route tests passed, but the connector itself was never run (it needs the MCP SDK, not installed) and its four screen tests need a real browser. The text below is the original install note, kept as it was.**
 
 ## What it is
 
