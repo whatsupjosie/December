@@ -8,61 +8,21 @@
 (function initStations() {
   const bar = document.getElementById('stations-bar');
   if (!bar) return;
-  const dock = document.getElementById('director-dock');
-  const summonedArea = document.getElementById('summoned-area');
-  const originalSlots = new Map();
-
-  function syncSwitcherKeys() {
-    const activeTab = bar.querySelector('[data-station].active');
-    const editor = document.getElementById('station-editor');
-    const controlKeys = window.PubCastControlKeys?.km;
-    if (!controlKeys) return;
-    // A docked editor still handles Space for playback.
-    if (activeTab?.dataset.station === 'director' && !originalSlots.has(editor)) {
-      controlKeys.open('switcher');
-    } else {
-      controlKeys.close();
-    }
-  }
-
-  if (dock && summonedArea) {
-    dock.addEventListener('click', event => {
-      const button = event.target.closest('button[data-summon]');
-      if (!button) return;
-      const station = button.dataset.summon;
-      const panel = document.getElementById(`station-${station}`);
-      if (!panel) return;
-
-      const slot = originalSlots.get(panel);
-      if (slot) {
-        slot.replaceWith(panel);
-        originalSlots.delete(panel);
-        const activeTab = bar.querySelector('[data-station].active');
-        panel.classList.toggle('hidden', activeTab?.dataset.station !== station);
-      } else {
-        const placeholder = document.createComment(`Director Dock: ${station}`);
-        panel.before(placeholder);
-        originalSlots.set(panel, placeholder);
-        summonedArea.appendChild(panel);
-        panel.classList.remove('hidden');
-      }
-      button.classList.toggle('active', !slot);
-      button.setAttribute('aria-pressed', String(!slot));
-      if (station === 'editor') syncSwitcherKeys();
-    });
-  }
-
   bar.addEventListener('click', e => {
     const btn = e.target.closest('[data-station]'); if (!btn) return;
     const target = btn.dataset.station;
-    document.querySelectorAll('[id^="station-"]').forEach(panel => {
-      panel.classList.toggle('hidden', !originalSlots.has(panel));
-    });
+    document.querySelectorAll('[id^="station-"]').forEach(el => el.classList.add('hidden'));
     bar.querySelectorAll('[data-station]').forEach(b => b.classList.remove('active'));
     const panel = document.getElementById(`station-${target}`);
     if (panel) panel.classList.remove('hidden');
     btn.classList.add('active');
-    syncSwitcherKeys();
+    // This page shares keys with the studio switcher. Keep the switcher
+    // disarmed in the editor: SPACE must PLAY, never cut live Program.
+    const controlKeys = window.PubCastControlKeys?.km;
+    if (controlKeys) {
+      if (target === 'director') controlKeys.open('switcher');
+      else controlKeys.close();
+    }
     if (target === 'recorder') loadRecorderStation();
   });
   // Default to director on load

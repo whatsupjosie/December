@@ -18,7 +18,7 @@ const world=document.createElement("canvas");world.width=Core.W;world.height=Cor
 const lastFrame=document.createElement("canvas");lastFrame.width=Core.W;lastFrame.height=Core.H;
 const state={pkg:null,performers:[],assets:{},avatarBridge:null,avatarError:"",
 programId:null,previewId:null,
-session:null,startingProduction:false,media:null,mediaError:null,recorder:null,videoStream:null,micStream:null,audioContext:null,micSource:null,
+session:null,media:null,mediaError:null,recorder:null,videoStream:null,micStream:null,audioContext:null,micSource:null,
 micGain:null,micAnalyser:null,audioDest:null,recordingPromise:null,recordingComplete:null,recordingStarting:null,
 recordingStartedAt:0,recordingId:null,recovery:null,
 recordingMime:"",microphoneMuted:false,microphoneLevel:1,selected:null,playbackUrl:null,downloadUrl:null,
@@ -55,15 +55,13 @@ async function safe(fn){
  try{await fn()}catch(e){if(e?.name==="AbortError")return;error(String(e?.message||e));console.error("PubCast 2.5D",e);}
 }
 function setControls(){
- const active=!!state.session&&!state.startingProduction,rec=!!state.recorder,stopping=!!state.recordingPromise,starting=!!state.recordingStarting;
- el.start.disabled=!!state.session||state.startingProduction||state.castingPete;el.genre.disabled=el.start.disabled;el.stop.disabled=!active||stopping||state.endingProduction;
- el.record.disabled=!active||state.endingProduction||state.panicActive||rec||stopping||starting||!state.storageReady;
- $("cut").disabled=$("fade").disabled=!active||!!state.endingProduction;
- for(const button of el.camera.children)button.disabled=state.startingProduction||!!state.endingProduction;
+ const active=!!state.session,rec=!!state.recorder,stopping=!!state.recordingPromise,starting=!!state.recordingStarting;
+ el.start.disabled=active||state.castingPete;el.genre.disabled=active||state.castingPete;el.stop.disabled=!active||stopping||state.endingProduction;
+ el.record.disabled=!active||rec||stopping||starting||!state.storageReady;
  el.recordStop.disabled=(!rec&&!starting)||stopping;
  el.recordStop.textContent=starting?"CANCEL RECORDING START":"STOP RECORDING";
  el.record.disabled=el.record.disabled||!!state.recovery;
- $("castPete").disabled=el.start.disabled||!!state.castingPete||!!state.peteActor;
+ $("castPete").disabled=active||!!state.castingPete||!!state.peteActor;
  $("speakPete").disabled=!active||!state.peteActor||!!state.peteSpeaking||state.panicActive||state.endingProduction;
  $("stopPete").disabled=!state.peteSpeaking;
  $("recoveryPanel").hidden=!state.recovery;
@@ -76,8 +74,7 @@ function setControls(){
  el.audioBadge.textContent=microphoneLive?"MIC "+(state.microphoneMuted?"MUTED":"ACTIVE"):"MIC OFF";
  el.micMute.disabled=!microphoneLive;
  el.micLevel.disabled=!microphoneLive;
- if(state.startingProduction)status("STARTING PRODUCTION");
- else if(active&&state.panicActive)status("PANIC: BLACKOUT",true);
+ if(active&&state.panicActive)status("PANIC: BLACKOUT",true);
  else if(!active&&el.state.textContent!=="ATTENTION")status("STANDBY");
  else if(active&&el.state.textContent!=="ATTENTION")status(state.blackout?"BLACKOUT":rec?"RECORDING":"ON AIR");
 }
@@ -131,7 +128,6 @@ function loadGenre(id){
  loadActors();
 }
 async function choosePreview(id){
- if(state.startingProduction||state.endingProduction)throw Error("Wait for the production transition to finish");
  Core.shot(state.pkg,id);
  if(state.sharedSwitcher?.connected()){
    await state.sharedSwitcher.choosePreview(id);
@@ -146,7 +142,7 @@ function makeTransition(duration=600,elapsedMs=0){
  state.transition={started:performance.now()-Math.max(0,elapsedMs),duration};
 }
 async function cut(dissolve){
- if(!state.session||state.startingProduction||state.endingProduction)throw Error("Program switching requires an active production");
+ if(!state.pkg||!state.session)throw Error("Start production before switching Program");
  const old=state.programId, wanted=state.previewId;
  if(state.sharedSwitcher?.connected()){
    // The same canonical switcher operates the studio; never take locally on HTTP failure.
@@ -204,13 +200,12 @@ function drawPreviewBars(c){
 }
 async function syncServerVideoCues(){
  if(!state.session||state.cuePollBusy)return;
- const session=state.session;
  state.cuePollBusy=true;
  try{
    const response=await fetch("/api/state/production",{cache:"no-store"});
    if(!response.ok)return;
    const remote=await response.json();
-   if(state.session!==session||!remote||typeof remote!=="object")return;
+   if(!remote||typeof remote!=="object")return;
    const panicSeq=Number(remote.panic_seq)||0;
    if(panicSeq>state.lastPanicSeq&&panicSeq>Date.parse(state.session.startedAt)/1000){
      state.lastPanicSeq=panicSeq;state.blackout=true;state.panicActive=true;
@@ -218,7 +213,6 @@ async function syncServerVideoCues(){
      cue("remote_panic",{panicSeq});
      status("PANIC: BLACKOUT");
      if(state.recorder||state.recordingStarting)await stopRecording({immediate:true});
-     if(state.session!==session)return;
    }
    const blackSeq=Number(remote.blackout_seq)||0;
    if(blackSeq&&blackSeq!==state.lastBlackoutSeq){
@@ -259,50 +253,42 @@ function reset(){
  cue("blocking.reset",{});log("Stage blocking reset");
 }
 async function startProduction(){
- if(state.session||state.startingProduction||state.castingPete)throw Error("Production or casting is already underway");
- state.startingProduction=true;
- el.alert.textContent="";
- setControls();
- try{
-  const sess=Core.makeSession(state.pkg,Date.now());state.session=sess;
-  emit("production.start",{package:state.pkg.id,program:state.programId});
-  try{if(state.storageReady)await Store.save(sess)}catch(e){state.session=null;throw Error("Cannot persist session start: "+e.message);}
-  state.remoteProgram=null;state.remotePreview=null;
-  const Shared=window.PubCast25DSharedSwitcher;
-  if(Shared){
-    const bridge=Shared.create({onState:sharedSwitcherState,onError:sharedSwitcherWarning});
-    const result=await bridge.attach(state.pkg);
-    state.sharedSwitcher=bridge;
-    el.switcherLink.textContent=result.shared?"VIDEO: SHARED SWITCHER":"VIDEO: LOCAL ONLY";
-    el.switcherLink.style.color=result.shared?"#79e9b0":"#efd18b";
-    log(result.shared?"SHARED SWITCHER ATTACHED: "+result.sourceCount+" stage cameras":"LOCAL VIDEO MODE: "+result.reason);
-    if(result.shared&&window.PubCast25DFramePublisher){
-      state.mediaPublisher=window.PubCast25DFramePublisher.create({
-        session:sess.id,sourceId:id=>Shared.sourceId(state.pkg.id,id),
-        onState:feed=>{
-          el.liveMedia.textContent=feed.live?"REMOTE FRAMES: CONFIRMED ("+feed.frames+")":"REMOTE FRAMES: OFF";
-          el.liveMedia.style.color=feed.live?"#79e9b0":"";
-        },
-        onError:(reason,count)=>{
-          if(count===1||count===3||count%10===0){
-            el.liveMedia.textContent="REMOTE FRAMES: ERROR";
-            el.liveMedia.style.color="#ff8b8b";log(reason);
-          }
-        }
-      });
-    }
-  }else{
-    el.switcherLink.textContent="VIDEO: LOCAL ONLY";
-    log("Shared switcher adapter unavailable; local-only production");
-  }
-  log("PRODUCTION START "+sess.id);
- }finally{
-   state.startingProduction=false;
-   setControls();
+ if(state.session||state.castingPete)throw Error("Production or casting is already underway");
+ const sess=Core.makeSession(state.pkg,Date.now());state.session=sess;
+ emit("production.start",{package:state.pkg.id,program:state.programId});
+ try{if(state.storageReady)await Store.save(sess)}catch(e){state.session=null;throw Error("Cannot persist session start: "+e.message);}
+ log("PRODUCTION START "+sess.id);setControls();
+ state.remoteProgram=null;state.remotePreview=null;
+ const Shared=window.PubCast25DSharedSwitcher;
+ if(Shared){
+   const bridge=Shared.create({onState:sharedSwitcherState,onError:sharedSwitcherWarning});
+   const result=await bridge.attach(state.pkg);
+   state.sharedSwitcher=bridge;
+   el.switcherLink.textContent=result.shared?"VIDEO: SHARED SWITCHER":"VIDEO: LOCAL ONLY";
+   el.switcherLink.style.color=result.shared?"#79e9b0":"#efd18b";
+   log(result.shared?"SHARED SWITCHER ATTACHED: "+result.sourceCount+" stage cameras":"LOCAL VIDEO MODE: "+result.reason);
+   if(result.shared&&window.PubCast25DFramePublisher){
+     state.mediaPublisher=window.PubCast25DFramePublisher.create({
+       session:sess.id,sourceId:id=>Shared.sourceId(state.pkg.id,id),
+       onState:feed=>{
+         el.liveMedia.textContent=feed.live?"REMOTE FRAMES: CONFIRMED ("+feed.frames+")":"REMOTE FRAMES: OFF";
+         el.liveMedia.style.color=feed.live?"#79e9b0":"";
+       },
+       onError:(reason,count)=>{
+         if(count===1||count===3||count%10===0){
+           el.liveMedia.textContent="REMOTE FRAMES: ERROR";
+           el.liveMedia.style.color="#ff8b8b";log(reason);
+         }
+       }
+     });
+   }
+ }else{
+   el.switcherLink.textContent="VIDEO: LOCAL ONLY";
+   log("Shared switcher adapter unavailable; local-only production");
  }
 }
 async function stopProduction(){
- if(state.startingProduction||state.endingProduction||!state.session)return;
+ if(state.endingProduction)return;
  state.endingProduction=true;setControls();
  try{
   window.PubcastSpeech?.stop();
@@ -310,12 +296,11 @@ async function stopProduction(){
   if(!state.session)return;
   if(state.recorder||state.recordingStarting)await stopRecording();
   if(state.recovery)throw Error("Save the unsaved take before ending this production. A recovery copy can also be downloaded below.");
-  const sess={...state.session,events:state.session.events.slice()};
-  const endedAt=Date.now();
-  Core.event(sess,"production.stop",{},endedAt);
-  Core.finish(sess,endedAt);
-  if(state.storageReady)await Store.save(sess);
   state.clacker?.close();state.clacker=null;
+  const sess=state.session;
+  emit("production.stop",{});
+  Core.finish(sess,Date.now());
+  if(state.storageReady)await Store.save(sess);
   try{await window.PubCastCameraPool?.endProduction?.();}catch(e){log("POOL CLOSE WARNING "+e.message);}
   if(state.mediaPublisher){
     try{await state.mediaPublisher.stop()}catch(e){log("LIVE MEDIA RELEASE WARNING "+e.message)}
@@ -356,8 +341,7 @@ function captureLease(id,owner,onFailure=()=>{}){
  return ()=>{closed=true;clearInterval(timer);};
 }
 async function startRecording(){
- if(!state.session||state.startingProduction||state.endingProduction)throw Error("Recording requires an active production");
- if(state.panicActive)throw Error("Clear the PANIC blackout before recording");
+ if(!state.session)throw Error("Start a production before recording");
  if(state.recorder||state.recordingPromise||state.recordingStarting)throw Error("Already recording or preparing recording");
  if(archive?.status().busy)throw Error("Pause the server save before starting another take");
  if(archive?.status().viewBusy){archive.cancelView();$("archiveStatus").textContent="Server transfer paused for recording. Retry after the take.";}

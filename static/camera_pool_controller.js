@@ -82,7 +82,7 @@ window.PubCastPoolPanelController={mount(section,flows){
  async function open(id){
   if(!/^pool_[a-f0-9]{32}$/.test(id))throw Error("Choose a valid pool");
   view.reset();actions.reset();state=null;sid=id;retryClose="";clearImages();draw();
-  $("poolInvite").value=new URL("/static/control_room.html?camera_pool="+id,location.href).href;
+  $("poolInvite").value=new URL("control_room.html?camera_pool="+id,location.href).href;
   await removeWorker();await refresh();
  }
  async function pump(){
@@ -123,7 +123,7 @@ window.PubCastPoolPanelController={mount(section,flows){
  $("poolOpen").onclick=()=>mutate(()=>open($("poolSessions").value));
  $("poolAssign").onclick=()=>mutate(async()=>{const id=sid;await api(actions,`/sessions/${id}/assignments`,"POST",{source_id:$("poolSource").value,participant_id:$("poolPerson").value,fps:Number($("poolFps").value),task:"camera_preview"});});
  $("poolClose").onclick=()=>mutate(()=>close(retryClose||sid));
- $("poolContribute").onclick=()=>{if(!sid)return message("Open a pool first");if($("poolLocalWorker").querySelector("iframe"))return;const frame=document.createElement("iframe");frame.src=new URL("/static/camera_pool_worker.html?pool="+sid,location.href).href;frame.title="Consent and contribution controls";frame.name="camera-pool-contribution";frame.style.cssText="width:100%;height:700px;border:1px solid #59718a";$("poolLocalWorker").appendChild(frame);};
+ $("poolContribute").onclick=()=>{if(!sid)return message("Open a pool first");if($("poolLocalWorker").querySelector("iframe"))return;const frame=document.createElement("iframe");frame.src=new URL("camera_pool_worker.html?pool="+sid,location.href).href;frame.title="Consent and contribution controls";frame.name="camera-pool-contribution";frame.style.cssText="width:100%;height:700px;border:1px solid #59718a";$("poolLocalWorker").appendChild(frame);};
  window.PubCastCameraPool={assignedSources:()=>{const live=source&&!source.paused&&performance.now()-source.stateAt<4000?source.liveState:state;return live?.assignments.map(t=>t.source_id)||[];},previewFor:id=>{const task=state?.assignments.find(t=>t.source_id===id);return task&&id!==state.program?currentImage(task)?.image||null:null;},state:()=>state,endProduction:async()=>{if(source)await close(source.id);}};
  window.addEventListener("production25d-ready",buttons);
  const initial=actions.version;
