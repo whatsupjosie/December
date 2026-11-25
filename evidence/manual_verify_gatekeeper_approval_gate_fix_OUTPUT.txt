@@ -1,0 +1,4 @@
+PASS  retire_object approval gate restored (was silently dropped)
+PASS  restore_retired_object correctly has no approval gate (matches predecessor)
+
+2 passed, 0 failed

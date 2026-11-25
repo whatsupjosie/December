@@ -1,0 +1,40 @@
+{
+  "blackbox_client_schema": "bbx1-client/1",
+  "blackbox_version": "0.6.0a3",
+  "limits_document": "KNOWN_LIMITATIONS_2.5.0a10.md",
+  "oubliette_active_product_surface": false,
+  "previews": [
+    "ITERATION_WALLET_DESKTOP_LOWER_2.5.0a10.png",
+    "ITERATION_WALLET_DESKTOP_TOP_2.5.0a10.png",
+    "ITERATION_WALLET_MOBILE_LABCOPY_2.5.0a10.png",
+    "ITERATION_WALLET_MOBILE_TOP_2.5.0a10.png"
+  ],
+  "product": "Iteration Wallet",
+  "release_date": "2026-07-24",
+  "schema": "rearview-foresight-release-manifest/1",
+  "supported_external_workflow": "LabCopy",
+  "verification": {
+    "blackbox_tests": "2 passed",
+    "desktop_headless_ui": "9 trays; no page-script errors",
+    "javascript_syntax": "passed",
+    "loopback_server_smoke": "passed",
+    "mobile_headless_ui": "9 trays; no page-script errors; bounded one-column layout",
+    "python_files_compiled": 119,
+    "release_checks": "16/16 passed",
+    "wallet_tests": "286 passed",
+    "wheel_clean_install": "passed"
+  },
+  "wallet_version": "2.5.0a10",
+  "wheels": [
+    {
+      "name": "bbx1_iteration_wallet_plugin-0.6.0a3-py3-none-any.whl",
+      "sha256": "b1be3c3e8020335ca967473ab04cb9716dd91e882ace99901696f88132c0d27f",
+      "size_bytes": 32402
+    },
+    {
+      "name": "iteration_wallet-2.5.0a10-py3-none-any.whl",
+      "sha256": "57d627367f3fb002aa8720c6cf961a370334c2e7d5cdda0ae78d52a28fd42a4c",
+      "size_bytes": 209373
+    }
+  ]
+}

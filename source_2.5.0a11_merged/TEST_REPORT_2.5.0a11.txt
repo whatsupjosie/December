@@ -1,0 +1,81 @@
+Iteration Wallet 2.5.0a11 / BlackBox 0.6.0a4
+Permanent Preservation Hardening — Test Report
+Date: 2026-07-27
+
+STATUS: ALL RELEASE-CANDIDATE AUTOMATED CHECKS PASSED
+
+Wallet source suite
+-------------------
+Result: 330 passed, 0 failed
+Elapsed: 41.81 seconds
+Command: python -m pytest -q
+Environment: PYTHONPATH=<release-root>;<release-root>/blackbox_source
+
+Standalone BlackBox suite
+-------------------------
+Result: 43 passed, 0 failed
+Elapsed: 1.20 seconds
+Command executed by the isolated release runner against blackbox_source/plugin_tests and blackbox_source/tests
+
+Market-readiness source quality coverage
+----------------------------------------
+- All active text is UTF-8, ends with a newline, and has no trailing whitespace.
+- Production invariants do not depend on assertions removed by Python -O.
+- Production dictionary literals have no duplicate string keys.
+- No runtime function body is a pass/ellipsis stub; typed Protocol contracts remain intentional interfaces.
+- No unresolved work-marker annotations remain in active release text.
+- Browser element IDs are unique and every static getElementById reference resolves.
+- Strict base64url decoding rejects noncanonical characters and malformed Unicode tokens fail closed.
+- Active timestamps carry explicit UTC offsets; legacy offset-free notification records remain readable.
+
+State-transition coverage added in this run
+-------------------------------------------
+- Candidate Retire and Restore preserve exact bytes, hashes, transition evidence, history, and receipts.
+- Archive Retire and Restore update only the current archive projection while preserving history.
+- Current Prime retirement is refused before authority consumption.
+- Wrong scope fails before mutation.
+- Crash after custody publication reconciles without repeating authority.
+- Crash after catalog commit finalizes the exact receipt.
+- Crash after receipt anchoring or receipt persistence reuses the exact canonical graph.
+- Conflicting destinations freeze the object for human-guided reconciliation.
+- Receipt tampering is detected.
+- Exact HTTP routes complete verified Retire and Restore transactions.
+- Configured Vault Head User/admin scope is enforced by Retire.
+
+Security-review follow-up coverage
+----------------------------------
+- Hardened approval decisions require a passkey token scoped to the exact approval ID.
+- A self-declared Head User identity session cannot approve through the HTTP boundary alone.
+- Browser Vault-open calls carry both the identity session and hardware approval.
+- Authentication/authorization campaign: 33 passed.
+- Custody-integrity, concurrency, and fault campaign: 38 passed.
+
+Source-bundle verification
+--------------------------
+Result: 27/27 passed
+Command: python RUN_VERIFICATION.py
+Includes version/schema pins, Python compilation, preservation laws, single cleanup authority, exact state-transition routes, absence of legacy routes, UI wiring, JavaScript syntax, passkey posture, bounded canonical flow, CLI surface, and release files.
+
+Live loopback smoke
+-------------------
+UI HTTP status: 200
+Wallet version: 2.5.0a11
+BlackBox chain health: true
+Custody integrity: true
+Passkey enrollment required: true
+Wallet/BlackBox core integration: true
+
+Clean wheel installation smoke
+------------------------------
+Wallet import: 2.5.0a11
+BlackBox import: 0.6.0a4
+Server application version: 2.5.0a11
+Passkey enrollment required: true
+iw doctor healthy: true
+
+Important release boundary
+--------------------------
+Automated cryptographic WebAuthn coverage is not a substitute for physical Windows Hello,
+phone-hybrid, and multi-vendor FIDO2 validation. Signed Windows service/installer work,
+service-owned ACL deployment, sealed-vault recovery, independent security review,
+accessibility audit, and field recovery rehearsal remain market-release blockers.

@@ -1,0 +1,21 @@
+{
+  "bind_host": "127.0.0.1",
+  "blackbox_chain_ok": true,
+  "blackbox_version": "0.6.0a4",
+  "clean_wheel_install": true,
+  "custody_integrity_ok": true,
+  "doctor_ok": true,
+  "live_loopback_smoke": true,
+  "passkey_enrollment_required": true,
+  "passkey_required_for_protected_actions": true,
+  "schema": "iteration-wallet-release-smoke/1",
+  "server_app_version": "2.5.0a11",
+  "state_transitions": {
+    "available": true,
+    "protected_content_preserved": true,
+    "restore": true,
+    "retire": true
+  },
+  "ui_http_200": true,
+  "wallet_version": "2.5.0a11"
+}

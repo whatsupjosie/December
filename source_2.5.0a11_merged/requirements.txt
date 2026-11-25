@@ -1,0 +1,8 @@
+# Iteration Wallet — Python dependencies
+# Install: pip install -r requirements.txt
+
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+pydantic>=2.0.0
+requests>=2.31.0
+cryptography>=42.0.0

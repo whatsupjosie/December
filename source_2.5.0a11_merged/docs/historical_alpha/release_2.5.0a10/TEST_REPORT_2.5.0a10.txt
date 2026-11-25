@@ -1,0 +1,64 @@
+ITERATION WALLET 2.5.0a10 / BLACKBOX 0.6.0a3
+TEST REPORT — CONTINUOUS AGENT RUN 2026-07-24
+
+1. SOURCE / PRODUCT VERIFICATION
+   Command: python RUN_VERIFICATION.py
+   Result: 16/16 checks passed
+   Covered: version alignment, dependency pin, 43-file compile scan, 9 unique trays,
+   no dead inline handlers, active LabCopy routes, Oubliette absent active UI/CLI,
+   passkey routes, responsive one-column contract, fresh runtime import, release files.
+
+2. WALLET TEST SUITE
+   Command: PYTHONPATH=<root>:<root>/blackbox_source python -m pytest -vv tests
+   Result: 286 passed in 32.27 seconds
+
+3. STANDALONE BLACKBOX TEST SUITE
+   Command: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=<root>:<root>/blackbox_source python -m pytest -q blackbox_source/tests
+   Result: 2 passed in 0.01 seconds
+
+4. JAVASCRIPT SYNTAX
+   Command: node --check <extracted inline application script>
+   Result: PASS
+   Script size checked: 58,160 bytes
+
+5. HEADLESS DESKTOP UI
+   Chromium viewport: 1920 x 1080
+   Result: PASS
+   Page-script errors: none
+   Trays rendered: 9
+   Main field: scrollable; lower evidence trays reachable
+
+6. HEADLESS MOBILE UI
+   Chromium viewport: 430 x 900
+   Result: PASS
+   Page-script errors: none
+   Trays rendered: 9
+   Tray bounds: x=18 px, width=394 px for every tray
+   Outcome: no horizontal tray overflow; one-column mobile custody document
+
+7. LIVE LOOPBACK SERVER SMOKE
+   Launcher: python app.py --no-browser --port 7442
+   Result: PASS
+   Root UI bytes: 151,553
+   Reported Wallet version: 2.5.0a10
+   Passkey status endpoint: PASS
+   Registration-options endpoint: PASS
+   RP ID: localhost
+   Fresh challenge: present
+
+8. PURE-PYTHON WHEEL BUILD / INSTALL
+   Wallet wheel: iteration_wallet-2.5.0a10-py3-none-any.whl
+   BlackBox wheel: bbx1_iteration_wallet_plugin-0.6.0a3-py3-none-any.whl
+   Clean --target installation: PASS
+   Distribution/import versions: aligned
+   Server version: 2.5.0a10
+   LabCopy CLI commands: labcopy-export, labcopy-reenter
+   Oubliette CLI commands: none
+   Passkey verification API route: present
+
+ENVIRONMENT LIMIT
+Direct Chromium navigation to the running loopback server was blocked by the
+container's browser-administrator policy. This was not represented as a product
+pass. HTTP server behavior was tested directly; the complete UI script was run
+headlessly against representative mocked API responses. Physical Windows Hello
+and phone hardware were not available in the Linux build environment.

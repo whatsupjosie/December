@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bbx1-iteration-wallet-plugin"
+version = "0.6.0a4"
+description = "Standalone host-neutral tamper-evident BlackBox recorder and local client contract"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Proprietary alpha - Rear View Foresight"}
+authors = [{name = "Rear View Foresight"}]
+dependencies = []
+
+[project.scripts]
+bbx1 = "blackbox_plugin.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["blackbox_plugin*"]
+exclude = ["iteration_wallet", "iteration_wallet.*", "plugin_tests*", "tests*", "reference_source*", "rubish*"]

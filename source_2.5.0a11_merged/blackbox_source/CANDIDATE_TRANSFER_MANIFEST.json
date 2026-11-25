@@ -1,0 +1,210 @@
+{
+  "manifest_type": "candidate_transfer_manifest",
+  "trusted_reference": false,
+  "human_commissioned": false,
+  "automatic_update_allowed": false,
+  "generated_at": "2026-07-19",
+  "entry_count": 40,
+  "entries": [
+    {
+      "path": "BLACKBOX_PLUGIN_README.md",
+      "size_bytes": 4795,
+      "sha256": "4e60644876224f941b35ada1e1a7ec0d7e3df0970ac13c15719b2a16a5b69368"
+    },
+    {
+      "path": "BUILD_REPORT_BLACKBOX_PLUGIN_20260719.md",
+      "size_bytes": 8368,
+      "sha256": "75a1cdb73bf6b9f692cef9ddfb14c4b3aa820d0dca6ad013f1b7e253e938d33f"
+    },
+    {
+      "path": "CHANGELOG_BLACKBOX_PLUGIN.md",
+      "size_bytes": 963,
+      "sha256": "60234b4e6a7a81dc9b45e6033ab00d77d679f92e5f6308b05b9ff7aac1441839"
+    },
+    {
+      "path": "LICENSE_ALPHA.txt",
+      "size_bytes": 289,
+      "sha256": "0ffa6b01c0bf2e714d6307e1ccfb810dca7d3b2f30a33f9cf0055411396b7a08"
+    },
+    {
+      "path": "PRODUCT_LAWS.md",
+      "size_bytes": 1789,
+      "sha256": "533fa1b50f1b87da43775fe3ff4e893e3a8e52d8625f032d93ae326cd4a57eea"
+    },
+    {
+      "path": "README.md",
+      "size_bytes": 904,
+      "sha256": "3fa0426e4ddc20f3262e5fd968d8901edbc5dc56fd8a1556d7a14a07f126ec1d"
+    },
+    {
+      "path": "SOURCE_INPUT_HASHES.json",
+      "size_bytes": 2372,
+      "sha256": "bbe383febed5aae33a2aefe101b6b6b7ae141884e69bff8cc0921fc639540429"
+    },
+    {
+      "path": "blackbox_plugin/__init__.py",
+      "size_bytes": 871,
+      "sha256": "e9cf921eb5fc31b58c87e020f7c24d72f76414ebfdb59708ea4893a3698a611d"
+    },
+    {
+      "path": "blackbox_plugin/adapters/__init__.py",
+      "size_bytes": 273,
+      "sha256": "3aa6a0382c90ac608c8bb76de390adf8ca8301afeff40f7c8404a9bec883b559"
+    },
+    {
+      "path": "blackbox_plugin/adapters/pub_manager.py",
+      "size_bytes": 2528,
+      "sha256": "61ceedba40846c15eeb8146e2328fb461a370b224cc52dee5b3a5949696db400"
+    },
+    {
+      "path": "blackbox_plugin/adapters/pubcast.py",
+      "size_bytes": 3124,
+      "sha256": "431158c6e36cf9e59718e4710d3073d0f226f736f1bc92179accb4b97b1a14fd"
+    },
+    {
+      "path": "blackbox_plugin/cli.py",
+      "size_bytes": 5689,
+      "sha256": "381450a968b6d716ef1401744bb1246e0df698a7087416319a742060aa8240a9"
+    },
+    {
+      "path": "blackbox_plugin/discovery.py",
+      "size_bytes": 4871,
+      "sha256": "1b6c7a47f21a9a0f8dbd97b5110477eed83005ce8f6fb833cd72e38c0d8b6b1a"
+    },
+    {
+      "path": "blackbox_plugin/errors.py",
+      "size_bytes": 581,
+      "sha256": "287e9c10472cacd0e70905125249d3ef35b7bd00d7bf1e9a4aaf324a1874e07b"
+    },
+    {
+      "path": "blackbox_plugin/lifecycle.py",
+      "size_bytes": 909,
+      "sha256": "8229c6a979276f2c9b12e4c11adfc58c441ef5fb0385be48de342bffc5578f95"
+    },
+    {
+      "path": "blackbox_plugin/models.py",
+      "size_bytes": 6319,
+      "sha256": "11a5baaebd8fa2dec375ff2ef89cc433e296573f60f67bf74dd18abac28994ca"
+    },
+    {
+      "path": "blackbox_plugin/recorder.py",
+      "size_bytes": 20594,
+      "sha256": "791c3607583ba8e686dc019b608338d50d46a4e6ae8bb715ef28ccd609d91a56"
+    },
+    {
+      "path": "blackbox_plugin/schema.py",
+      "size_bytes": 1900,
+      "sha256": "3bc32848f7acec0a802fad3b5ddbaca8ed9ac63c615f7906d232951f25eadb3e"
+    },
+    {
+      "path": "blackbox_plugin/sentinel.py",
+      "size_bytes": 5310,
+      "sha256": "d912a1f2439658d8e4966a7bb4693f106f2d601e49d626c5c122ad9795bc31ae"
+    },
+    {
+      "path": "blackbox_plugin/service.py",
+      "size_bytes": 2597,
+      "sha256": "f491d2be691ae39ad6f7fd0204c4ef4141a5bb30abc4382d30b81e3e77114232"
+    },
+    {
+      "path": "blackbox_plugin/views.py",
+      "size_bytes": 4452,
+      "sha256": "deb919248798e739c3a775d9cbbacbd2fa5591fe15f2ecc5e4e2726c9678e2d6"
+    },
+    {
+      "path": "dist/bbx1_iteration_wallet_plugin-0.3.0-py3-none-any.whl",
+      "size_bytes": 31607,
+      "sha256": "e5b1fef37b57d415f49c31962ad2c758b07895103c77af481671487ca949116a"
+    },
+    {
+      "path": "docs/blackbox_plugin/ARCHITECTURE.md",
+      "size_bytes": 2403,
+      "sha256": "391935c9e54b019fc62382b072264cd7bcbd074be7011f6f706895e299b30110"
+    },
+    {
+      "path": "docs/blackbox_plugin/ITERATION_WALLET_INTEGRATION.md",
+      "size_bytes": 1458,
+      "sha256": "26edb8d123c62e07c6f9d9b8016259fe2be3eea268687613f5a385e32dbc61c1"
+    },
+    {
+      "path": "docs/blackbox_plugin/PUBCAST_WIRING.md",
+      "size_bytes": 1074,
+      "sha256": "cd88f7f3b8aaba71d8ae1fa04e8eb4d08e44e3693b30a244ba3e03f51af82d27"
+    },
+    {
+      "path": "examples/demo_standalone.py",
+      "size_bytes": 814,
+      "sha256": "362d3fceed1ceb8037220104a58a7e55a50f16e357a1ec3995da319e868b810a"
+    },
+    {
+      "path": "examples/demo_wallet_bridge.py",
+      "size_bytes": 697,
+      "sha256": "55c5fa8fa9318e3c8496e36aad64a7b597607e313a30fcb05611f89fa3398735"
+    },
+    {
+      "path": "iteration_wallet_blackbox/__init__.py",
+      "size_bytes": 497,
+      "sha256": "1428c001aa353ab474d1a6a8fe74b352fbcb2a1f63958787b5aabd7b5210fcd5"
+    },
+    {
+      "path": "iteration_wallet_blackbox/compat.py",
+      "size_bytes": 5308,
+      "sha256": "8a96ecb49e52e6c3c8660cd248723943ed74eb9f5a5d61412e0966bb46c8f4f7"
+    },
+    {
+      "path": "iteration_wallet_blackbox/connector.py",
+      "size_bytes": 2021,
+      "sha256": "7e4aaf4d0e26e35094223d08b7f4f58a114965351abc6c716eade19639c84268"
+    },
+    {
+      "path": "iteration_wallet_blackbox/event_map.py",
+      "size_bytes": 1689,
+      "sha256": "9435b63649e0b7276f92870efa3fb6bfc2bd0104d1cb77a79866fb42248ff844"
+    },
+    {
+      "path": "iteration_wallet_blackbox/models.py",
+      "size_bytes": 1872,
+      "sha256": "c367eb588b75271e2df9408fd3874dbf27febf3b84482a7c7db95795f37b1c54"
+    },
+    {
+      "path": "iteration_wallet_blackbox/outbox.py",
+      "size_bytes": 3288,
+      "sha256": "5deb0d2fb1b6dce162ab060ac1c420b24e6b8d7f6c615321dcb5da96af547e2c"
+    },
+    {
+      "path": "legacy_blackbox_phase1_2/README_PHASE1_2.md",
+      "size_bytes": 924,
+      "sha256": "fae8dc2b9be4100bcd9912f8cea42637e1f947f5d76f94845d5c95c24623b503"
+    },
+    {
+      "path": "legacy_blackbox_phase1_2/__init___phase1_2.py",
+      "size_bytes": 376,
+      "sha256": "5d9845490e70654cae4baa361703ed791e0b67a0e22a389cf8edf3e73712efc4"
+    },
+    {
+      "path": "legacy_blackbox_phase1_2/append_only_recorder_phase1_2.py",
+      "size_bytes": 6365,
+      "sha256": "97b01d774925c805e096999c4558516e6afaefe0a339251b0964eef70d1c305a"
+    },
+    {
+      "path": "legacy_blackbox_phase1_2/pubcast_event_adapter_phase1_2.py",
+      "size_bytes": 3373,
+      "sha256": "b10b19ae4fb5e82b0d4a16527782c7c1d2c7dde822ad7f5b9a45a9c69b087e99"
+    },
+    {
+      "path": "plugin_tests/test_architecture_boundaries.py",
+      "size_bytes": 585,
+      "sha256": "8cb94933c9fd30223bf3992d6b463a6698ed43f956bdfa5f6f2bdba49045c27d"
+    },
+    {
+      "path": "plugin_tests/test_blackbox_plugin.py",
+      "size_bytes": 13514,
+      "sha256": "53c4e0ef08d637b1fedce318397563a7c4731c88224a782cd4d2f3efe9b34262"
+    },
+    {
+      "path": "pyproject.toml",
+      "size_bytes": 708,
+      "sha256": "f9ccc9206dd06f5d853d613a9820f93ae5dba8380b018364b1b4907bd7644122"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+PASS  exploit: bare decision_by, no session -> rejected
+PASS  exploit: known-admin-id string, no session -> rejected (THE FIX)
+PASS  valid session + head user -> approved
+PASS  valid session, non-admin actor -> rejected
+PASS  decision_by mismatched vs session identity -> rejected
+PASS  bot session without human-intent proof -> rejected
+PASS  unknown/forged session_id -> rejected
+PASS  write-once terminal state still enforced
+PASS  concurrent decisions: exactly one winner
+
+9 passed, 0 failed

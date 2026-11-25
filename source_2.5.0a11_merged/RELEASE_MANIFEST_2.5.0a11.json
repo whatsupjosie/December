@@ -1,0 +1,78 @@
+{
+  "documents": [
+    "README.md",
+    "INSTALLATION.md",
+    "SECURITY_BOUNDARY_2.5.0a11.md",
+    "UI_WORKSPACE_GUIDE_2.5.0a11.md",
+    "KNOWN_LIMITATIONS_2.5.0a11.md",
+    "QUALITY_AUDIT_20260727.md",
+    "CONTINUOUS_AGENT_RUN_REPORT_20260725.md",
+    "SECURITY_REVIEW_PATCH_20260727.md",
+    "TEST_REPORT_2.5.0a11.txt",
+    "RELEASE_SMOKE_2.5.0a11.json"
+  ],
+  "generated_at": "2026-07-27",
+  "implemented_custody_transactions": {
+    "admit_labcopy_result_as_candidate": "canonical-coordinated-preservation-only",
+    "admit_oubliette_derivative_as_candidate": "canonical-coordinated-preservation-only",
+    "candidate_to_prime": "canonical-coordinated-preservation-only",
+    "direct_engine_bypass": "absent",
+    "export_working_copy": "canonical-coordinated-preservation-only",
+    "legacy_ambiguous_routes": "absent",
+    "quarantine": "canonical-coordinated-preservation-only",
+    "restore_retired_object": "canonical-coordinated-preservation-only",
+    "retire_object": "canonical-coordinated-preservation-only"
+  },
+  "known_limitations": "KNOWN_LIMITATIONS_2.5.0a11.md",
+  "product_laws": {
+    "blackbox_evidence": "preserved",
+    "physical_cleanup_authority": "registered program-created non-authoritative runtime residue only",
+    "protected_content": "preserved",
+    "uncertain_material": "preserve for investigation"
+  },
+  "release": {
+    "blackbox_client_schema": "bbx1-client/1",
+    "blackbox_version": "0.6.0a4",
+    "label": "Permanent Preservation Hardening and Market-Readiness Quality Pass",
+    "status": "release-candidate-hardened-alpha",
+    "wallet_version": "2.5.0a11"
+  },
+  "schema": "iteration-wallet-release-manifest/1",
+  "verification": {
+    "blackbox_tests": {
+      "elapsed_seconds": 1.20,
+      "failed": 0,
+      "passed": 43
+    },
+    "clean_wheel_smoke": "passed",
+    "live_loopback_smoke": "passed",
+    "smoke_report": "RELEASE_SMOKE_2.5.0a11.json",
+    "source_bundle_checks": {
+      "passed": 27,
+      "status": "passed",
+      "total": 27
+    },
+    "source_quality_checks": {
+      "passed": 6,
+      "status": "passed",
+      "total": 6
+    },
+    "wallet_tests": {
+      "elapsed_seconds": 41.81,
+      "failed": 0,
+      "passed": 330
+    }
+  },
+  "wheels": [
+    {
+      "file": "dist/bbx1_iteration_wallet_plugin-0.6.0a4-py3-none-any.whl",
+      "sha256": "95001af437831c22aedbdce5fadb72789e098dbfa9a414f86b1c5e6f72996dde",
+      "size_bytes": 33460
+    },
+    {
+      "file": "dist/iteration_wallet-2.5.0a11-py3-none-any.whl",
+      "sha256": "009517fb7a927a0a610952bdb062989be81e3cd31c0198a5325cbecc35a891fc",
+      "size_bytes": 234571
+    }
+  ]
+}

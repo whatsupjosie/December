@@ -1,0 +1,1412 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Iteration Wallet — Canonical Custody</title>
+<style>
+:root{
+  --night:#130f18;--ink:#211a27;--paper:#f3eadb;--ivory:#fff8e8;--porcelain:#f7f0e3;
+  --walnut:#3a241d;--walnut-2:#60402e;--brass:#a9702d;--brass-hi:#e8c884;--brass-dark:#5e3b13;
+  --amethyst:#5e3c73;--amethyst-hi:#9c7eb0;--ruby:#8e2838;--emerald:#27634c;
+  --line:rgba(61,38,25,.22);--muted:#756b72;--shadow:0 22px 55px rgba(28,17,30,.22);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;min-height:100vh;color:var(--ink);font:15px/1.48 Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;background:
+ radial-gradient(ellipse at 78% -12%,rgba(194,144,75,.22),transparent 32rem),
+ radial-gradient(ellipse at 8% 8%,rgba(96,55,114,.23),transparent 34rem),
+ repeating-linear-gradient(115deg,rgba(91,55,31,.035) 0 2px,transparent 2px 9px),
+ linear-gradient(145deg,#d9cdbd,#f4eadb 46%,#cfc0d2);background-attachment:fixed}
+body:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.16;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.55' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.38'/%3E%3C/svg%3E")}
+button,input,select,textarea{font:inherit}button{cursor:pointer}.shell{display:grid;grid-template-columns:278px minmax(0,1fr);min-height:100vh}
+aside{padding:22px 18px 28px;border-right:1px solid rgba(232,200,132,.28);background:
+ linear-gradient(90deg,rgba(255,255,255,.025),transparent 30%),
+ repeating-linear-gradient(18deg,rgba(232,200,132,.025) 0 1px,transparent 1px 7px),
+ linear-gradient(180deg,#17111d,#26182d 57%,#19121e);color:#fbf1fb;position:sticky;top:0;height:100vh;box-shadow:inset -1px 0 rgba(0,0,0,.5),8px 0 28px rgba(20,12,24,.16)}
+aside:after{content:"";position:absolute;right:-6px;top:0;bottom:0;width:11px;background:linear-gradient(90deg,#5c3918,#d0a65d 45%,#6c431b);box-shadow:0 0 12px rgba(0,0,0,.42)}
+.brand{display:flex;align-items:center;gap:13px;margin:3px 2px 25px;padding:10px 8px 16px;border-bottom:1px solid rgba(232,200,132,.18)}
+.mark{width:52px;height:52px;border:1px solid #d5af66;border-radius:50% 50% 44% 44%;display:grid;place-items:center;color:var(--brass-hi);font-size:25px;background:radial-gradient(circle at 50% 35%,rgba(232,200,132,.16),transparent 58%),#211727;box-shadow:inset 0 0 0 4px #34223b,inset 0 0 22px rgba(232,200,132,.14),0 7px 18px rgba(0,0,0,.32)}
+.brand strong{display:block;font:700 19px/1.1 Georgia,serif;letter-spacing:.015em}.brand small{color:#c9bbca;letter-spacing:.08em;text-transform:uppercase;font-size:9px}
+.scope{position:relative;padding:16px 14px 17px;border:1px solid rgba(232,200,132,.26);border-radius:20px 9px 20px 9px;background:linear-gradient(145deg,rgba(255,255,255,.07),rgba(255,255,255,.025));font-size:11.5px;color:#d8ceda;box-shadow:inset 0 1px rgba(255,255,255,.08)}
+.scope:before{content:"BOUNDARY";position:absolute;right:10px;top:-8px;padding:2px 7px;border:1px solid rgba(232,200,132,.3);border-radius:99px;background:#1c1421;color:#d9b977;font-size:8px;letter-spacing:.14em}
+.scope b{display:block;color:var(--brass-hi);margin-bottom:6px;text-transform:uppercase;letter-spacing:.11em}
+.nav{margin-top:24px;display:grid;gap:7px}.nav button{position:relative;border:1px solid transparent;border-radius:6px 17px 17px 6px;background:transparent;color:#d8cddd;text-align:left;padding:11px 14px 11px 32px;transition:.18s}
+.nav button:before{content:"";position:absolute;left:12px;top:50%;width:8px;height:8px;border-radius:50%;transform:translateY(-50%);background:#463249;box-shadow:inset 0 0 0 1px #7d6681}
+.nav button.active,.nav button:hover{border-color:rgba(232,200,132,.2);background:linear-gradient(90deg,rgba(232,200,132,.13),rgba(255,255,255,.055));color:#fff;box-shadow:inset 3px 0 #bd8b44}
+.nav button.active:before,.nav button:hover:before{background:#e0bd78;box-shadow:0 0 10px #d2aa60}
+.aside-foot{position:absolute;left:22px;right:22px;bottom:22px;color:#a99dad;font-size:10px;border-top:1px solid rgba(255,255,255,.08);padding-top:13px}
+main{padding:25px 31px 42px;min-width:0;position:relative}.topbar{position:relative;display:flex;justify-content:space-between;gap:24px;align-items:flex-start;margin-bottom:20px;padding:25px 28px 28px;border:1px solid rgba(82,50,29,.25);border-radius:10px 46px 14px 46px;background:
+ radial-gradient(circle at 88% 26%,rgba(232,200,132,.16),transparent 16rem),
+ linear-gradient(135deg,rgba(255,252,243,.9),rgba(239,225,204,.76));box-shadow:var(--shadow),inset 0 1px rgba(255,255,255,.85);overflow:hidden}
+.topbar:before{content:"";position:absolute;left:0;right:0;bottom:0;height:7px;background:linear-gradient(90deg,#5c3918,#d8af65 22%,#734a20 55%,#e4c47f 78%,#5f3b18)}
+.topbar:after{content:"RF";position:absolute;right:26px;bottom:-24px;font:900 105px/1 Georgia,serif;color:rgba(80,49,70,.055);letter-spacing:-.1em}
+.eyebrow{text-transform:uppercase;letter-spacing:.16em;font-size:10px;font-weight:900;color:var(--amethyst)}h1{font:700 clamp(31px,4vw,51px)/1.01 Georgia,serif;margin:7px 0 10px;letter-spacing:-.025em}h1 em{color:var(--amethyst);font-style:italic}.sub{color:#685e67;max-width:770px;font-size:13px}
+.actions{display:flex;gap:9px;flex-wrap:wrap;position:relative;z-index:1}.btn{position:relative;border:1px solid rgba(70,43,28,.25);border-radius:5px 15px 7px 15px;padding:10px 15px;background:linear-gradient(145deg,#fffaf0,#e7d8c5);color:var(--ink);box-shadow:0 5px 13px rgba(35,22,43,.11),inset 0 1px rgba(255,255,255,.9);transition:.15s}.btn:hover{transform:translateY(-1px);filter:brightness(1.04)}.btn:active{transform:translateY(1px)}
+.btn.primary{background:linear-gradient(145deg,#7d5a8e,#473153);color:#fff;border-color:#3f2949;box-shadow:0 7px 17px rgba(68,40,80,.26),inset 0 1px rgba(255,255,255,.18)}.btn.brass{background:linear-gradient(145deg,#d7ae65,#8a5a24);color:#241608;border-color:#6b431a;text-shadow:0 1px rgba(255,255,255,.36)}.btn.danger{color:#fff;background:linear-gradient(145deg,#a74957,#6e1e2d);border-color:#631b28}.btn:disabled{opacity:.45;cursor:not-allowed;transform:none;filter:grayscale(.4)}
+.status-grid{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:10px;margin-bottom:17px;padding:9px;border:1px solid rgba(75,43,27,.24);border-radius:22px 8px 22px 8px;background:linear-gradient(180deg,#4b3027,#2d1c21);box-shadow:0 15px 30px rgba(31,18,27,.2),inset 0 1px rgba(255,255,255,.12)}
+.stat{position:relative;padding:15px 15px 14px;border:1px solid rgba(232,200,132,.2);border-radius:14px 5px 14px 5px;background:radial-gradient(circle at 50% 20%,rgba(255,255,255,.08),transparent 65%),linear-gradient(145deg,#281f2d,#18131d);box-shadow:inset 0 0 0 3px rgba(108,70,39,.25),inset 0 0 25px rgba(0,0,0,.34)}
+.stat:before{content:"";position:absolute;right:10px;top:10px;width:7px;height:7px;border-radius:50%;background:#8a6f4b;box-shadow:0 0 7px currentColor}.stat span{display:block;color:#b7a9b9;font-size:9px;text-transform:uppercase;letter-spacing:.13em}.stat strong{display:block;color:#f5eaf3;font:700 18px/1.2 Georgia,serif;margin-top:8px}.ok{color:#73c39a!important}.warning{color:#e3b663!important}.failure{color:#e37781!important}
+.grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(310px,.75fr);gap:16px}.stack{display:grid;gap:16px;align-content:start}.card{position:relative;border:1px solid rgba(73,43,25,.24);border-radius:12px 31px 14px 31px;background:linear-gradient(145deg,rgba(255,251,241,.92),rgba(232,218,200,.82));box-shadow:var(--shadow),inset 0 1px rgba(255,255,255,.86);overflow:hidden;isolation:isolate}.card:nth-child(even){border-radius:31px 12px 31px 14px}.card:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:-1;background:radial-gradient(circle at 92% 7%,rgba(121,77,135,.08),transparent 15rem),repeating-linear-gradient(115deg,rgba(96,58,34,.025) 0 1px,transparent 1px 8px)}
+.card-head{position:relative;padding:17px 20px 15px 24px;border-bottom:1px solid rgba(82,48,27,.18);display:flex;justify-content:space-between;gap:16px;align-items:center;background:linear-gradient(90deg,rgba(92,55,37,.10),rgba(255,255,255,.2))}.card-head:before{content:"";position:absolute;left:0;top:0;bottom:0;width:7px;background:linear-gradient(#d7ae65,#785020,#e0bc75)}.card-head h2{font:700 19px Georgia,serif;margin:0;letter-spacing:.005em}.card-body{padding:19px 20px 21px}.hint{color:var(--muted);font-size:11.5px}.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.field{display:grid;gap:6px}.field.full{grid-column:1/-1}.field label{font-size:9px;font-weight:900;letter-spacing:.11em;text-transform:uppercase;color:#6e626a}
+input,select,textarea{width:100%;border:1px solid rgba(77,49,33,.25);background:linear-gradient(180deg,rgba(255,253,246,.94),rgba(245,236,223,.88));border-radius:5px 13px 6px 13px;padding:10px 11px;color:var(--ink);outline:none;box-shadow:inset 0 1px 3px rgba(65,39,26,.08)}input:focus,select:focus,textarea:focus{border-color:var(--amethyst-hi);box-shadow:0 0 0 3px rgba(128,97,154,.13),inset 0 1px 3px rgba(65,39,26,.08)}input[readonly]{background:rgba(228,219,207,.72);color:#6c6269}textarea{min-height:76px;resize:vertical}.form-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:14px}
+.table{display:grid;gap:8px}.row{display:grid;grid-template-columns:minmax(140px,1.4fr) minmax(90px,.55fr) minmax(90px,.55fr) minmax(125px,.65fr) auto;gap:10px;align-items:center;padding:11px 12px 11px 17px;border:1px solid rgba(80,48,29,.19);border-radius:5px 16px 6px 16px;background:linear-gradient(90deg,rgba(255,255,255,.67),rgba(227,213,196,.55));box-shadow:inset 4px 0 #b68442}.row small{display:block;color:var(--muted)}.row-actions{display:flex;justify-content:flex-end;gap:7px;align-items:center}.row-actions .btn{padding:7px 11px;font-size:9px;white-space:nowrap}.pill{display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(88,53,111,.15);border-radius:999px;padding:4px 9px;font-size:10px;background:rgba(88,53,111,.09);color:var(--amethyst)}.pill.good{background:rgba(40,107,80,.1);color:var(--emerald)}.empty{padding:25px;text-align:center;color:var(--muted);border:1px dashed rgba(83,50,32,.28);border-radius:8px 18px 8px 18px;background:rgba(255,255,255,.26)}.receipt{padding:12px 2px;border-bottom:1px solid rgba(73,43,25,.16)}.receipt:last-child{border-bottom:0}.receipt code{font-size:10px;word-break:break-all;color:#674d6e}.receipt strong{display:block;margin-bottom:4px}.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+.notice{border:1px solid rgba(169,112,45,.27);border-left:6px solid var(--brass);background:linear-gradient(90deg,rgba(216,182,122,.19),rgba(255,255,255,.12));padding:12px 14px;border-radius:5px 14px 5px 14px;color:#65471e;font-size:12px}.unavailable{display:grid;gap:11px}.unavailable div{display:grid;grid-template-columns:105px 1fr;gap:12px;align-items:start;padding:10px 0;border-bottom:1px solid rgba(77,47,29,.12)}.unavailable div:last-child{border:0}.unavailable b{color:var(--ruby);text-transform:uppercase;letter-spacing:.08em;font-size:9px;margin-top:3px}
+.overlay{position:fixed;inset:0;background:rgba(16,10,19,.7);backdrop-filter:blur(6px);display:none;place-items:center;padding:20px;z-index:20}.overlay.open{display:grid}.modal{width:min(590px,100%);background:linear-gradient(145deg,#fff8eb,#e7d7c2);border:1px solid #b58341;border-radius:18px 42px 18px 42px;box-shadow:0 30px 100px rgba(0,0,0,.48);overflow:hidden}.modal .card-head,.modal .card-body{background:transparent}.ceremony{padding:16px;border:1px solid rgba(232,200,132,.28);border-radius:8px 20px 8px 20px;background:radial-gradient(circle at 50% 0,rgba(232,200,132,.12),transparent 60%),#211626;color:#f6eef8}.ceremony input{margin-top:9px;background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2);color:#fff;text-transform:uppercase;letter-spacing:.14em;text-align:center;font-weight:900}
+.toast{position:fixed;right:24px;bottom:24px;max-width:430px;padding:13px 16px;border:1px solid rgba(232,200,132,.35);border-radius:6px 18px 6px 18px;color:#fff;background:#251a2b;box-shadow:0 16px 50px rgba(0,0,0,.35);transform:translateY(120px);opacity:0;transition:.22s;z-index:50}.toast.show{transform:translateY(0);opacity:1}.toast.bad{background:var(--ruby)}.toast.good{background:var(--emerald)}
+hr{border-color:rgba(83,50,32,.14)!important}
+@media(max-width:1050px){.shell{grid-template-columns:238px minmax(0,1fr)}main{padding:22px}.grid{grid-template-columns:1fr}.status-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:760px){.shell{grid-template-columns:1fr}aside{position:relative;height:auto;padding:16px 17px 18px}aside:after,.aside-foot{display:none}.brand{margin-bottom:12px}.scope{display:none}.nav{display:flex;overflow:auto;margin-top:8px}.nav button{white-space:nowrap;padding-left:27px}.topbar{display:block;border-radius:10px 28px 10px 28px}.actions{margin-top:17px}.grid{grid-template-columns:1fr}}
+@media(max-width:620px){main{padding:13px}.topbar{padding:20px 17px 24px}.form-grid,.status-grid{grid-template-columns:1fr}.row{grid-template-columns:1fr}.card-body{padding:16px}.card-head{padding-right:14px}.unavailable div{grid-template-columns:1fr;gap:3px}.actions .btn{flex:1}}
+
+/* V2 MECHANICAL BUBBLE TRAY SYSTEM
+   Polygonal instrument furniture. Shapes remain grouped, responsive and operable. */
+:root{
+  --bubble-cut:22px;
+  --bubble-notch:12px;
+  --bubble-glow:rgba(239,199,122,.42);
+  --bubble-violet:rgba(142,104,166,.28);
+}
+body{background:
+ radial-gradient(ellipse at 84% -8%,rgba(255,196,94,.24),transparent 32rem),
+ radial-gradient(ellipse at 7% 12%,rgba(104,58,130,.29),transparent 35rem),
+ linear-gradient(122deg,rgba(60,28,52,.05),transparent 32%),
+ repeating-linear-gradient(113deg,rgba(73,43,26,.035) 0 2px,transparent 2px 10px),
+ linear-gradient(145deg,#cabba9,#f5ead8 45%,#c6b5cc)}
+main{overflow:hidden}
+.topbar,.status-grid,.card,.modal,.scope{
+  border-radius:0;
+  filter:drop-shadow(0 17px 24px rgba(25,13,28,.19));
+}
+.topbar{
+  clip-path:polygon(0 0,calc(100% - 58px) 0,100% 35px,100% calc(100% - 18px),calc(100% - 20px) 100%,56px 100%,0 calc(100% - 37px));
+  padding:28px 42px 34px 32px;
+  border:0;
+  background:
+    radial-gradient(circle at 76% 18%,rgba(255,255,255,.72),transparent 9rem),
+    radial-gradient(circle at 84% 26%,rgba(125,76,143,.17),transparent 18rem),
+    linear-gradient(135deg,#fffaf0 0%,#eadbc4 54%,#cdb9d2 100%);
+  box-shadow:inset 0 0 0 1px rgba(75,43,25,.22),inset 0 0 0 7px rgba(173,117,47,.08),inset 0 1px rgba(255,255,255,.95)
+}
+.topbar:before{height:10px;background:linear-gradient(90deg,#4d2b11,#f0ce86 16%,#74491f 39%,#e9c477 67%,#633817);box-shadow:0 -2px 8px rgba(255,211,129,.42)}
+.topbar:after{right:45px}
+.actions{align-items:center}
+.btn{clip-path:polygon(8px 0,calc(100% - 12px) 0,100% 10px,100% calc(100% - 7px),calc(100% - 9px) 100%,7px 100%,0 calc(100% - 9px),0 8px);border-radius:0;border:0;box-shadow:inset 0 0 0 1px rgba(70,43,28,.28),inset 0 1px rgba(255,255,255,.92),0 6px 13px rgba(35,22,43,.15)}
+.btn:hover{filter:brightness(1.07) drop-shadow(0 0 8px rgba(239,199,122,.28))}
+.status-grid{
+  position:relative;
+  grid-template-columns:repeat(4,minmax(140px,1fr));
+  gap:8px;padding:12px 15px 13px;
+  clip-path:polygon(20px 0,calc(100% - 28px) 0,100% 22px,100% calc(100% - 18px),calc(100% - 20px) 100%,28px 100%,0 calc(100% - 18px),0 20px);
+  border:0;background:linear-gradient(145deg,#523426,#271922 62%,#1a121d);
+  box-shadow:inset 0 0 0 2px #5f3b18,inset 0 0 0 5px rgba(223,181,105,.18),inset 0 0 35px rgba(0,0,0,.45)
+}
+.status-grid:before,.status-grid:after{content:"";position:absolute;top:50%;width:13px;height:45%;transform:translateY(-50%);background:linear-gradient(#f2d18e,#7a491c,#e9c379);box-shadow:0 0 12px rgba(232,194,119,.3)}
+.status-grid:before{left:0;clip-path:polygon(0 15%,100% 0,100% 100%,0 85%)}
+.status-grid:after{right:0;clip-path:polygon(0 0,100% 15%,100% 85%,0 100%)}
+.stat{border:0;border-radius:0;clip-path:polygon(13px 0,calc(100% - 13px) 0,100% 12px,100% calc(100% - 12px),calc(100% - 13px) 100%,13px 100%,0 calc(100% - 12px),0 12px);box-shadow:inset 0 0 0 1px rgba(232,200,132,.25),inset 0 0 0 4px rgba(75,45,62,.35),inset 0 0 28px rgba(0,0,0,.38)}
+.grid{grid-template-columns:minmax(0,1.22fr) minmax(300px,.78fr);gap:13px;align-items:start}
+.stack{gap:13px}
+.card{
+  --shape-a:polygon(20px 0,calc(100% - 47px) 0,100% 28px,100% calc(100% - 22px),calc(100% - 25px) 100%,45px 100%,0 calc(100% - 31px),0 22px);
+  --shape-b:polygon(46px 0,calc(100% - 22px) 0,100% 20px,100% calc(100% - 40px),calc(100% - 38px) 100%,20px 100%,0 calc(100% - 20px),0 36px);
+  --shape-c:polygon(18px 0,72% 0,78% 14px,calc(100% - 18px) 14px,100% 34px,100% calc(100% - 18px),calc(100% - 20px) 100%,31% 100%,26% calc(100% - 13px),18px calc(100% - 13px),0 calc(100% - 34px),0 20px);
+  clip-path:var(--shape-a);border:0;overflow:hidden;
+  background:
+    radial-gradient(ellipse at 84% 6%,rgba(255,255,255,.76),transparent 12rem),
+    radial-gradient(circle at 7% 95%,rgba(101,61,119,.13),transparent 18rem),
+    repeating-linear-gradient(116deg,rgba(91,53,30,.032) 0 1px,transparent 1px 8px),
+    linear-gradient(145deg,#fff9ed,#e3d2bc 67%,#d1bfd3);
+  box-shadow:inset 0 0 0 1px rgba(62,35,20,.28),inset 0 0 0 7px rgba(162,105,42,.07),inset 0 1px rgba(255,255,255,.95);
+  transition:clip-path .42s cubic-bezier(.2,.8,.2,1),filter .24s ease,transform .24s ease
+}
+.stack .card:nth-child(3n+2){clip-path:var(--shape-b)}
+.stack .card:nth-child(3n){clip-path:var(--shape-c)}
+.card:hover,.card:focus-within{clip-path:polygon(28px 0,calc(100% - 31px) 0,100% 25px,100% calc(100% - 29px),calc(100% - 29px) 100%,31px 100%,0 calc(100% - 25px),0 29px);filter:drop-shadow(0 20px 27px rgba(24,13,28,.22)) drop-shadow(0 0 10px rgba(231,190,109,.18));transform:translateY(-1px)}
+.card:after{content:"";position:absolute;inset:6px;pointer-events:none;z-index:5;clip-path:inherit;border:1px solid rgba(141,88,35,.25);box-shadow:inset 0 0 18px rgba(255,255,255,.32)}
+.card-head{padding:20px 28px 17px 31px;background:
+ linear-gradient(90deg,rgba(72,39,25,.13),rgba(255,255,255,.18) 58%,rgba(108,67,124,.10));border-bottom:1px solid rgba(82,48,27,.19)}
+.card-head:before{width:10px;background:linear-gradient(#f2d28d,#75471b 46%,#dfb76d);box-shadow:3px 0 12px rgba(221,177,97,.28)}
+.card-head:after{content:"";position:absolute;right:22px;bottom:-5px;width:58px;height:9px;clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%);background:linear-gradient(90deg,#71441b,#efcf8b,#75461a);box-shadow:0 0 10px rgba(232,196,125,.32)}
+.card-body{padding:22px 29px 27px}
+.card h2{letter-spacing:.015em}
+.field input,.field select,.field textarea{border-radius:0;clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);border:0;box-shadow:inset 0 0 0 1px rgba(73,44,28,.27),inset 0 2px 6px rgba(67,38,24,.08),0 1px rgba(255,255,255,.7)}
+.row,.empty,.notice,.ceremony{border-radius:0;clip-path:polygon(9px 0,calc(100% - 13px) 0,100% 10px,100% calc(100% - 9px),calc(100% - 9px) 100%,11px 100%,0 calc(100% - 10px),0 9px)}
+.notice{border:0;box-shadow:inset 6px 0 var(--brass),inset 0 0 0 1px rgba(169,112,45,.27)}
+.pill{border-radius:0;clip-path:polygon(6px 0,calc(100% - 6px) 0,100% 50%,calc(100% - 6px) 100%,6px 100%,0 50%);padding-inline:12px}
+.scope{clip-path:polygon(16px 0,100% 0,100% calc(100% - 20px),calc(100% - 17px) 100%,0 100%,0 16px);border:0;box-shadow:inset 0 0 0 1px rgba(232,200,132,.28),inset 0 0 18px rgba(0,0,0,.18)}
+.nav button{border-radius:0;clip-path:polygon(0 0,calc(100% - 16px) 0,100% 50%,calc(100% - 16px) 100%,0 100%,8px 50%)}
+.modal{clip-path:polygon(28px 0,calc(100% - 52px) 0,100% 31px,100% calc(100% - 28px),calc(100% - 35px) 100%,44px 100%,0 calc(100% - 29px),0 35px);border:0;box-shadow:inset 0 0 0 2px #9b682d,inset 0 0 0 8px rgba(231,191,115,.12),0 30px 100px rgba(0,0,0,.48)}
+body[data-tray-shape="soft"] .card{clip-path:polygon(32px 0,calc(100% - 32px) 0,100% 32px,100% calc(100% - 32px),calc(100% - 32px) 100%,32px 100%,0 calc(100% - 32px),0 32px)}
+body[data-tray-shape="faceted"] .stack .card:nth-child(odd){clip-path:var(--shape-c)}
+body[data-tray-shape="faceted"] .stack .card:nth-child(even){clip-path:var(--shape-b)}
+.shape-control{white-space:nowrap}
+@media(max-width:980px){.shell{grid-template-columns:225px minmax(0,1fr)}main{padding-inline:20px}.grid{grid-template-columns:1fr}.status-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:720px){.shell{display:block}aside{position:relative;height:auto}.aside-foot{position:static;margin-top:18px}.topbar{display:block}.actions{margin-top:18px}.status-grid{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.field.full{grid-column:auto}.card-body{padding-inline:22px}.card-head{padding-inline:25px}}
+
+
+/* ===== Pub Partner cinematic spatial-instrument pass ===== */
+:root{--obsidian:#080b0f;--navy:#111a27;--cobalt:#173c5b;--pearl:#f4efe6;--silver2:#cbd3db;--gold2:#d6a957;--forest:#0d3329;--violet2:#4a275d;--ember:#a84f24}
+body{background:
+ radial-gradient(circle at 58% 0%,rgba(76,42,96,.34),transparent 34rem),
+ radial-gradient(circle at 100% 45%,rgba(22,80,73,.22),transparent 38rem),
+ linear-gradient(145deg,#080a0e,#121923 48%,#080a0e);color:#f3eadb;padding:70px 12px 12px;overflow:hidden}
+body:before{opacity:.32;mix-blend-mode:screen}
+.app-menu{position:fixed;z-index:50;left:12px;right:12px;top:8px;height:55px;display:flex;align-items:center;gap:20px;padding:0 18px 0 28px;color:#e7c880;border:1px solid #6e4a20;clip-path:polygon(18px 0,calc(100% - 18px) 0,100% 18px,100% 100%,0 100%,0 18px);background:linear-gradient(180deg,#151318,#080a0d 72%),repeating-linear-gradient(100deg,rgba(255,255,255,.03) 0 1px,transparent 1px 8px);box-shadow:inset 0 0 0 2px rgba(214,169,87,.14),0 9px 24px rgba(0,0,0,.5)}
+.app-menu:before{content:"";position:absolute;inset:4px;border:1px solid rgba(214,169,87,.28);clip-path:inherit;pointer-events:none}.menu-brand{font:700 19px Georgia,serif;letter-spacing:.08em;color:#f0d89d;margin-right:12px;text-shadow:0 0 15px rgba(214,169,87,.25)}.menu-items{display:flex;gap:4px}.menu-items button{border:0;background:transparent;color:#d8c8b3;padding:9px 12px;border-radius:10px}.menu-items button:hover{color:white;background:linear-gradient(180deg,rgba(98,66,122,.32),rgba(214,169,87,.1))}.menu-project{margin-left:auto;padding:8px 15px;border:1px solid #6d5536;border-radius:20px;background:linear-gradient(#26242a,#121418);color:#e8ddce;font-size:11px}
+.shell{height:calc(100vh - 82px);min-height:0;grid-template-columns:250px minmax(0,1fr);border:2px solid #7f5727;clip-path:polygon(22px 0,calc(100% - 22px) 0,100% 22px,100% calc(100% - 22px),calc(100% - 22px) 100%,22px 100%,0 calc(100% - 22px),0 22px);background:linear-gradient(145deg,#0d1117,#151c26);box-shadow:inset 0 0 0 5px #080b0f,inset 0 0 0 7px rgba(214,169,87,.35),0 24px 70px rgba(0,0,0,.55);overflow:hidden}
+aside{height:100%;position:relative;overflow:auto;padding-top:18px;background:radial-gradient(circle at 50% 0,rgba(91,49,112,.35),transparent 25rem),linear-gradient(180deg,#171422,#0c1118 72%);border-right:1px solid #77522a}
+aside:after{width:7px;right:-4px}.brand{margin-bottom:16px}.mark{border-radius:50%;background:radial-gradient(circle at 50% 45%,#9b78bc 0 9%,#362047 21%,#11131a 65%);box-shadow:inset 0 0 0 4px #24182d,0 0 22px rgba(138,89,179,.45)}
+main{height:100%;overflow:auto;padding:18px 22px 34px;background:
+ radial-gradient(circle at 72% 10%,rgba(255,255,255,.08),transparent 18rem),
+ linear-gradient(125deg,rgba(255,255,255,.025),transparent 35%),
+ repeating-linear-gradient(118deg,rgba(203,211,219,.025) 0 1px,transparent 1px 9px),#101722}
+.topbar{min-height:145px;margin-bottom:12px;border:1px solid #8a642f;clip-path:polygon(24px 0,calc(100% - 42px) 0,100% 31px,100% calc(100% - 22px),calc(100% - 26px) 100%,20px 100%,0 calc(100% - 22px),0 20px);border-radius:0;background:radial-gradient(circle at 82% 18%,rgba(97,55,120,.22),transparent 18rem),linear-gradient(145deg,#1b2029,#0e131a 65%);box-shadow:inset 0 0 0 4px rgba(214,169,87,.12),0 12px 30px rgba(0,0,0,.45)}
+.topbar:before{height:3px}.topbar:after{color:rgba(214,169,87,.06)}h1{color:#f2e8d9;font-size:clamp(27px,3.2vw,44px)}h1 em{color:#d6aaeb}.sub{color:#aeb7c3}.eyebrow{color:#e1b85f}
+.status-grid{grid-template-columns:1.25fr .9fr .9fr .65fr;background:linear-gradient(145deg,#0b2a23,#0b1118);border-color:#6d572e;clip-path:polygon(18px 0,calc(100% - 20px) 0,100% 15px,100% calc(100% - 18px),calc(100% - 15px) 100%,15px 100%,0 calc(100% - 15px),0 17px);border-radius:0}.stat{border-radius:0;clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);background:radial-gradient(circle at 75% 25%,rgba(38,132,102,.2),transparent 50%),linear-gradient(145deg,#11291f,#0c1117)}
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:12px;align-items:start}.grid>.stack{display:contents}
+.card{border-radius:0!important;min-width:0;clip-path:polygon(17px 0,calc(100% - 35px) 0,100% 24px,100% calc(100% - 16px),calc(100% - 20px) 100%,20px 100%,0 calc(100% - 20px),0 16px);border:1px solid #7f592c;background:linear-gradient(145deg,#f7f1e8,#d9d4d0 72%,#a9b5c0);color:#211b20;box-shadow:inset 0 0 0 4px rgba(255,255,255,.34),inset 0 0 28px rgba(255,255,255,.45),0 15px 32px rgba(0,0,0,.38)}
+.card:after{content:"";position:absolute;inset:5px;z-index:-1;clip-path:inherit;border:1px solid rgba(214,169,87,.55);pointer-events:none}.card:before{background:radial-gradient(circle at 14% 7%,rgba(255,255,255,.6),transparent 22rem),repeating-linear-gradient(115deg,rgba(75,79,87,.035) 0 1px,transparent 1px 9px)}
+.grid .card:nth-of-type(1){grid-column:span 7;clip-path:polygon(22px 0,calc(100% - 50px) 0,100% 34px,96% 100%,17px 100%,0 calc(100% - 22px),0 18px);background:linear-gradient(145deg,#f8f4ed,#cbd4db 75%,#95a7b5)}
+.grid .card:nth-of-type(2){grid-column:span 5;clip-path:polygon(12% 0,100% 0,100% 86%,88% 100%,8% 100%,0 82%,0 18%);background:radial-gradient(circle at 80% 10%,rgba(112,75,138,.42),transparent 18rem),linear-gradient(145deg,#3e2450,#1b1830 72%);color:#f4eafa;border-color:#9b68b0}
+.grid #oubliette{grid-column:span 8;clip-path:polygon(4% 0,96% 0,100% 7%,98% 100%,2% 100%,0 92%,0 8%);background:radial-gradient(circle at 88% 14%,rgba(28,114,85,.28),transparent 22rem),linear-gradient(145deg,#102a23,#07120f 75%);color:#e8d7a7;border-color:#9a7132}
+.grid #ceremony{grid-column:span 4;clip-path:polygon(18px 0,calc(100% - 18px) 0,100% 12%,92% 100%,12% 100%,0 88%,0 15%);background:radial-gradient(circle at 50% 20%,rgba(214,169,87,.2),transparent 16rem),linear-gradient(145deg,#1a1615,#07090d 72%);color:#ead6a3}
+.grid .card:nth-of-type(5){grid-column:span 7;background:linear-gradient(145deg,#dfefff,#9ebfd3 58%,#2a5672);color:#10202d;border-color:#c9e8f7;clip-path:polygon(18px 0,calc(100% - 28px) 0,100% 23px,96% 100%,0 100%,0 20px)}
+.grid .card:nth-of-type(6){grid-column:span 5;background:linear-gradient(145deg,#3c2a20,#151113 55%,#0a2d25);color:#e8c778;clip-path:polygon(9% 0,100% 0,100% 84%,89% 100%,0 100%,0 12%)}
+.grid #evidence{grid-column:span 6;background:linear-gradient(145deg,#f7f1e8,#d8c8b4 72%,#b58e55);clip-path:polygon(0 10%,10% 0,100% 0,100% 86%,90% 100%,0 100%)}
+.grid .card:nth-of-type(8){grid-column:span 6;background:radial-gradient(circle at 90% 10%,rgba(41,105,155,.34),transparent 18rem),linear-gradient(145deg,#11243a,#071019 70%);color:#dceeff;border-color:#467da4;clip-path:polygon(20px 0,100% 0,100% calc(100% - 22px),calc(100% - 40px) 100%,0 100%,0 20px)}
+.card-head{background:linear-gradient(90deg,rgba(255,255,255,.12),rgba(0,0,0,.08));border-bottom-color:rgba(214,169,87,.35)}.card-head h2{color:inherit}.hint{color:inherit;opacity:.7}.card-body{padding:19px 22px 23px}.field label{color:inherit;opacity:.72}.card input,.card select,.card textarea{background:rgba(255,255,255,.76);color:#191821}.grid #oubliette input,.grid #oubliette select,.grid #oubliette textarea,.grid #ceremony input,.grid #ceremony select,.grid #ceremony textarea,.grid .card:nth-of-type(2) input,.grid .card:nth-of-type(2) select{background:rgba(8,12,16,.58);color:#f4eadc;box-shadow:inset 0 0 0 1px rgba(214,169,87,.35)}
+.btn{border-radius:0;clip-path:polygon(8px 0,calc(100% - 8px) 0,100% 50%,calc(100% - 8px) 100%,8px 100%,0 50%)}
+@media(max-width:1100px){.shell{grid-template-columns:215px minmax(0,1fr)}.grid .card,.grid #oubliette,.grid #ceremony,.grid #evidence{grid-column:span 12}.menu-items button:nth-child(n+6){display:none}}
+@media(max-width:760px){body{overflow:auto;padding:62px 6px 6px}.shell{height:auto;display:block;clip-path:none}.app-menu{left:6px;right:6px}.menu-items{display:none}aside{height:auto}.grid{display:block}.grid>.stack{display:block}.card{margin-bottom:12px;clip-path:none!important}.topbar{clip-path:none}.status-grid{clip-path:none}.menu-project{display:none}}
+
+
+/* ===== Spatial Mechanical Tray Runtime ===== */
+:root{
+ --metal-gold:#d8b267;--metal-gold-hi:#fff1b7;--metal-silver:#c9d4dc;--metal-silver-hi:#f7fdff;
+ --glass-blue:#3d89b5;--glass-green:#17634b;--glass-violet:#6e3d91;--glass-copper:#b45d2a;
+ --tray-transition:680ms cubic-bezier(.2,.8,.18,1);
+}
+body[data-theme="pearl"]{--field-base:#dce7ef;--field-deep:#8296a7;--field-glow:#74c8f1}
+body[data-theme="club"]{--field-base:#12261f;--field-deep:#080d0b;--field-glow:#4dc28f}
+body[data-theme="studio"]{--field-base:#24172c;--field-deep:#0e0b13;--field-glow:#d66f40}
+.app-menu{overflow:visible!important;isolation:isolate;background:
+ linear-gradient(180deg,rgba(255,255,255,.08),transparent 38%),
+ linear-gradient(180deg,#17171c,#08090c 72%);box-shadow:inset 0 0 0 2px rgba(216,178,103,.18),inset 0 -9px 20px rgba(0,0,0,.48),0 9px 24px rgba(0,0,0,.5)}
+.app-menu:after{content:"";position:absolute;inset:2px;pointer-events:none;opacity:.42;background:repeating-linear-gradient(105deg,transparent 0 20px,rgba(255,255,255,.045) 21px,transparent 22px 40px);clip-path:inherit}
+.menu-items{position:relative;z-index:4}.menu-root{position:relative}.menu-root>button{position:relative;z-index:2}.menu-root.open>button{color:#fff;background:linear-gradient(180deg,rgba(86,142,181,.34),rgba(216,178,103,.12));box-shadow:inset 0 -2px var(--metal-gold)}
+.menu-pop{position:absolute;display:none;top:44px;left:0;min-width:220px;padding:8px;border:1px solid rgba(230,198,132,.5);clip-path:polygon(10px 0,calc(100% - 18px) 0,100% 12px,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);background:
+ radial-gradient(circle at 85% 8%,rgba(90,145,182,.18),transparent 90px),
+ linear-gradient(145deg,rgba(34,35,42,.98),rgba(8,10,14,.99));box-shadow:0 18px 45px rgba(0,0,0,.6),inset 0 0 0 2px rgba(216,178,103,.1);backdrop-filter:blur(18px)}
+.menu-root.open .menu-pop{display:grid;animation:menuDrop .18s ease-out}.menu-pop button{border:0!important;border-radius:0!important;text-align:left!important;padding:9px 12px!important;color:#e8dfd2!important;background:transparent!important}.menu-pop button:hover{background:linear-gradient(90deg,rgba(92,151,190,.24),rgba(216,178,103,.12))!important;color:#fff!important}.menu-sep{height:1px;margin:5px 8px;background:linear-gradient(90deg,transparent,rgba(216,178,103,.55),transparent)}
+@keyframes menuDrop{from{opacity:0;transform:translateY(-7px) scale(.98)}to{opacity:1;transform:none}}
+.shell{position:relative;overflow:hidden;background:
+ radial-gradient(circle at 72% 12%,color-mix(in srgb,var(--field-glow) 16%,transparent),transparent 34rem),
+ linear-gradient(145deg,color-mix(in srgb,var(--field-base) 72%,#111),var(--field-deep));}
+main{overflow:hidden}.grid.tray-field{position:relative;display:block!important;min-height:1480px;margin-top:16px;padding:22px;border:1px solid rgba(224,193,127,.38);border-radius:34px 14px 36px 16px;background:
+ linear-gradient(120deg,rgba(255,255,255,.08),transparent 18% 75%,rgba(255,255,255,.035)),
+ radial-gradient(circle at 20% 20%,color-mix(in srgb,var(--field-glow) 18%,transparent),transparent 29rem),
+ repeating-linear-gradient(115deg,rgba(255,255,255,.025) 0 1px,transparent 1px 11px),
+ linear-gradient(145deg,color-mix(in srgb,var(--field-base) 45%,#16181d),color-mix(in srgb,var(--field-deep) 92%,#000));box-shadow:inset 0 0 0 5px rgba(20,15,18,.55),inset 0 0 0 7px rgba(216,178,103,.22),inset 0 0 80px rgba(0,0,0,.48),0 20px 50px rgba(22,14,24,.22)}
+.grid.tray-field:before{content:"TRAY FIELD · DRAG · RESIZE · REFLOW";position:absolute;left:28px;top:10px;z-index:0;font:700 9px Georgia,serif;letter-spacing:.2em;color:rgba(238,210,153,.56)}
+.grid.tray-field:after{content:"";position:absolute;inset:12px;pointer-events:none;border:1px solid rgba(230,205,151,.18);clip-path:polygon(14px 0,calc(100% - 22px) 0,100% 17px,100% calc(100% - 18px),calc(100% - 18px) 100%,16px 100%,0 calc(100% - 18px),0 15px)}
+.grid.tray-field>.stack{display:contents!important}
+.grid.tray-field .card{position:absolute!important;margin:0!important;min-width:270px;min-height:220px;max-width:none;overflow:hidden;will-change:left,top,width,height,clip-path,transform;transition:left var(--tray-transition),top var(--tray-transition),width var(--tray-transition),height var(--tray-transition),clip-path var(--tray-transition),filter .28s ease,transform .28s ease;box-shadow:0 28px 52px rgba(0,0,0,.44),0 0 0 1px rgba(255,255,255,.08),inset 0 0 0 2px rgba(255,255,255,.16),inset 0 0 32px rgba(255,255,255,.08);z-index:2}
+.grid.tray-field .card.dragging,.grid.tray-field .card.resizing{transition:none!important;filter:brightness(1.08) drop-shadow(0 30px 35px rgba(0,0,0,.52));z-index:40!important}
+.grid.tray-field .card.focused{filter:brightness(1.07) saturate(1.08);z-index:30!important}
+.grid.tray-field .card:after{content:"";position:absolute;inset:4px;z-index:-1;pointer-events:none;clip-path:inherit;background:
+ linear-gradient(118deg,rgba(255,255,255,.28),transparent 18% 72%,rgba(255,255,255,.09)),
+ repeating-linear-gradient(105deg,transparent 0 12px,rgba(255,255,255,.025) 13px,transparent 14px 26px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.28),inset 0 0 24px rgba(255,255,255,.06)}
+.grid.tray-field .card[data-material="pearl"]{background:
+ radial-gradient(circle at 18% 8%,rgba(255,255,255,.88),transparent 34%),
+ url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='.018' numOctaves='4' seed='7'/%3E%3CfeColorMatrix values='1 0 0 0 .75  0 1 0 0 .75  0 0 1 0 .75  0 0 0 .18 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+ linear-gradient(145deg,#fffdf7,#e8e2d8 62%,#b9c8d2);color:#28242a;border-color:#f8e4b0}
+.grid.tray-field .card[data-material="sapphire"]{background:radial-gradient(circle at 22% 10%,rgba(124,210,255,.28),transparent 28%),linear-gradient(145deg,#17344a,#081522 72%);color:#e6f6ff;border-color:#72b8dd}
+.grid.tray-field .card[data-material="emerald"]{background:radial-gradient(circle at 82% 13%,rgba(69,210,152,.24),transparent 28%),linear-gradient(145deg,#143c31,#06140f 72%);color:#f0d998;border-color:#b58b42}
+.grid.tray-field .card[data-material="amethyst"]{background:radial-gradient(circle at 18% 12%,rgba(190,113,243,.32),transparent 30%),linear-gradient(145deg,#4a245d,#151023 72%);color:#f7eaff;border-color:#c883e6}
+.grid.tray-field .card[data-material="obsidian"]{background:radial-gradient(circle at 82% 13%,rgba(215,112,48,.18),transparent 26%),linear-gradient(145deg,#21130f,#07080b 72%);color:#f0ca79;border-color:#c37c31}
+.grid.tray-field .card[data-material="copper"]{background:radial-gradient(circle at 18% 8%,rgba(255,177,93,.25),transparent 28%),linear-gradient(145deg,#66301d,#241017 70%);color:#ffe3c0;border-color:#d98b4d}
+.card-head{cursor:grab;user-select:none;touch-action:none;padding-right:105px!important}.card-head:active{cursor:grabbing}.tray-tools{position:absolute;right:12px;top:10px;z-index:8;display:flex;gap:5px}.tray-tools button{width:25px;height:25px;border:1px solid rgba(255,255,255,.22);border-radius:50%;padding:0;background:rgba(8,10,14,.32);color:inherit;box-shadow:inset 0 1px rgba(255,255,255,.12)}.tray-tools button:hover{background:rgba(216,178,103,.28)}
+.tray-resize{position:absolute;right:8px;bottom:8px;width:23px;height:23px;z-index:10;cursor:nwse-resize;touch-action:none;opacity:.72;clip-path:polygon(100% 0,100% 100%,0 100%);background:linear-gradient(135deg,transparent 0 43%,rgba(255,255,255,.42) 44% 52%,transparent 53% 63%,rgba(216,178,103,.78) 64% 72%,transparent 73%)}
+.grid.tray-field .card .card-body{height:calc(100% - 64px);overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}.grid.tray-field .card.collapsed{height:62px!important;min-height:62px}.grid.tray-field .card.collapsed .card-body{display:none}.grid.tray-field .card.collapsed .tray-resize{display:none}
+body[data-tray-shape="mechanical"] .grid.tray-field .card:nth-of-type(3n+1){clip-path:polygon(22px 0,calc(100% - 52px) 0,100% 34px,100% calc(100% - 28px),calc(100% - 34px) 100%,18px 100%,0 calc(100% - 20px),0 18px)}
+body[data-tray-shape="mechanical"] .grid.tray-field .card:nth-of-type(3n+2){clip-path:polygon(10% 0,88% 0,100% 16%,96% 87%,84% 100%,7% 100%,0 82%,3% 14%)}
+body[data-tray-shape="mechanical"] .grid.tray-field .card:nth-of-type(3n){clip-path:polygon(4% 0,92% 0,100% 11%,98% 92%,87% 100%,10% 97%,0 86%,2% 10%)}
+body[data-tray-shape="soft"] .grid.tray-field .card:nth-of-type(odd){clip-path:polygon(8% 0,84% 1%,98% 10%,100% 78%,91% 96%,22% 100%,4% 88%,0 18%)}
+body[data-tray-shape="soft"] .grid.tray-field .card:nth-of-type(even){clip-path:polygon(17% 0,93% 5%,100% 20%,96% 90%,78% 100%,9% 95%,0 80%,3% 12%)}
+body[data-tray-shape="faceted"] .grid.tray-field .card:nth-of-type(odd){clip-path:polygon(30px 0,calc(100% - 18px) 0,100% 30px,calc(100% - 12px) 100%,20px 100%,0 calc(100% - 32px),8px 18px)}
+body[data-tray-shape="faceted"] .grid.tray-field .card:nth-of-type(even){clip-path:polygon(12% 0,100% 0,96% 80%,82% 100%,0 96%,4% 15%)}
+body[data-motion="reduced"] *{animation-duration:.001ms!important;transition-duration:.001ms!important}
+body[data-labels="off"] .card-head .hint{display:none}
+@media(max-width:1100px){.grid.tray-field{min-height:auto!important;display:grid!important;grid-template-columns:1fr!important;gap:14px!important}.grid.tray-field>.stack{display:contents!important}.grid.tray-field .card{position:relative!important;left:auto!important;top:auto!important;width:auto!important;height:auto!important;min-height:320px;clip-path:none!important}.tray-resize{display:none}}
+
+
+/* ===== Active Cinematic Lighting Pass ===== */
+:root{
+  --light-x:62%;--light-y:18%;--light-angle:122deg;--light-warm:255,194,111;
+  --light-cool:114,205,255;--ambient-level:.72;--shimmer-speed:9s;
+}
+body[data-motion="reduced"]{--shimmer-speed:0s}
+.shell{isolation:isolate}
+.shell>.ambient-light-field,.shell>.particle-field{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.shell>.ambient-light-field{z-index:1;mix-blend-mode:screen;background:
+ radial-gradient(ellipse 42% 34% at var(--light-x) var(--light-y),rgba(var(--light-warm),.15),transparent 68%),
+ radial-gradient(ellipse 36% 30% at calc(var(--light-x) - 22%) calc(var(--light-y) + 46%),rgba(var(--light-cool),.09),transparent 72%),
+ linear-gradient(var(--light-angle),rgba(255,255,255,.045),transparent 28% 72%,rgba(var(--light-warm),.035));
+ filter:blur(10px);opacity:var(--ambient-level);transition:background .18s linear}
+.shell>.ambient-light-field:before{content:"";position:absolute;inset:-18%;background:conic-gradient(from 25deg at var(--light-x) var(--light-y),transparent 0 12%,rgba(var(--light-warm),.07) 15%,transparent 22% 57%,rgba(var(--light-cool),.045) 64%,transparent 72%);filter:blur(24px);animation:ambientBreathe 11s ease-in-out infinite alternate}
+.shell>.ambient-light-field:after{content:"";position:absolute;inset:0;background:radial-gradient(circle at var(--light-x) var(--light-y),rgba(255,255,255,.16) 0 1px,rgba(var(--light-warm),.1) 2px 5px,transparent 32px);filter:blur(1px)}
+@keyframes ambientBreathe{to{transform:translate3d(1.5%,-1%,0) scale(1.035);opacity:.78}}
+.particle-field{z-index:7;opacity:.72;mix-blend-mode:screen}
+.light-particle{position:absolute;width:var(--p-size);height:var(--p-size);border-radius:50%;background:rgba(var(--p-color),var(--p-alpha));box-shadow:0 0 calc(var(--p-size)*2.4) rgba(var(--p-color),calc(var(--p-alpha)*.75));filter:blur(var(--p-blur));animation:particleDrift var(--p-duration) ease-in-out var(--p-delay) infinite alternate;transform:translate3d(0,0,0)}
+@keyframes particleDrift{to{transform:translate3d(var(--p-dx),var(--p-dy),0) scale(1.35);opacity:.2}}
+.grid.tray-field{isolation:isolate}
+.grid.tray-field .card{--local-light-x:50%;--local-light-y:18%;--edge-warm:.28;--edge-cool:.16;isolation:isolate;backface-visibility:hidden;
+ box-shadow:
+  calc((var(--shadow-x,0))*1px) calc((var(--shadow-y,24))*1px) 52px rgba(0,0,0,.48),
+  0 2px 0 rgba(255,255,255,.12),0 0 0 1px rgba(255,255,255,.07),
+  inset 0 1px 0 rgba(255,255,255,.42),inset 0 -18px 40px rgba(0,0,0,.18),
+  inset 0 0 0 2px rgba(255,255,255,.12),0 0 24px rgba(var(--tray-glow,114,205,255),.07)}
+.grid.tray-field .card:hover{box-shadow:
+ calc((var(--shadow-x,0))*1px) calc((var(--shadow-y,28))*1px) 62px rgba(0,0,0,.52),
+ 0 2px 0 rgba(255,255,255,.17),0 0 0 1px rgba(255,255,255,.10),
+ inset 0 1px 0 rgba(255,255,255,.52),inset 0 -20px 42px rgba(0,0,0,.16),
+ inset 0 0 0 2px rgba(255,255,255,.15),0 0 34px rgba(var(--tray-glow,114,205,255),.13)}
+.light-skin{position:absolute;inset:0;z-index:1;pointer-events:none;clip-path:inherit;overflow:hidden}
+.light-skin .specular{position:absolute;inset:-30%;background:
+ radial-gradient(ellipse 28% 19% at var(--local-light-x) var(--local-light-y),rgba(255,255,255,.38),rgba(var(--light-warm),.12) 23%,transparent 64%),
+ linear-gradient(var(--light-angle),transparent 35%,rgba(255,255,255,.13) 46%,rgba(255,255,255,.025) 51%,transparent 61%);
+ mix-blend-mode:screen;filter:blur(.2px);animation:specularWander var(--shimmer-speed) ease-in-out infinite alternate}
+.light-skin .edge-light{position:absolute;inset:2px;clip-path:inherit;box-shadow:
+ inset 2px 2px 0 rgba(255,255,255,.36),inset -2px -2px 0 rgba(0,0,0,.44),
+ inset 0 0 18px rgba(var(--light-warm),var(--edge-warm)),0 0 10px rgba(var(--light-cool),var(--edge-cool));opacity:.85}
+.light-skin .occlusion{position:absolute;inset:0;background:
+ radial-gradient(ellipse 52% 38% at calc(var(--local-light-x) + 36%) calc(var(--local-light-y) + 55%),transparent 0 16%,rgba(0,0,0,.16) 66%,rgba(0,0,0,.32) 100%),
+ linear-gradient(calc(var(--light-angle) + 180deg),transparent 45%,rgba(0,0,0,.24) 100%);mix-blend-mode:multiply}
+.light-skin .micro-shimmer{position:absolute;inset:-20%;opacity:.2;background:repeating-linear-gradient(112deg,transparent 0 17px,rgba(255,255,255,.14) 18px,transparent 19px 41px);transform:translateX(-18%);animation:microShimmer calc(var(--shimmer-speed)*1.7) linear infinite}
+.light-skin .rim-spark{position:absolute;width:7px;height:7px;border-radius:50%;left:var(--local-light-x);top:var(--local-light-y);background:white;box-shadow:0 0 6px white,0 0 18px rgba(var(--light-warm),.95),0 0 32px rgba(var(--light-cool),.45);opacity:.55;animation:rimPulse 3.6s ease-in-out infinite}
+@keyframes specularWander{to{transform:translate3d(3.5%,2%,0) rotate(.35deg);opacity:.76}}
+@keyframes microShimmer{to{transform:translateX(18%)}}
+@keyframes rimPulse{50%{opacity:.9;transform:scale(1.35)} }
+.grid.tray-field .card>.card-head,.grid.tray-field .card>.card-body,.grid.tray-field .card>.tray-tools,.grid.tray-field .card>.tray-resize{position:relative;z-index:3}
+.grid.tray-field .card[data-material="pearl"]{--tray-glow:178,220,255;--edge-warm:.32;--edge-cool:.24}
+.grid.tray-field .card[data-material="sapphire"]{--tray-glow:74,171,239;--edge-warm:.14;--edge-cool:.42}
+.grid.tray-field .card[data-material="emerald"]{--tray-glow:65,201,145;--edge-warm:.31;--edge-cool:.18}
+.grid.tray-field .card[data-material="amethyst"]{--tray-glow:191,112,238;--edge-warm:.24;--edge-cool:.31}
+.grid.tray-field .card[data-material="obsidian"]{--tray-glow:241,148,66;--edge-warm:.38;--edge-cool:.08}
+.grid.tray-field .card[data-material="copper"]{--tray-glow:255,126,67;--edge-warm:.45;--edge-cool:.07}
+.lantern-emitter{position:absolute;z-index:9;width:28px;height:28px;border-radius:50%;pointer-events:none;background:radial-gradient(circle,#fff9d2 0 7%,#ffd388 10% 20%,rgba(255,141,44,.68) 28%,transparent 70%);filter:blur(.2px);box-shadow:0 0 8px #fff1bd,0 0 24px rgba(255,174,77,.85),0 0 64px rgba(255,125,30,.45);animation:lanternFlicker 2.8s steps(8,end) infinite}
+.lantern-emitter:before{content:"";position:absolute;inset:-95px;background:radial-gradient(circle,rgba(255,190,92,.18),transparent 66%);filter:blur(12px)}
+@keyframes lanternFlicker{0%,100%{opacity:.86;transform:scale(.96)}36%{opacity:1;transform:scale(1.05)}58%{opacity:.76;transform:scale(.92)}74%{opacity:.96;transform:scale(1.02)}}
+.backlit .card-head{box-shadow:inset 0 -1px rgba(255,255,255,.16),0 8px 22px rgba(var(--tray-glow),.11)}
+.backlit .card-head h2{text-shadow:0 0 9px rgba(var(--tray-glow),.36),0 1px 0 rgba(255,255,255,.18)}
+@media(prefers-reduced-motion:reduce){.ambient-light-field:before,.light-particle,.specular,.micro-shimmer,.rim-spark,.lantern-emitter{animation:none!important}}
+
+
+/* ===== Canonical Materials & Surface Response Pass ===== */
+:root{
+ --mat-noise:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.72' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.52'/%3E%3C/svg%3E");
+ --mat-brush:repeating-linear-gradient(102deg,transparent 0 3px,rgba(255,255,255,.035) 3.5px,transparent 4px 9px);
+ --mat-hairline:repeating-linear-gradient(91deg,transparent 0 14px,rgba(255,255,255,.025) 14.5px,transparent 15px 31px);
+ --surface-transition:background 900ms ease,color 520ms ease,border-color 650ms ease,box-shadow 650ms ease,filter 650ms ease;
+}
+.grid.tray-field .card{transition:var(--tray-transition),var(--surface-transition);overflow:hidden}
+.material-skin{position:absolute;inset:0;z-index:0;pointer-events:none;clip-path:inherit;overflow:hidden;isolation:isolate}
+.material-skin:before,.material-skin:after{content:"";position:absolute;inset:-2%;pointer-events:none}
+.material-skin:before{opacity:.52;mix-blend-mode:soft-light;background-image:var(--mat-noise);background-size:220px 220px;filter:contrast(1.15)}
+.material-skin:after{opacity:.36;mix-blend-mode:screen;background:linear-gradient(118deg,transparent 18%,rgba(255,255,255,.11) 34%,transparent 48% 74%,rgba(255,255,255,.05) 83%,transparent 92%);transform:translateX(-8%)}
+.grid.tray-field .card>.card-head,.grid.tray-field .card>.card-body{backdrop-filter:saturate(1.03)}
+
+/* Rearview Pearl — warm, diffuse, faintly iridescent rather than plastic white */
+.grid.tray-field .card[data-material="pearl"]{color:#25272d;border-color:#d7c69c;background:
+ radial-gradient(ellipse 90% 72% at 13% 7%,rgba(255,255,255,.96),transparent 49%),
+ radial-gradient(ellipse 72% 64% at 91% 18%,rgba(184,221,238,.42),transparent 56%),
+ radial-gradient(ellipse 86% 92% at 52% 118%,rgba(218,190,221,.22),transparent 58%),
+ linear-gradient(137deg,#faf7f0 0%,#e9e6df 42%,#cfd9df 74%,#f4eee3 100%)}
+.card[data-material="pearl"] .material-skin:before{opacity:.19;filter:blur(.35px) contrast(.85)}
+.card[data-material="pearl"] .material-skin:after{opacity:.48;background:
+ radial-gradient(ellipse 38% 25% at 25% 12%,rgba(255,255,255,.75),transparent 66%),
+ conic-gradient(from 210deg at 74% 20%,transparent,rgba(139,207,228,.08),rgba(233,178,215,.10),rgba(255,238,187,.11),transparent 38%)}
+
+/* Sapphire glass — layered depth, edge Fresnel, restrained internal haze */
+.grid.tray-field .card[data-material="sapphire"]{color:#eaf8ff;border-color:#72bbdf;background:
+ radial-gradient(ellipse 70% 52% at 18% 8%,rgba(155,229,255,.30),transparent 50%),
+ radial-gradient(ellipse 55% 62% at 88% 85%,rgba(17,87,135,.42),transparent 62%),
+ linear-gradient(145deg,rgba(34,91,129,.96),rgba(7,25,40,.97) 58%,rgba(3,12,22,.99))}
+.card[data-material="sapphire"] .material-skin:before{opacity:.24;mix-blend-mode:overlay;filter:blur(.55px) contrast(1.35)}
+.card[data-material="sapphire"] .material-skin:after{opacity:.58;background:
+ linear-gradient(104deg,transparent 12%,rgba(187,239,255,.18) 31%,transparent 34% 73%,rgba(89,181,231,.12) 76%,transparent 88%),
+ radial-gradient(ellipse 56% 15% at 50% 102%,rgba(34,143,205,.25),transparent 70%)}
+
+/* Emerald enamel / glass — dense jewel body with gold-friendly highlights */
+.grid.tray-field .card[data-material="emerald"]{color:#f3dfaa;border-color:#b8944e;background:
+ radial-gradient(ellipse 76% 55% at 86% 8%,rgba(92,224,164,.23),transparent 53%),
+ radial-gradient(ellipse 55% 68% at 14% 92%,rgba(21,104,72,.30),transparent 62%),
+ linear-gradient(144deg,#174b3c,#09241b 54%,#04100d 100%)}
+.card[data-material="emerald"] .material-skin:before{opacity:.25;mix-blend-mode:overlay;filter:contrast(1.25)}
+.card[data-material="emerald"] .material-skin:after{opacity:.42;background:var(--mat-hairline),linear-gradient(112deg,transparent 23%,rgba(126,244,193,.13) 38%,transparent 43%)}
+
+/* Amethyst glass — velvety depth, not neon */
+.grid.tray-field .card[data-material="amethyst"]{color:#faedff;border-color:#b982cf;background:
+ radial-gradient(ellipse 72% 56% at 16% 7%,rgba(224,160,255,.28),transparent 54%),
+ radial-gradient(ellipse 66% 58% at 88% 91%,rgba(74,26,102,.35),transparent 62%),
+ linear-gradient(142deg,#5e3270,#261734 57%,#100b18)}
+.card[data-material="amethyst"] .material-skin:before{opacity:.23;mix-blend-mode:overlay;filter:blur(.4px) contrast(1.2)}
+.card[data-material="amethyst"] .material-skin:after{opacity:.44;background:linear-gradient(106deg,transparent 18%,rgba(255,221,255,.17) 34%,transparent 38% 77%,rgba(196,119,235,.11) 81%,transparent 92%)}
+
+/* Obsidian lacquer — near-black body, deep clearcoat, razor highlight */
+.grid.tray-field .card[data-material="obsidian"]{color:#f3d28e;border-color:#a86c31;background:
+ radial-gradient(ellipse 62% 45% at 81% 7%,rgba(255,169,83,.13),transparent 51%),
+ radial-gradient(ellipse 90% 82% at 20% 110%,rgba(45,24,20,.50),transparent 65%),
+ linear-gradient(143deg,#1b1717,#07080b 45%,#020305 100%)}
+.card[data-material="obsidian"] .material-skin:before{opacity:.10;mix-blend-mode:screen;filter:contrast(1.8)}
+.card[data-material="obsidian"] .material-skin:after{opacity:.66;background:linear-gradient(111deg,transparent 14%,rgba(255,255,255,.16) 25%,rgba(255,255,255,.025) 27%,transparent 31% 86%,rgba(255,174,83,.10) 89%,transparent 92%)}
+
+/* Copper / bronze — brushed directional metal with darker recesses */
+.grid.tray-field .card[data-material="copper"]{color:#ffead0;border-color:#da925b;background:
+ radial-gradient(ellipse 76% 58% at 17% 8%,rgba(255,195,127,.25),transparent 53%),
+ linear-gradient(147deg,#8d4a2d,#542718 43%,#251014 77%,#130a0d)}
+.card[data-material="copper"] .material-skin:before{opacity:.38;mix-blend-mode:soft-light;filter:contrast(1.35);background-image:var(--mat-noise),var(--mat-brush);background-size:150px 150px,auto}
+.card[data-material="copper"] .material-skin:after{opacity:.52;background:repeating-linear-gradient(102deg,transparent 0 5px,rgba(255,223,178,.045) 5.5px,transparent 6px 12px),linear-gradient(113deg,transparent 22%,rgba(255,203,138,.18) 37%,transparent 43%)}
+
+/* Canonical field surfaces: lacquer shell, satin brass, walnut and stone */
+.shell{background:
+ radial-gradient(ellipse 70% 35% at 40% -10%,rgba(255,255,255,.075),transparent 65%),
+ linear-gradient(146deg,#161c25,#090d13 58%,#05070a);box-shadow:inset 0 0 0 5px #05070a,inset 0 0 0 7px rgba(208,164,87,.37),inset 0 0 42px rgba(0,0,0,.72),0 28px 80px rgba(0,0,0,.62)}
+.app-menu{background:linear-gradient(180deg,rgba(255,255,255,.09),transparent 28%),var(--mat-brush),linear-gradient(180deg,#232127,#090a0d 76%)}
+aside{background:
+ linear-gradient(90deg,rgba(255,255,255,.025),transparent 18% 80%,rgba(0,0,0,.22)),
+ repeating-linear-gradient(92deg,rgba(255,255,255,.015) 0 1px,transparent 1px 7px),
+ linear-gradient(180deg,#211521,#110e15 42%,#0b1115)}
+.scope{background:
+ radial-gradient(ellipse 80% 34% at 20% 0,rgba(255,255,255,.09),transparent 65%),
+ linear-gradient(145deg,rgba(67,43,31,.92),rgba(24,18,17,.96));border-color:#7d5732;box-shadow:inset 0 1px rgba(255,255,255,.08),inset 0 -12px 24px rgba(0,0,0,.24)}
+main{background:
+ radial-gradient(ellipse 52% 28% at 65% 0,rgba(255,255,255,.075),transparent 72%),
+ linear-gradient(118deg,rgba(255,255,255,.022),transparent 30%),
+ repeating-linear-gradient(117deg,rgba(203,211,219,.018) 0 1px,transparent 1px 11px),
+ linear-gradient(145deg,#111923,#0a1119)}
+.card-head{background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.025) 48%,rgba(0,0,0,.10));box-shadow:inset 0 1px rgba(255,255,255,.14),inset 0 -1px rgba(0,0,0,.18)}
+.card input,.card select,.card textarea{border-color:rgba(91,79,65,.40);background:linear-gradient(180deg,rgba(255,255,255,.86),rgba(239,235,225,.76));box-shadow:inset 0 1px 4px rgba(32,24,19,.13),0 1px rgba(255,255,255,.48)}
+.btn{position:relative;overflow:hidden;background-image:linear-gradient(180deg,rgba(255,255,255,.18),transparent 44%),linear-gradient(145deg,#ece7dc,#c8c0b3)}
+.btn:after{content:"";position:absolute;inset:1px;pointer-events:none;clip-path:inherit;border-top:1px solid rgba(255,255,255,.38);opacity:.65}
+
+/* Heirloom globe: quiet signature object and material sampler */
+.heirloom-globe{position:relative;margin:12px auto 19px;width:142px;height:166px;display:grid;place-items:start center;filter:drop-shadow(0 15px 18px rgba(0,0,0,.42));user-select:none}
+.globe-sphere{position:relative;width:112px;height:112px;border-radius:50%;overflow:hidden;transform:rotate(-8deg);background:radial-gradient(circle at 30% 22%,#fff 0 2%,#7998ad 8%,#172533 38%,#05070a 75%);border:1px solid #c39a50;box-shadow:inset -18px -20px 28px rgba(0,0,0,.62),inset 10px 8px 18px rgba(255,255,255,.13),0 0 0 5px #171419,0 0 0 7px #9b7034,0 8px 30px rgba(0,0,0,.55)}
+.globe-sphere:before{content:"";position:absolute;inset:9px;border-radius:50%;opacity:.72;background:
+ repeating-radial-gradient(ellipse at 50% 50%,transparent 0 10px,rgba(226,199,137,.19) 10.5px 11px,transparent 12px 19px),
+ repeating-linear-gradient(90deg,transparent 0 17px,rgba(226,199,137,.18) 18px,transparent 19px 34px)}
+.globe-sphere:after{content:"";position:absolute;inset:-12%;border-radius:48%;opacity:.82;background:
+ radial-gradient(ellipse 16% 11% at 30% 31%,#d7b46c 0 55%,transparent 62%),
+ radial-gradient(ellipse 23% 18% at 57% 43%,#c99948 0 52%,transparent 60%),
+ radial-gradient(ellipse 13% 23% at 69% 68%,#ddb965 0 48%,transparent 57%),
+ radial-gradient(ellipse 13% 9% at 43% 72%,#b6833c 0 48%,transparent 58%);animation:globeTurn 24s linear infinite}
+.globe-meridian{position:absolute;top:-7px;width:128px;height:128px;border:3px solid #b8863f;border-left-color:#f1d392;border-right-color:#654318;border-radius:50%;transform:rotate(12deg);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18),0 2px 4px rgba(0,0,0,.5)}
+.globe-stand{position:absolute;top:109px;width:8px;height:35px;background:linear-gradient(90deg,#5d3b16,#e1bd71 42%,#714817);box-shadow:0 8px 0 10px #171319,0 10px 0 12px #8f632d;border-radius:2px}
+.globe-caption{position:absolute;bottom:-2px;font:700 9px Georgia,serif;letter-spacing:.19em;color:#cfae70;text-transform:uppercase;text-shadow:0 1px 3px #000}
+.heirloom-globe[data-globe-material="crystal"] .globe-sphere{border-color:#d9f5ff;background:radial-gradient(circle at 27% 18%,#fff 0 3%,rgba(187,238,255,.75) 9%,rgba(91,142,174,.36) 35%,rgba(14,27,39,.62) 70%);box-shadow:inset -18px -20px 28px rgba(0,20,35,.42),inset 10px 8px 20px rgba(255,255,255,.44),0 0 0 5px #17202a,0 0 0 7px #d9e8ed,0 0 26px rgba(121,216,255,.22)}
+.heirloom-globe[data-globe-material="wood"] .globe-sphere{border-color:#d0a35d;background:repeating-radial-gradient(ellipse at 35% 28%,#6f452c 0 8px,#805337 9px 11px,#56321f 12px 18px);box-shadow:inset -18px -20px 28px rgba(24,10,4,.58),inset 10px 8px 18px rgba(255,224,176,.12),0 0 0 5px #1b1412,0 0 0 7px #a87636,0 8px 30px rgba(0,0,0,.55)}
+.heirloom-globe[data-globe-material="marble"] .globe-sphere{border-color:#b8b9b9;background:radial-gradient(circle at 28% 18%,#fff,#d7d5d0 42%,#89919a 76%);box-shadow:inset -18px -20px 28px rgba(31,38,44,.40),inset 10px 8px 18px rgba(255,255,255,.38),0 0 0 5px #17191c,0 0 0 7px #a7afb4,0 8px 30px rgba(0,0,0,.55)}
+.heirloom-globe[data-globe-material="marble"] .globe-sphere:before{background:linear-gradient(118deg,transparent 12%,rgba(67,83,96,.22) 15%,transparent 19% 45%,rgba(116,95,91,.16) 48%,transparent 52%),repeating-radial-gradient(ellipse at 50% 50%,transparent 0 12px,rgba(55,62,68,.12) 13px,transparent 14px 22px)}
+@keyframes globeTurn{to{transform:translateX(-22%) rotate(360deg)}}
+.heirloom-globe:hover .globe-sphere{filter:brightness(1.07);transform:rotate(-8deg) scale(1.025)}
+body[data-motion="reduced"] .globe-sphere:after{animation-play-state:paused}
+@media(prefers-reduced-motion:reduce){.globe-sphere:after{animation:none!important}}
+
+
+/* =========================================================
+   LINEWORK · SHADING · FINE DETAIL PASS — 2026-07-23
+   Restrained drafting lines, engraved seams, bevel shading,
+   micro-contrast, and material-specific edge articulation.
+   ========================================================= */
+:root{
+  --hairline-light:rgba(255,255,255,.20);
+  --hairline-dark:rgba(6,9,13,.38);
+  --engrave-warm:rgba(210,169,91,.32);
+  --engrave-cool:rgba(142,203,232,.20);
+}
+
+/* Frame line hierarchy: outer silhouette, inset rule, then a quiet drafting trace. */
+.shell:before{content:"";position:absolute;inset:7px;pointer-events:none;z-index:6;border:1px solid rgba(236,211,158,.22);clip-path:polygon(16px 0,calc(100% - 20px) 0,100% 16px,100% calc(100% - 18px),calc(100% - 18px) 100%,18px 100%,0 calc(100% - 16px),0 17px);box-shadow:inset 0 0 0 1px rgba(0,0,0,.34)}
+.app-menu{box-shadow:inset 0 -1px rgba(255,255,255,.08),inset 0 -2px rgba(0,0,0,.48),0 7px 18px rgba(0,0,0,.27)}
+.menu-brand{position:relative;text-shadow:0 1px 0 rgba(0,0,0,.78),0 0 12px rgba(215,179,104,.10)}
+.menu-brand:after{content:"";position:absolute;left:0;right:0;bottom:-5px;height:1px;background:linear-gradient(90deg,transparent,rgba(218,181,105,.64) 18%,rgba(255,242,204,.30) 50%,rgba(218,181,105,.64) 82%,transparent)}
+.menu-root>button{box-shadow:inset 0 1px rgba(255,255,255,.035);text-shadow:0 1px rgba(0,0,0,.68)}
+.menu-pop{box-shadow:0 20px 36px rgba(0,0,0,.54),inset 0 0 0 1px rgba(255,255,255,.055),inset 0 12px 22px rgba(255,255,255,.025)}
+.menu-pop:before{content:"";position:absolute;inset:5px;pointer-events:none;border:1px solid rgba(203,168,101,.16);clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px)}
+
+/* Tray silhouettes gain a crisp drawing line plus a softer modeled underside. */
+.grid.tray-field .card{
+  outline:1px solid rgba(0,0,0,.20);outline-offset:-3px;
+  filter:drop-shadow(0 2px 0 rgba(255,255,255,.035)) drop-shadow(0 18px 24px rgba(0,0,0,.24));
+}
+.grid.tray-field .card:before{
+  content:"";position:absolute;inset:9px;z-index:2;pointer-events:none;clip-path:inherit;
+  background:
+    linear-gradient(135deg,var(--hairline-light),transparent 17% 82%,rgba(0,0,0,.18)),
+    linear-gradient(90deg,transparent 0 13px,rgba(255,255,255,.035) 14px,transparent 15px 100%);
+  opacity:.58;mix-blend-mode:soft-light;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.10),inset 0 0 0 2px rgba(0,0,0,.10),inset 0 -18px 28px rgba(0,0,0,.10)
+}
+.grid.tray-field .card.focused:before{opacity:.75}
+
+/* Header engraving and title rule. */
+.card-head{position:relative;border-bottom:1px solid rgba(0,0,0,.22)}
+.card-head:before{content:"";position:absolute;left:14px;right:14px;bottom:3px;height:1px;pointer-events:none;background:linear-gradient(90deg,transparent,rgba(255,255,255,.23) 12%,rgba(0,0,0,.18) 50%,rgba(255,255,255,.18) 88%,transparent);opacity:.72}
+.card-head h2,.card-head h3{position:relative;letter-spacing:.035em;text-shadow:0 1px 0 rgba(255,255,255,.13),0 2px 2px rgba(0,0,0,.20)}
+.card-head h2:after,.card-head h3:after{content:"";display:block;width:42px;height:2px;margin-top:5px;background:linear-gradient(90deg,currentColor,transparent);opacity:.34;box-shadow:0 1px rgba(0,0,0,.22)}
+
+/* Interior drafting grid: barely visible, enough to make panels feel engineered. */
+.card-body{position:relative;background-image:linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.014) 1px,transparent 1px);background-size:28px 28px;background-position:13px 11px}
+.card-body:before{content:"";position:absolute;inset:7px;pointer-events:none;border-left:1px solid rgba(255,255,255,.045);border-top:1px solid rgba(255,255,255,.035);border-right:1px solid rgba(0,0,0,.08);border-bottom:1px solid rgba(0,0,0,.10);clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px)}
+
+/* Controls: engraved wells, tight edge lines, and more legible shading. */
+.card input,.card select,.card textarea{outline:1px solid rgba(255,255,255,.14);outline-offset:-2px;text-shadow:0 1px rgba(255,255,255,.30)}
+.card input:focus,.card select:focus,.card textarea:focus{box-shadow:inset 0 1px 5px rgba(23,18,15,.16),0 0 0 1px rgba(216,179,104,.58),0 0 0 3px rgba(216,179,104,.10)}
+.btn{border-top-color:rgba(255,255,255,.30);border-left-color:rgba(255,255,255,.18);border-right-color:rgba(0,0,0,.28);border-bottom-color:rgba(0,0,0,.38);text-shadow:0 1px rgba(255,255,255,.30),0 -1px rgba(0,0,0,.12);box-shadow:inset 0 1px rgba(255,255,255,.34),inset 0 -2px rgba(0,0,0,.15),0 2px 3px rgba(0,0,0,.18)}
+.btn:hover{transform:translateY(-1px);box-shadow:inset 0 1px rgba(255,255,255,.38),inset 0 -2px rgba(0,0,0,.14),0 4px 8px rgba(0,0,0,.22)}
+.btn:active{transform:translateY(1px);box-shadow:inset 0 2px 4px rgba(0,0,0,.22),0 1px rgba(255,255,255,.08)}
+
+/* Circular tray tools read as tiny machined controls instead of generic icons. */
+.tray-tools button{position:relative;border-color:rgba(218,184,119,.34);box-shadow:inset 0 1px rgba(255,255,255,.18),inset 0 -2px rgba(0,0,0,.30),0 1px 2px rgba(0,0,0,.28);text-shadow:0 1px 1px #000}
+.tray-tools button:after{content:"";position:absolute;inset:4px;border-radius:50%;border:1px solid rgba(255,255,255,.07);pointer-events:none}
+.tray-resize{filter:drop-shadow(0 1px rgba(0,0,0,.65))}
+
+/* Material-specific line response. The linework changes tone, not merely color. */
+.card[data-material="pearl"]{--detail-line:rgba(114,104,86,.22)}
+.card[data-material="pearl"] .card-head{box-shadow:inset 0 1px rgba(255,255,255,.54),inset 0 -1px rgba(91,79,62,.18)}
+.card[data-material="sapphire"]{--detail-line:rgba(130,215,255,.22)}
+.card[data-material="sapphire"] .card-head,.card[data-material="amethyst"] .card-head{box-shadow:inset 0 1px rgba(255,255,255,.20),inset 0 -1px rgba(0,0,0,.42),0 1px rgba(118,202,246,.06)}
+.card[data-material="emerald"]{--detail-line:rgba(210,174,98,.24)}
+.card[data-material="obsidian"]{--detail-line:rgba(224,157,81,.24)}
+.card[data-material="obsidian"]:before{background:linear-gradient(128deg,rgba(255,198,118,.12),transparent 21% 78%,rgba(0,0,0,.34)),repeating-linear-gradient(112deg,rgba(255,255,255,.018) 0 1px,transparent 1px 17px)}
+.card[data-material="copper"]{--detail-line:rgba(255,188,124,.28)}
+.card[data-material="copper"]:before{background:repeating-linear-gradient(98deg,rgba(255,232,203,.045) 0 1px,transparent 1px 5px),linear-gradient(132deg,rgba(255,213,162,.15),transparent 24% 74%,rgba(31,8,3,.24))}
+
+/* Fine label and divider detail. */
+label,.label,.meta,.eyebrow{letter-spacing:.025em;text-shadow:0 1px rgba(0,0,0,.14)}
+hr,.menu-sep{border:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.14),rgba(0,0,0,.22),rgba(255,255,255,.08),transparent);box-shadow:0 1px rgba(0,0,0,.22)}
+
+/* Globe cartography receives engraved latitude/longitude, continent edging, and stand detailing. */
+.globe-sphere{outline:1px solid rgba(0,0,0,.52);outline-offset:-4px}
+.globe-sphere:before{box-shadow:inset 0 0 0 1px rgba(255,255,255,.08),inset 0 0 18px rgba(0,0,0,.16);mix-blend-mode:screen}
+.globe-sphere:after{filter:drop-shadow(0 1px 0 rgba(255,244,211,.22)) drop-shadow(0 -1px 0 rgba(45,24,8,.55));background-blend-mode:screen}
+.globe-meridian:after{content:"";position:absolute;inset:4px;border-radius:50%;border:1px solid rgba(255,231,176,.28);box-shadow:0 0 0 1px rgba(36,20,7,.26)}
+.globe-stand:before{content:"";position:absolute;left:2px;top:1px;width:2px;height:31px;background:linear-gradient(#fff2c6,rgba(255,255,255,.05));opacity:.42}
+.globe-caption{padding:3px 8px;border-top:1px solid rgba(214,178,105,.25);border-bottom:1px solid rgba(0,0,0,.42);background:linear-gradient(90deg,transparent,rgba(0,0,0,.22),transparent)}
+
+/* Keep the detail pass quiet on smaller screens. */
+@media(max-width:700px){.card-body{background-size:36px 36px}.grid.tray-field .card:before{opacity:.42}.shell:before{display:none}}
+@media(prefers-reduced-motion:reduce){.btn:hover{transform:none}}
+
+
+
+/* ===== Vector Tray Illustration Pass =====
+   SVG owns silhouette, bevels, seams, engraved lines and modeled shading.
+   CSS remains responsible for layout and accessible content only. */
+.grid.tray-field .card{background:#14171c!important;border:0!important;clip-path:none!important;overflow:hidden!important}
+.grid.tray-field .card>.material-skin{display:none!important}
+.tray-illustration{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;overflow:visible}
+.grid.tray-field .card>.card-head,.grid.tray-field .card>.card-body,.grid.tray-field .card>.tray-tools,.grid.tray-field .card>.tray-resize{z-index:4}
+.grid.tray-field .card>.card-head{background:transparent!important;border:0!important}
+.grid.tray-field .card>.card-body{background:transparent!important}
+.tray-illustration .engrave{vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round}
+.tray-illustration .fastener{filter:drop-shadow(0 1px 1px rgba(0,0,0,.7))}
+.grid.tray-field .card.focused .tray-illustration{filter:drop-shadow(0 0 13px rgba(231,198,126,.28))}
+@media(max-width:1100px){.tray-illustration{display:none}.grid.tray-field .card{background:linear-gradient(145deg,#f7f2e9,#cbd3d8)!important;border:1px solid #9d7c45!important;border-radius:18px!important}}
+
+/* Continuous-agent completion pass: workspace persistence, security state, and accessibility. */
+.status-grid{grid-template-columns:repeat(5,minmax(130px,1fr))}
+.workspace-control{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:7px 9px;background:rgba(24,17,29,.72);border:1px solid rgba(232,200,132,.25);clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
+.workspace-control label{color:#dec995;font-size:8px;font-weight:900;letter-spacing:.12em;text-transform:uppercase}
+.workspace-control select{width:150px;min-width:120px;padding:7px 9px;background:#211724;color:#f6eef5;border-color:rgba(232,200,132,.32)}
+.security-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.security-actions .btn{flex:1;min-width:150px}
+.security-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:14px}.security-fact{padding:10px;border:1px solid rgba(73,43,25,.16);background:rgba(255,255,255,.28);clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px)}.security-fact b{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--amethyst);margin-bottom:4px}.security-fact span{font-size:11px;color:var(--muted)}
+.credential-list{display:grid;gap:7px;margin-top:12px}.credential-item{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:9px 11px;background:rgba(255,255,255,.31);border-left:3px solid var(--brass);font-size:11px}.credential-item code{font-size:9px;max-width:150px;overflow:hidden;text-overflow:ellipsis}
+.stage-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:13px}.stage{padding:8px;text-align:center;border:1px solid rgba(73,43,25,.17);background:rgba(255,255,255,.25);font-size:9px;text-transform:uppercase;letter-spacing:.07em}.stage.active{background:rgba(39,99,76,.12);color:var(--emerald);box-shadow:inset 0 -3px var(--emerald)}
+.card[data-docked]{filter:drop-shadow(0 0 14px rgba(232,200,132,.24))}.card[data-docked="left"]{box-shadow:inset 5px 0 rgba(232,200,132,.36)}.card[data-docked="right"]{box-shadow:inset -5px 0 rgba(232,200,132,.36)}
+body[data-motion="reduced"] *,body[data-motion="reduced"] *:before,body[data-motion="reduced"] *:after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
+body[data-labels="off"] .card-head .hint{display:none}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #f2cd82!important;outline-offset:2px}
+@media(max-width:1180px){.status-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:760px){.status-grid{grid-template-columns:repeat(2,1fr)}.workspace-control{width:100%}.security-facts,.stage-strip{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){.status-grid,.security-facts,.stage-strip{grid-template-columns:1fr}}
+
+
+/* Final interaction/contrast pass. The viewport shell stays fixed while the
+   tray field scrolls; every tray body remains reachable by keyboard or mouse. */
+main{overflow:auto!important;scrollbar-gutter:stable both-edges;overscroll-behavior:contain}
+.grid.tray-field{min-height:2290px}
+.grid.tray-field .card .card-body{scrollbar-color:rgba(224,190,122,.65) rgba(5,7,10,.18);padding-bottom:28px}
+.grid.tray-field .card:not([data-material="pearl"]) .hint,
+.grid.tray-field .card:not([data-material="pearl"]) .empty,
+.grid.tray-field .card:not([data-material="pearl"]) .field label,
+.grid.tray-field .card:not([data-material="pearl"]) .row small,
+.grid.tray-field .card:not([data-material="pearl"]) .security-fact span{color:rgba(243,238,229,.78)}
+.grid.tray-field .card:not([data-material="pearl"]) input,
+.grid.tray-field .card:not([data-material="pearl"]) select,
+.grid.tray-field .card:not([data-material="pearl"]) textarea{background:linear-gradient(180deg,rgba(4,7,11,.72),rgba(20,17,20,.62));color:#fff7e8;border-color:rgba(229,195,127,.38);box-shadow:inset 0 1px 5px rgba(0,0,0,.42)}
+.grid.tray-field .card:not([data-material="pearl"]) input::placeholder,
+.grid.tray-field .card:not([data-material="pearl"]) textarea::placeholder{color:rgba(244,237,225,.48)}
+.grid.tray-field .card:not([data-material="pearl"]) .notice,
+.grid.tray-field .card:not([data-material="pearl"]) .receipt,
+.grid.tray-field .card:not([data-material="pearl"]) .security-fact,
+.grid.tray-field .card:not([data-material="pearl"]) .stage,
+.grid.tray-field .card:not([data-material="pearl"]) .credential-item,
+.grid.tray-field .card:not([data-material="pearl"]) .row{background:rgba(4,7,10,.34);border-color:rgba(231,199,132,.23);color:inherit}
+.grid.tray-field .card:not([data-material="pearl"]) .security-fact b{color:#e6c476}
+.grid.tray-field .card:not([data-material="pearl"]) .stage.active{background:rgba(55,157,115,.22);color:#9be2bd}
+.grid.tray-field .card[data-material="pearl"] .hint,.grid.tray-field .card[data-material="pearl"] .empty{color:#625d60}
+.credential-item{display:grid;grid-template-columns:minmax(0,1fr) minmax(90px,150px) auto}.credential-item .btn.compact{padding:7px 10px;font-size:9px}.credential-item code{white-space:nowrap}
+.card-head h2,.card-head .hint{max-width:calc(100% - 4px)}
+@media(max-width:1100px){main{overflow:visible!important}.grid.tray-field{min-height:auto!important}.credential-item{grid-template-columns:1fr}.credential-item code{max-width:100%!important}.shell{height:auto;min-height:100vh}}
+
+/* Responsive custody workspace: mobile is a true one-column document, not a
+   scaled desktop tray field. These rules deliberately outrank stored tray
+   coordinates so every control remains visible without horizontal panning. */
+@media(max-width:1100px){
+  html,body{width:100%;max-width:100%;overflow-x:hidden!important}
+  body{min-width:0!important}
+  .app-menu{max-width:calc(100vw - 24px);box-sizing:border-box}
+  .shell{display:block!important;width:100%!important;max-width:100%!important;min-width:0!important;overflow:visible!important;clip-path:none!important}
+  .shell>aside,.shell>main,aside,main{display:block!important;width:100%!important;max-width:100%!important;min-width:0!important;box-sizing:border-box}
+  main{padding-inline:14px!important}
+  .topbar,.status-grid,.grid.tray-field{width:100%!important;max-width:100%!important;min-width:0!important;box-sizing:border-box}
+  .grid.tray-field{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:14px!important;padding:18px 12px 12px!important;margin-inline:0!important;overflow:visible!important}
+  .grid.tray-field>.stack{display:contents!important}
+  .grid.tray-field .card{position:relative!important;inset:auto!important;left:auto!important;right:auto!important;top:auto!important;bottom:auto!important;transform:none!important;width:100%!important;max-width:100%!important;min-width:0!important;height:auto!important;min-height:320px!important;margin:0!important;box-sizing:border-box!important;clip-path:none!important}
+  .grid.tray-field .card.collapsed{min-height:62px!important;height:62px!important}
+  .grid.tray-field .card .card-body{height:auto!important;max-height:none!important;overflow:visible!important;min-width:0!important}
+  .card-head,.card-body,.form-grid,.field,.row,.notice,.receipt,.security-fact,.credential-item{min-width:0!important;max-width:100%!important;box-sizing:border-box}
+  input,select,textarea,button{max-width:100%}
+  .tray-tools{right:10px!important;max-width:42%!important;flex-wrap:wrap;justify-content:flex-end}
+  .tray-resize{display:none!important}
+}
+@media(max-width:760px){
+  body{padding:60px 5px 8px!important}
+  .app-menu{left:5px!important;right:5px!important;max-width:none!important}
+  .shell>aside,aside{padding:15px 13px 16px!important}
+  main{padding:12px 5px 20px!important}
+  .topbar{padding:15px 13px!important}
+  .grid.tray-field{padding:18px 5px 8px!important;border-radius:18px!important}
+  .grid.tray-field:before{left:12px!important;max-width:calc(100% - 24px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .grid.tray-field:after{inset:6px!important}
+  .grid.tray-field .card{border-radius:16px!important;min-height:300px!important}
+  .card-head{padding:17px 92px 13px 16px!important}
+  .card-body{padding:16px!important}
+  .form-grid,.security-facts,.stage-strip,.status-grid{grid-template-columns:1fr!important}
+  .field.full{grid-column:auto!important}
+  .actions,.row-actions,.workspace-control{width:100%!important;max-width:100%!important;flex-wrap:wrap!important}
+  .actions .btn,.row-actions .btn{flex:1 1 135px}
+  .tray-tools{top:10px!important;right:8px!important}
+}
+
+</style>
+</head>
+<body>
+
+<nav class="app-menu" aria-label="Application menu">
+  <div class="menu-brand">ITERATION WALLET</div>
+  <div class="menu-items" role="menubar">
+    <div class="menu-root"><button type="button" data-menu="file">File</button><div class="menu-pop" data-panel="file"><button data-command="new-project">New project</button><button data-command="open-vault">Open / lock Vault</button><button data-command="refresh">Refresh custody</button><span class="menu-sep"></span><button data-command="save-layout">Save workspace</button><button data-command="import-layout">Import tray layout…</button><button data-command="export-layout">Export tray layout</button></div></div>
+    <div class="menu-root"><button type="button" data-menu="edit">Edit</button><div class="menu-pop" data-panel="edit"><button data-command="undo-layout">Undo tray move</button><button data-command="reset-layout">Reset tray field</button><button data-command="compact-layout">Compact trays</button></div></div>
+    <div class="menu-root"><button type="button" data-menu="view">View</button><div class="menu-pop" data-panel="view"><button data-command="reflow">Reflow mechanical bubbles</button><button data-command="toggle-labels">Toggle tray labels</button><button data-command="toggle-motion">Reduce / restore motion</button></div></div>
+    <div class="menu-root"><button type="button" data-menu="mode">Mode</button><div class="menu-pop" data-panel="mode"><button data-theme="pearl">Pearl & sapphire</button><button data-theme="club">Oak & emerald</button><button data-theme="studio">Copper & violet</button></div></div>
+    <div class="menu-root"><button type="button" data-menu="custody">Custody</button><div class="menu-pop" data-panel="custody"><button data-jump="workspace">Workspace</button><button data-jump="labcopy">LabCopy workspace</button><button data-jump="ceremony">Promotion ceremony</button></div></div>
+    <div class="menu-root"><button type="button" data-menu="evidence">Evidence</button><div class="menu-pop" data-panel="evidence"><button data-jump="evidence">Receipts & events</button><button data-command="refresh">Verify current state</button></div></div>
+    <div class="menu-root"><button type="button" data-menu="special">Special</button><div class="menu-pop" data-panel="special"><button data-command="scatter">Scatter and settle</button><button data-command="spotlight-prime">Spotlight Prime ceremony</button><button data-command="material-cycle">Cycle materials</button></div></div>
+    <div class="menu-root"><button type="button" data-menu="settings">Settings</button><div class="menu-pop" data-panel="settings"><button data-command="save-layout">Save active workspace</button><button data-command="reset-layout">Restore defaults</button><button data-command="toggle-motion">Motion preference</button></div></div>
+  </div>
+  <button type="button" class="menu-project" data-command="open-vault">Vault: Canonical Custody ▾</button>
+</nav>
+<div class="shell">
+  <aside>
+    <div class="brand"><div class="mark">RF</div><div><strong>Iteration Wallet</strong><small>Custody Instrument</small></div></div>
+    <button type="button" class="heirloom-globe" id="heirloomGlobe" data-globe-material="obsidian" title="Cycle heirloom globe material" aria-label="Cycle heirloom globe material"><span class="globe-sphere"></span><span class="globe-meridian"></span><span class="globe-stand"></span><span class="globe-caption">Custody Atlas</span></button>
+    <div class="scope"><b>Bounded alpha</b>Wallet and canonical BlackBox are the required core. LabCopy is the tested external-work path: exact bytes leave under a scoped proposal and can return only as preserved evidence or a new Candidate.</div>
+    <div class="nav">
+      <button class="active" onclick="scrollToId('overview')">Overview</button>
+      <button onclick="scrollToId('workspace')">Workspace</button>
+      <button onclick="scrollToId('labcopy')">LabCopy workspace</button>
+      <button onclick="scrollToId('ceremony')">Promotion ceremony</button>
+      <button onclick="scrollToId('evidence')">Evidence</button>
+    </div>
+    <div class="aside-foot">Local-first custody. No execution. No silent overwrite. No automatic trust.</div>
+  </aside>
+
+  <main>
+    <header class="topbar" id="overview">
+      <div><div class="eyebrow">Rearview Foresight · Canonical custody</div><h1>Keep every generation.<br><em>Choose the Prime deliberately.</em></h1><div class="sub">This interface exposes canonical custody, LabCopy work, passkey approval, and evidence. External work never replaces Prime in place: Wallet captures what returned and admits changed material only as a new Candidate after exact Human Intent.</div></div>
+      <div class="actions"><div class="workspace-control"><label for="workspaceSelect">Tray workspace</label><select id="workspaceSelect" aria-label="Tray workspace"></select><button class="btn" type="button" onclick="TrayRuntime.saveActiveWorkspace()">Save</button></div><button class="btn shape-control" id="shapeButton" onclick="cycleTrayGeometry()" title="Cycle mechanical tray geometry">Reflow shapes</button><button class="btn" onclick="refreshAll()">Refresh</button><button class="btn" id="vaultButton" onclick="toggleVault()">Open Vault</button></div>
+    </header>
+
+    <section class="status-grid">
+      <div class="stat"><span>Runtime</span><strong id="runtimeStatus">Checking…</strong></div>
+      <div class="stat"><span>Canonical chain</span><strong id="chainStatus">Checking…</strong></div>
+      <div class="stat"><span>Custody</span><strong id="custodyStatus">Checking…</strong></div>
+      <div class="stat"><span>Receipts</span><strong id="receiptCount">0</strong></div><div class="stat"><span>Passkey gate</span><strong id="passkeyStatus">Checking…</strong></div>
+    </section>
+
+    <div class="grid tray-field" id="workspace">
+      <div class="stack">
+        <section class="card" data-tray-id="projects">
+          <div class="card-head"><div><h2>Projects and sections</h2><div class="hint">Create the named compartments that hold generations.</div></div></div>
+          <div class="card-body">
+            <div class="form-grid">
+              <div class="field"><label>New project</label><input id="projectName" placeholder="Iteration Wallet"></div>
+              <div class="field"><label>Reference path (optional)</label><input id="projectPath" placeholder="C:\Projects\IterationWallet"></div>
+            </div>
+            <div class="form-actions"><button class="btn primary" onclick="createProject()">Create project</button></div>
+            <hr style="border:0;border-top:1px solid var(--line);margin:20px 0">
+            <div class="form-grid">
+              <div class="field"><label>Project</label><select id="sectionProject"></select></div>
+              <div class="field"><label>New section</label><input id="sectionName" placeholder="Core"></div>
+              <div class="field full"><label>Description</label><input id="sectionDescription" placeholder="Primary product implementation"></div>
+            </div>
+            <div class="form-actions"><button class="btn" onclick="createSection()">Create section</button></div>
+          </div>
+        </section>
+
+        <section class="card" data-tray-id="candidate-intake">
+          <div class="card-head"><div><h2>Add a Candidate</h2><div class="hint">Wallet copies the file into custody. The original remains where it is.</div></div></div>
+          <div class="card-body">
+            <div class="form-grid">
+              <div class="field"><label>Project</label><select id="candidateProject" onchange="syncSectionSelects()"></select></div>
+              <div class="field"><label>Section</label><select id="candidateSection"></select></div>
+              <div class="field full"><label>Local source path</label><input id="candidatePath" placeholder="C:\Projects\build\candidate.zip"></div>
+              <div class="field full"><label>Notes</label><input id="candidateNotes" placeholder="What changed, where it came from, what remains uncertain"></div>
+            </div>
+            <div class="form-actions"><button class="btn primary" onclick="addCandidate()">Copy into Candidate custody</button></div>
+          </div>
+        </section>
+
+
+        <section class="card" id="labcopy" data-tray-id="labcopy">
+          <div class="card-head"><div><h2>LabCopy workspace</h2><div class="hint">Export a signed working copy, work outside custody, then return changed bytes only as a new Candidate.</div></div><span class="pill good">Tested path</span></div>
+          <div class="card-body">
+            <div class="notice">The protected Prime never leaves custody. LabCopy exports are HMAC-manifested, bounded to an approved directory, and every return is classified before admission.</div>
+            <div class="form-grid" style="margin-top:16px">
+              <div class="field"><label>Human actor ID</label><input id="labActorId" value="local-owner" autocomplete="off"></div>
+              <div class="field"><label>Project</label><select id="labProject" onchange="syncLabSections()"></select></div>
+              <div class="field"><label>Section</label><select id="labSection" onchange="syncLabObjects()"></select></div>
+              <div class="field"><label>Prime or Candidate</label><select id="labObject"></select></div>
+              <div class="field full"><label>Approved LabCopy folder</label><input id="labOutputDir" placeholder="C:\IterationWallet-Lab"></div>
+              <div class="field"><label>Lab policy</label><input id="labPolicy" value="local-development"></div>
+              <div class="field"><label>Working label</label><input id="labLabel" placeholder="UI polish pass"></div>
+              <div class="field full"><label>Reason for export</label><input id="labReason" placeholder="Exact work authorized outside custody"></div>
+              <div class="field"><label>Human ceremony</label><input id="labExportWord" autocomplete="off" placeholder="EXPORT"></div>
+              <div class="field" style="align-content:end"><button class="btn brass" id="labExportButton" onclick="exportLabCopy()" disabled>Authorize LabCopy export</button></div>
+            </div>
+            <div class="form-actions"><button class="btn primary" onclick="prepareLabCopy()">Prepare exact export proposal</button></div>
+            <hr style="border:0;border-top:1px solid var(--line);margin:20px 0">
+            <div class="stage-strip" aria-label="LabCopy stages"><div class="stage active">1 · Proposal</div><div class="stage">2 · Passkey + export</div><div class="stage">3 · Capture return</div><div class="stage">4 · Admit Candidate</div></div><div class="hint"><b>Return changed work.</b> Capture the exact external result, review the immutable proposal, then admit it as a Candidate. The existing Prime is untouched.</div>
+            <div class="form-grid" style="margin-top:12px">
+              <div class="field"><label>Lab ID</label><input id="labId" readonly placeholder="Created on export"></div>
+              <div class="field"><label>Capsule ID</label><input id="labCapsuleId" readonly placeholder="Created on capture"></div>
+              <div class="field full"><label>Returned result path</label><input id="labResultPath" placeholder="C:\IterationWallet-Lab\result.zip"></div>
+              <div class="field full"><label>Allowed LabCopy root</label><input id="labAllowedRoot" placeholder="C:\IterationWallet-Lab"></div>
+              <div class="field full"><label>Return reason</label><input id="labReturnReason" placeholder="Why this returned result should enter as a Candidate"></div>
+              <div class="field"><label>Human ceremony</label><input id="labAdmitWord" autocomplete="off" placeholder="ADMIT"></div>
+              <div class="field" style="align-content:end"><button class="btn brass" id="labAdmitButton" onclick="admitLabCopy()" disabled>Admit returned Candidate</button></div>
+            </div>
+            <div class="form-actions"><button class="btn" onclick="captureLabCopyResult()">Capture and classify returned bytes</button></div>
+          </div>
+        </section>
+
+        <section class="card" id="deviceGate" data-tray-id="passkey-gate">
+          <div class="card-head"><div><h2>Phone / biometric gate</h2><div class="hint">Wallet verifies a signed WebAuthn assertion before issuing a one-use protected-action token.</div></div><span class="pill" id="passkeyBadge">Checking</span></div>
+          <div class="card-body">
+            <div class="notice">Fingerprint, Face ID, Windows Hello, or a phone passkey stays inside the authenticator. Wallet stores only the public credential and verifies a fresh server challenge. Each approval is limited to one exact action and cannot be replayed.</div>
+            <div class="security-facts"><div class="security-fact"><b>Enrollment</b><span id="passkeyEnrollment">Checking…</span></div><div class="security-fact"><b>Protected actions</b><span id="passkeyPolicy">Checking…</span></div><div class="security-fact"><b>Relying party</b><span id="passkeyRp">localhost</span></div></div>
+            <div class="security-actions"><button class="btn primary" onclick="registerPasskey('platform')">Pair this device</button><button class="btn" onclick="registerPasskey('cross-platform')">Pair phone / security key</button><button class="btn brass" onclick="runBiometricCheck()">Verify now</button></div>
+            <div class="receipt" id="passkeyResult"><strong>Awaiting enrollment</strong><div>Pair one authenticator. After enrollment, protected ceremonies require a fresh fingerprint, face, PIN, or phone approval.</div></div>
+            <div class="credential-list" id="credentialList"></div>
+          </div>
+        </section>
+
+        <section class="card" id="ceremony" data-tray-id="promotion">
+          <div class="card-head"><div><h2>Canonical promotion ceremony</h2><div class="hint">Identity continuity, Gatekeeper policy, one-use ceremony, journaled mutation, canonical evidence, and receipt verification.</div></div><span class="pill">Trust expansion</span></div>
+          <div class="card-body">
+            <div class="notice">A local identity session proves continuity inside this Vault instance. It is not real-world authentication, nonrepudiation, or an independent witness.</div>
+            <div class="form-grid" style="margin-top:16px">
+              <div class="field"><label>Human actor ID</label><input id="actorId" value="local-owner" autocomplete="off"></div>
+              <div class="field"><label>Project</label><select id="promoteProject" onchange="syncPromotionSections()"></select></div>
+              <div class="field"><label>Section</label><select id="promoteSection" onchange="syncCandidateSelect()"></select></div>
+              <div class="field"><label>Candidate</label><select id="promoteCandidate"></select></div>
+              <div class="field full"><label>Reason</label><textarea id="promoteReason" placeholder="Why this generation should become the trusted Prime"></textarea></div>
+            </div>
+            <div class="form-actions"><button class="btn brass" onclick="openPromotionModal()">Begin human ceremony</button></div>
+          </div>
+        </section>
+
+        <section class="card" data-tray-id="generations">
+          <div class="card-head"><div><h2>Current generations</h2><div class="hint">The displayed state is derived from the Wallet catalog; evidence remains in the canonical BlackBox chain.</div></div></div>
+          <div class="card-body"><div id="generationRows" class="table"><div class="empty">No generations yet.</div></div></div>
+        </section>
+      </div>
+
+      <div class="stack">
+        <section class="card" data-tray-id="boundary">
+          <div class="card-head"><div><h2>Supported boundary</h2><div class="hint">No compatibility fiction.</div></div></div>
+          <div class="card-body unavailable">
+            <div><b>Available</b><span>Project and section creation, Raw Source/Candidate intake, exact Retire and Restore custody transitions, HMAC LabCopy export, bounded result capture, Candidate-only return, canonical promotion, receipts, chain and custody verification.</span></div>
+            <div><b>Compatibility retained</b><span>Legacy Oubliette compatibility remains backend-only for existing data and is not part of the primary product workflow. LabCopy is the supported external-work path.</span></div>
+            <div><b>Not claimed</b><span>Universal one-chain operation, independent external witnessing, production security readiness, or automatic repair.</span></div>
+          </div>
+        </section>
+
+        <section class="card" id="evidence" data-tray-id="receipts">
+          <div class="card-head"><div><h2>Human Intent receipts</h2><div class="hint">Portable records backed by the canonical event graph.</div></div><button class="btn" onclick="loadReceipts()">Reload</button></div>
+          <div class="card-body" id="receiptList"><div class="empty">No receipts yet.</div></div>
+        </section>
+
+        <section class="card" data-tray-id="events">
+          <div class="card-head"><div><h2>Recent local facts</h2><div class="hint">Catalog events for orientation, not a replacement evidence chain.</div></div></div>
+          <div class="card-body" id="eventList"><div class="empty">No events yet.</div></div>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="overlay" id="promotionOverlay">
+  <div class="modal">
+    <div class="card-head"><div><div class="eyebrow">Protected trust expansion</div><h2>Promote Candidate to Prime</h2></div><button class="btn" onclick="closePromotionModal()">Cancel</button></div>
+    <div class="card-body">
+      <p id="promotionSummary">Review the selected scope.</p>
+      <div class="ceremony">Type <strong>PROMOTE</strong> yourself. Paste is blocked for this ceremony.<input id="promotionWord" autocomplete="off" placeholder="PROMOTE"></div>
+      <div class="form-actions"><button class="btn brass" id="confirmPromotion" onclick="performPromotion()" disabled>Authorize and promote</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="stateTransitionOverlay">
+  <div class="modal">
+    <div class="card-head"><div><div class="eyebrow">Protected custody transition</div><h2 id="stateTransitionTitle">Retire protected object</h2></div><button class="btn" onclick="closeStateTransitionModal()">Cancel</button></div>
+    <div class="card-body">
+      <p id="stateTransitionSummary">Review the exact object and resulting state.</p>
+      <div class="field full"><label for="stateTransitionReason">Reason recorded with the transition</label><textarea id="stateTransitionReason" maxlength="2000" placeholder="Why this exact state transition is appropriate"></textarea></div>
+      <div class="ceremony" id="stateTransitionCeremony">Type <strong id="stateTransitionRequiredWord">RETIRE</strong> yourself. Paste is blocked for this ceremony.<input id="stateTransitionWord" autocomplete="off" placeholder="RETIRE"></div>
+      <div class="form-actions"><button class="btn brass" id="confirmStateTransition" onclick="performStateTransition()" disabled>Authorize exact transition</button></div>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="layoutImport" accept="application/json,.json" hidden><div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+const API_BASE = '/api/v21';
+const App = { state:null, status:null, receipts:[], session:null, capabilities:null, labProposal:null, labCapture:null, passkey:null, lastHardwareApproval:null, stateTransition:null };
+
+async function api(method, path, body = null) {
+  const options = { method, headers:{'Content-Type':'application/json'} };
+  if (body !== null) options.body = JSON.stringify(body);
+  const response = await fetch(API_BASE + path, options);
+  let payload = null;
+  try { payload = await response.json(); } catch (_) { payload = {}; }
+  if (!response.ok) {
+    const detail = Array.isArray(payload.detail) ? payload.detail.map(x => x.msg || JSON.stringify(x)).join('; ') : payload.detail;
+    throw new Error(detail || `Request failed (${response.status})`);
+  }
+  return payload;
+}
+
+function toast(message, kind='') {
+  const el = document.getElementById('toast');
+  el.textContent = message; el.className = `toast show ${kind}`;
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => el.className='toast', 4200);
+}
+function esc(value) { return String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
+function scrollToId(id) { document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'}); }
+function projects() { return App.state?.projects || []; }
+function sections(projectId) { return projects().find(p => p.id === projectId)?.sections || []; }
+function candidates(projectId, sectionId) { return sections(projectId).find(s => s.id === sectionId)?.files?.filter(f => f.state === 'candidate') || []; }
+
+async function refreshAll() {
+  try {
+    const [state,status,chain,custody,capabilities,passkey] = await Promise.all([
+      api('GET', '/state'), api('GET', '/private-alpha/status'), api('GET', '/blackbox/chain'), api('GET', '/custody/verify'), api('GET', '/capabilities'), api('GET','/security/passkeys/status')
+    ]);
+    App.state=state; App.status=status; App.capabilities=capabilities; App.passkey=passkey;
+    const coreReady=Boolean(capabilities.wallet_blackbox_core?.available);
+    document.getElementById('runtimeStatus').textContent = coreReady ? `Wallet ${status.version||''} · LabCopy ${capabilities.labcopy?.available?'ready':'check required'}` : 'Core configuration required';
+    document.getElementById('runtimeStatus').className = coreReady ? 'ok' : 'failure';
+    document.getElementById('chainStatus').textContent = chain.ok ? 'Verified' : 'Check required';
+    document.getElementById('chainStatus').className = chain.ok ? 'ok' : 'failure';
+    document.getElementById('custodyStatus').textContent = custody.ok ? 'Verified' : 'Check required';
+    document.getElementById('custodyStatus').className = custody.ok ? 'ok' : 'failure';
+    const passkeyStatus=document.getElementById('passkeyStatus');
+    passkeyStatus.textContent=passkey.enrolled?(passkey.require_for_protected_actions?'Required':'Enrolled'):'Not paired';
+    passkeyStatus.className=passkey.enrolled?'ok':'warning';
+    const vaultButton=document.getElementById('vaultButton');
+    vaultButton.textContent=state.is_vault_open?'Lock Vault':'Open Vault';
+    vaultButton.className=state.is_vault_open?'btn danger':'btn';
+    renderPasskeyStatus(); renderSelectors(); syncLabSelectors(); renderGenerations(); renderEvents(); await loadReceipts(false);
+    tuneMechanicalBubbles();
+  } catch (error) { toast(error.message || 'Could not refresh Wallet.', 'bad'); }
+}
+
+function setOptions(selectId, items, placeholder, label) {
+  const el=document.getElementById(selectId); if(!el) return; const current=el.value;
+  el.innerHTML=`<option value="">${esc(placeholder)}</option>`+items.map(item=>`<option value="${esc(item.id)}">${esc(label(item))}</option>`).join('');
+  if (items.some(item=>item.id===current)) el.value=current; else if(items.length===1) el.value=items[0].id;
+}
+function renderSelectors() {
+  const ps=projects();
+  ['sectionProject','candidateProject','promoteProject'].forEach(id=>setOptions(id,ps,'Select project',p=>p.name));
+  syncSectionSelects(); syncPromotionSections();
+}
+function syncSectionSelects() {
+  const projectId=document.getElementById('candidateProject').value;
+  setOptions('candidateSection',sections(projectId),'Select section',s=>s.name);
+}
+function syncPromotionSections() {
+  const projectId=document.getElementById('promoteProject').value;
+  setOptions('promoteSection',sections(projectId),'Select section',s=>s.name);
+  syncCandidateSelect();
+}
+
+function syncCandidateSelect() {
+  const projectId=document.getElementById('promoteProject').value;
+  const sectionId=document.getElementById('promoteSection').value;
+  setOptions('promoteCandidate',candidates(projectId,sectionId),'Select Candidate',c=>`${c.name} · ${c.id}`);
+}
+
+async function toggleVault() {
+  try {
+    const open=Boolean(App.state?.is_vault_open);
+    const actorId=document.getElementById('actorId').value.trim();
+    if(!actorId) return toast('Human actor ID is required.','bad');
+    const session=await ensureIdentitySession(actorId);
+    if(open) {
+      await api('POST','/vault/lock',{session_id:session.session_id});
+    } else {
+      const hardware_gate_token=await hardwareTokenFor('open_vault',{});
+      await api('POST','/vault/open',{session_id:session.session_id,hardware_gate_token});
+    }
+    toast(open?'Vault locked. Active ceremony tokens were revoked.':'Vault opened for a local session.','good');
+    await refreshAll();
+  } catch(error){toast(error.message,'bad')}
+}
+async function createProject() {
+  const name=document.getElementById('projectName').value.trim();
+  if(!name) return toast('Project name is required.','bad');
+  try { const result=await api('POST','/projects',{name,path:document.getElementById('projectPath').value.trim()}); toast(`Created project ${result.name}.`,'good'); document.getElementById('projectName').value=''; await refreshAll(); }
+  catch(error){toast(error.message,'bad')}
+}
+async function createSection() {
+  const projectId=document.getElementById('sectionProject').value, name=document.getElementById('sectionName').value.trim();
+  if(!projectId||!name) return toast('Choose a project and name the section.','bad');
+  try { const result=await api('POST',`/projects/${projectId}/sections`,{name,description:document.getElementById('sectionDescription').value.trim()}); toast(`Created section ${result.name}.`,'good'); document.getElementById('sectionName').value=''; await refreshAll(); }
+  catch(error){toast(error.message,'bad')}
+}
+async function addCandidate() {
+  const projectId=document.getElementById('candidateProject').value, sectionId=document.getElementById('candidateSection').value, path=document.getElementById('candidatePath').value.trim();
+  if(!projectId||!sectionId||!path) return toast('Project, section, and local source path are required.','bad');
+  try { const result=await api('POST',`/projects/${projectId}/sections/${sectionId}/candidates`,{path,notes:document.getElementById('candidateNotes').value.trim()}); toast(`Candidate ${result.name} is now preserved.`,'good'); document.getElementById('candidatePath').value=''; await refreshAll(); }
+  catch(error){toast(error.message,'bad')}
+}
+
+
+function syncLabSelectors(){
+  const project=document.getElementById('labProject'); if(!project) return;
+  const current=project.value; project.innerHTML=projects().map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+  if([...project.options].some(o=>o.value===current)) project.value=current; syncLabSections();
+}
+function syncLabSections(){
+  const projectId=document.getElementById('labProject')?.value, section=document.getElementById('labSection'); if(!section) return;
+  const current=section.value; section.innerHTML=sections(projectId).map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('');
+  if([...section.options].some(o=>o.value===current)) section.value=current; syncLabObjects();
+}
+function syncLabObjects(){
+  const projectId=document.getElementById('labProject')?.value, sectionId=document.getElementById('labSection')?.value, object=document.getElementById('labObject'); if(!object) return;
+  const items=(sections(projectId).find(s=>s.id===sectionId)?.files||[]).filter(f=>['prime','candidate'].includes(f.state));
+  object.innerHTML=items.map(x=>`<option value="${esc(x.id)}">${esc(x.name)} · ${esc(x.state)}</option>`).join('');
+}
+async function prepareLabCopy(){
+  const projectId=document.getElementById('labProject').value, sectionId=document.getElementById('labSection').value, objectId=document.getElementById('labObject').value;
+  const output_dir=document.getElementById('labOutputDir').value.trim(), lab_policy=document.getElementById('labPolicy').value.trim();
+  if(!projectId||!sectionId||!objectId||!output_dir||!lab_policy) return toast('Choose an object, LabCopy folder, and policy.','bad');
+  try{
+    App.labProposal=await api('POST',`/projects/${projectId}/sections/${sectionId}/files/${objectId}/labcopy/proposal`,{output_dir,lab_policy,requested_label:document.getElementById('labLabel').value.trim()||null});
+    updateLabStages(1);toast('Exact LabCopy proposal prepared. Review it, then type EXPORT.','good');
+  }catch(error){toast(error.message,'bad')}
+}
+function updateLabStages(activeIndex){document.querySelectorAll('#labcopy .stage').forEach((stage,index)=>stage.classList.toggle('active',index<=activeIndex))}
+async function exportLabCopy(){
+  if(document.getElementById('labExportWord').value!=='EXPORT'||!App.labProposal) return toast('Prepare the proposal and type EXPORT yourself.','bad');
+  const actorId=document.getElementById('labActorId').value.trim(), projectId=document.getElementById('labProject').value, sectionId=document.getElementById('labSection').value, objectId=document.getElementById('labObject').value;
+  try{
+    const session=await ensureIdentitySession(actorId);
+    await ensureVaultOpen(actorId,session);
+    const proposal=App.labProposal.proposal||App.labProposal;
+    const context={project_id:projectId,section_id:sectionId,object_id:objectId,proposal_id:proposal.proposal_id,proposal_hash:proposal.proposal_hash};
+    const hardware_gate_token=await hardwareTokenFor('export_working_copy',context);
+    const token=await api('POST','/ceremony/tokens',{action_key:'export_working_copy',session_id:session.session_id,...context,ttl_seconds:300,hardware_gate_token});
+    const completed=await api('POST',`/projects/${projectId}/sections/${sectionId}/files/${objectId}/export-working-copy`,{proposal_id:proposal.proposal_id,proposal_hash:proposal.proposal_hash,ceremony_token:token.ceremony_token,session_id:session.session_id,reason:document.getElementById('labReason').value.trim()});
+    const result=completed.result||{};
+    document.getElementById('labId').value=result.lab_id||proposal.lab_id||'';
+    document.getElementById('labAllowedRoot').value=result.output_root||document.getElementById('labOutputDir').value;
+    App.labProposal=null;document.getElementById('labExportWord').value='';document.getElementById('labExportButton').disabled=true;
+    updateLabStages(1);toast(`LabCopy exported without changing custody. Receipt ${completed.human_intent_receipt?.receipt_id||'recorded'}.`,'good');await refreshAll();
+  }catch(error){toast(error.message,'bad')}
+}
+async function captureLabCopyResult(){
+  const labId=document.getElementById('labId').value.trim(), result_path=document.getElementById('labResultPath').value.trim(), allowed_root=document.getElementById('labAllowedRoot').value.trim();
+  if(!labId||!result_path||!allowed_root) return toast('Lab ID, returned path, and allowed root are required.','bad');
+  try{
+    App.labCapture=await api('POST',`/labcopy/${labId}/results/capture`,{result_path,allowed_root,source_label:document.getElementById('labLabel').value.trim()||null,external_assertions:[]});
+    const capsule=App.labCapture.capsule||App.labCapture;document.getElementById('labCapsuleId').value=capsule.capsule_id||'';
+    if(capsule.capsule_id)App.labCapture.proposal=await api('POST',`/labcopy/${labId}/results/${capsule.capsule_id}/admission-proposal`);
+    updateLabStages(2);toast(capsule.classification==='identical'?'Returned bytes are identical; no new Candidate is needed.':'Returned bytes captured and classified. No Candidate exists yet.','good');
+  }catch(error){toast(error.message,'bad')}
+}
+async function admitLabCopy(){
+  if(document.getElementById('labAdmitWord').value!=='ADMIT'||!App.labCapture) return toast('Capture the returned bytes and type ADMIT yourself.','bad');
+  const actorId=document.getElementById('labActorId').value.trim(), labId=document.getElementById('labId').value.trim(), capsuleId=document.getElementById('labCapsuleId').value.trim(), projectId=document.getElementById('labProject').value, sectionId=document.getElementById('labSection').value;
+  try{
+    const session=await ensureIdentitySession(actorId), proposal=App.labCapture.proposal?.proposal||App.labCapture.proposal||{};
+    const context={project_id:projectId,section_id:sectionId,object_id:capsuleId,proposal_id:proposal.proposal_id,proposal_hash:proposal.proposal_hash};
+    const hardware_gate_token=await hardwareTokenFor('admit_labcopy_result_as_candidate',context);
+    const token=await api('POST','/ceremony/tokens',{action_key:'admit_labcopy_result_as_candidate',session_id:session.session_id,...context,ttl_seconds:300,hardware_gate_token});
+    const completed=await api('POST',`/labcopy/${labId}/results/${capsuleId}/admit`,{proposal_id:proposal.proposal_id,proposal_hash:proposal.proposal_hash,ceremony_token:token.ceremony_token,session_id:session.session_id,reason:document.getElementById('labReturnReason').value.trim()});
+    App.labCapture=null;document.getElementById('labAdmitWord').value='';document.getElementById('labAdmitButton').disabled=true;updateLabStages(3);
+    toast(`Returned work admitted as a new Candidate. Receipt ${completed.human_intent_receipt?.receipt_id||'recorded'}.`,'good');await refreshAll();
+  }catch(error){toast(error.message,'bad')}
+}
+for(const [id,word,button] of [['labExportWord','EXPORT','labExportButton'],['labAdmitWord','ADMIT','labAdmitButton']]){ const input=document.getElementById(id); input?.addEventListener('paste',e=>{e.preventDefault();toast('Paste is blocked for protected ceremonies.','bad')}); input?.addEventListener('input',()=>{input.value=input.value.toUpperCase().replace(/[^A-Z]/g,'');document.getElementById(button).disabled=input.value!==word}); }
+function b64urlToBytes(value){
+  const padded=value.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-value.length%4)%4);
+  const raw=atob(padded);return Uint8Array.from(raw,c=>c.charCodeAt(0));
+}
+function bytesToB64url(value){
+  if(value===null||value===undefined)return null;
+  const bytes=value instanceof Uint8Array?value:new Uint8Array(value);
+  let binary='';for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,i+0x8000));
+  return btoa(binary).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function webauthnAvailable(){return Boolean(window.isSecureContext&&window.PublicKeyCredential&&navigator.credentials)}
+function renderPasskeyStatus(){
+  const status=App.passkey||{}, badge=document.getElementById('passkeyBadge'), list=document.getElementById('credentialList');
+  document.getElementById('passkeyEnrollment').textContent=status.enrolled?`${status.credential_count} credential${status.credential_count===1?'':'s'} paired`:'No credential paired';
+  document.getElementById('passkeyPolicy').textContent=status.enrollment_required?'Enrollment required before protected operation':'Fresh approval required';
+  document.getElementById('passkeyRp').textContent=status.rp_id||location.hostname;
+  badge.textContent=status.enrolled?'Enrolled':'Not paired';badge.className=status.enrolled?'pill good':'pill';
+  const credentials=status.credentials||[];
+  list.innerHTML=credentials.length?credentials.map(item=>`<div class="credential-item"><div><strong>${esc(item.label||'Passkey')}</strong><div>${esc(item.attachment||'authenticator')} · ${esc((item.transports||[]).join(', ')||'local transport')}</div></div><code>${esc(item.credential_id)}</code><button class="btn compact danger" type="button" ${credentials.length<=1?'disabled title="Enroll another passkey before revoking this one"':''} onclick='revokePasskey(${JSON.stringify(item.credential_id)})'>Revoke</button></div>`).join(''):'<div class="empty">No passkey has been enrolled yet.</div>';
+  if(!webauthnAvailable())document.getElementById('passkeyResult').innerHTML='<strong>Secure WebAuthn context unavailable</strong><div>Open the app through http://localhost:7432 in a current browser. WebAuthn is never attempted from an insecure remote origin.</div>';
+}
+async function registerPasskey(attachment){
+  const result=document.getElementById('passkeyResult'), badge=document.getElementById('passkeyBadge');
+  if(!webauthnAvailable())return toast('WebAuthn requires a secure browser context such as localhost.','bad');
+  badge.textContent='Pairing…';
+  try{
+    const label=attachment==='platform'?'This PC / Windows Hello':'Phone or security key';
+    const hardware_gate_token=App.passkey?.enrolled
+      ?await authenticatePasskey('manage_passkeys',{operation:'enroll_passkey'})
+      :null;
+    const envelope=await api('POST','/security/passkeys/registration/options',{
+      label,attachment,hardware_gate_token
+    });
+    const publicKey=envelope.publicKey;
+    publicKey.challenge=b64urlToBytes(publicKey.challenge);
+    publicKey.user.id=b64urlToBytes(publicKey.user.id);
+    publicKey.excludeCredentials=(publicKey.excludeCredentials||[]).map(item=>({...item,id:b64urlToBytes(item.id)}));
+    const credential=await navigator.credentials.create({publicKey});
+    if(!credential)throw new Error('The authenticator did not return a credential.');
+    const response=credential.response;
+    if(typeof response.getPublicKey!=='function'||typeof response.getAuthenticatorData!=='function')throw new Error('This browser cannot expose the standard WebAuthn public-key registration fields. Update Chrome, Edge, or Safari.');
+    const publicKeySpki=response.getPublicKey();
+    if(!publicKeySpki)throw new Error('The authenticator did not provide a usable public key.');
+    const verified=await api('POST','/security/passkeys/registration/verify',{
+      challenge_id:envelope.challenge_id,
+      credential_id:bytesToB64url(credential.rawId),
+      client_data_json:bytesToB64url(response.clientDataJSON),
+      authenticator_data:bytesToB64url(response.getAuthenticatorData()),
+      public_key_spki:bytesToB64url(publicKeySpki),
+      algorithm:response.getPublicKeyAlgorithm(),
+      transports:typeof response.getTransports==='function'?response.getTransports():[],
+      attachment:credential.authenticatorAttachment||attachment||'unknown',
+      label:envelope.label||label
+    });
+    result.innerHTML=`<strong>Passkey paired</strong><div>${esc(verified.credential?.label||label)} is now enrolled. Protected actions will require a fresh signed assertion.</div>`;
+    toast('Passkey enrollment verified and stored locally.','good');await refreshAll();
+  }catch(error){badge.textContent='Pairing failed';badge.className='pill';result.innerHTML=`<strong>Enrollment was not completed</strong><div>${esc(error.message||error.name)}</div>`;toast(error.message||'Passkey enrollment failed.','bad')}
+}
+async function authenticatePasskey(actionKey='hardware_gate_check',context={}){
+  if(!webauthnAvailable())throw new Error('WebAuthn is unavailable in this browser context.');
+  if(!App.passkey?.enrolled)throw new Error('Pair a passkey before using protected ceremonies.');
+  const envelope=await api('POST','/security/passkeys/authentication/options',{action_key:actionKey,context});
+  const publicKey=envelope.publicKey;
+  publicKey.challenge=b64urlToBytes(publicKey.challenge);
+  publicKey.allowCredentials=(publicKey.allowCredentials||[]).map(item=>({...item,id:b64urlToBytes(item.id)}));
+  if(actionKey==='hardware_gate_check')publicKey.hints=['client-device','hybrid','security-key'];
+  const credential=await navigator.credentials.get({publicKey});
+  if(!credential)throw new Error('No passkey assertion was returned.');
+  const response=credential.response;
+  const verified=await api('POST','/security/passkeys/authentication/verify',{
+    challenge_id:envelope.challenge_id,
+    credential_id:bytesToB64url(credential.rawId),
+    client_data_json:bytesToB64url(response.clientDataJSON),
+    authenticator_data:bytesToB64url(response.authenticatorData),
+    signature:bytesToB64url(response.signature),
+    user_handle:response.userHandle?bytesToB64url(response.userHandle):null
+  });
+  App.lastHardwareApproval={actionKey,context,expiresAt:Date.now()+(verified.expires_in||180)*1000};
+  return verified.hardware_gate_token;
+}
+
+async function revokePasskey(credentialId){
+  if((App.passkey?.credential_count||0)<=1)return toast('Enroll another passkey before revoking the final active credential.','bad');
+  if(!confirm('Revoke this passkey? Its credential history remains preserved, but it will no longer authorize protected actions.'))return;
+  try{
+    const context={credential_id:credentialId};
+    const hardware_gate_token=await authenticatePasskey('manage_passkeys',context);
+    const result=await api('POST','/security/passkeys/revoke',{credential_id:credentialId,hardware_gate_token});
+    toast(`Passkey revoked. ${result.remaining} active credential${result.remaining===1?' remains':'s remain'}.`,'good');
+    await refreshAll();
+  }catch(error){toast(error.message||'Passkey revocation failed.','bad')}
+}
+async function runBiometricCheck(){
+  const badge=document.getElementById('passkeyBadge'), result=document.getElementById('passkeyResult');
+  try{badge.textContent='Waiting for approval…';const token=await authenticatePasskey('hardware_gate_check',{});badge.textContent='Verified';badge.className='pill good';result.innerHTML='<strong>Cryptographic user verification passed</strong><div>Wallet verified the authenticator signature, RP scope, origin, user-presence flag, user-verification flag, and replay counter. This check token is not reused for custody actions.</div>';toast('Fingerprint / phone passkey verification succeeded.','good');return token}
+  catch(error){badge.textContent=App.passkey?.enrolled?'Not verified':'Not paired';badge.className='pill';result.innerHTML=`<strong>Verification was not completed</strong><div>${esc(error.message||error.name)}</div>`;toast(error.message||'Passkey verification failed.','bad');return null}
+}
+function clearBiometricCheck(){App.lastHardwareApproval=null;const badge=document.getElementById('passkeyBadge');badge.textContent=App.passkey?.enrolled?'Enrolled':'Not paired';badge.className=App.passkey?.enrolled?'pill good':'pill';document.getElementById('passkeyResult').innerHTML='<strong>Approval cleared</strong><div>Protected actions always request a fresh one-use passkey signature.</div>'}
+async function hardwareTokenFor(actionKey,context){
+  if(!App.passkey?.enrolled){scrollToId('deviceGate');throw new Error('Pair a passkey first. The hardware gate activates after enrollment.');}
+  document.getElementById('passkeyBadge').textContent='Approve action…';
+  const token=await authenticatePasskey(actionKey,context);
+  document.getElementById('passkeyBadge').textContent='Action approved';document.getElementById('passkeyBadge').className='pill good';
+  return token;
+}
+
+function openPromotionModal() {
+  const projectId=document.getElementById('promoteProject').value, sectionId=document.getElementById('promoteSection').value, candidateId=document.getElementById('promoteCandidate').value;
+  if(!projectId||!sectionId||!candidateId) return toast('Choose the exact project, section, and Candidate.','bad');
+  const project=projects().find(p=>p.id===projectId), section=sections(projectId).find(s=>s.id===sectionId), candidate=candidates(projectId,sectionId).find(c=>c.id===candidateId);
+  document.getElementById('promotionSummary').innerHTML=`Promote <strong>${esc(candidate?.name)}</strong> in ${esc(project?.name)} / ${esc(section?.name)}. The former Prime, if present, will be archived.`;
+  const input=document.getElementById('promotionWord'); input.value=''; document.getElementById('confirmPromotion').disabled=true;
+  document.getElementById('promotionOverlay').classList.add('open'); setTimeout(()=>input.focus(),80);
+}
+function closePromotionModal(){document.getElementById('promotionOverlay').classList.remove('open')}
+const promotionWord=document.getElementById('promotionWord');
+promotionWord.addEventListener('paste',event=>{event.preventDefault();toast('Paste is blocked for the promotion ceremony.','bad')});
+promotionWord.addEventListener('input',()=>{promotionWord.value=promotionWord.value.toUpperCase().replace(/[^A-Z]/g,'');document.getElementById('confirmPromotion').disabled=promotionWord.value!=='PROMOTE'});
+
+async function ensureIdentitySession(actorId) {
+  if(App.session?.actor_id===actorId) {
+    try { App.session=await api('GET',`/identity/sessions/${App.session.session_id}`); return App.session; } catch(_){ App.session=null; }
+  }
+  App.session=await api('POST', '/identity/sessions', {
+    actor_id:actorId, actor_kind:'human', device_id:'iteration-wallet-browser',
+    verified_methods:['interactive_browser','human_ceremony','typed_human_ceremony'], role_claims:{local_continuity_only:true}, ttl_minutes:480
+  });
+  sessionStorage.setItem('iw_session',JSON.stringify(App.session)); return App.session;
+}
+async function ensureVaultOpen(actorId,existingSession=null) {
+  const session=existingSession||await ensureIdentitySession(actorId);
+  if(!App.state?.is_vault_open) {
+    const hardware_gate_token=await hardwareTokenFor('open_vault',{});
+    await api('POST','/vault/open',{session_id:session.session_id,hardware_gate_token});
+    App.state={...(App.state||{}),is_vault_open:true};
+  }
+  return session;
+}
+async function performPromotion() {
+  if(promotionWord.value!=='PROMOTE') return;
+  const actorId=document.getElementById('actorId').value.trim(), projectId=document.getElementById('promoteProject').value, sectionId=document.getElementById('promoteSection').value, candidateId=document.getElementById('promoteCandidate').value;
+  if(!actorId) return toast('Human actor ID is required.','bad');
+  const button=document.getElementById('confirmPromotion'); button.disabled=true; button.textContent='Waiting for passkey…';
+  try {
+    const session=await ensureIdentitySession(actorId);
+    await ensureVaultOpen(actorId,session);
+    const context={project_id:projectId,section_id:sectionId,object_id:candidateId};
+    const hardware_gate_token=await hardwareTokenFor('promote_candidate_to_prime',context);
+    button.textContent='Promoting…';
+    const token=await api('POST', '/ceremony/tokens', {action_key:'promote_candidate_to_prime',session_id:session.session_id,...context,ttl_seconds:300,hardware_gate_token});
+    const result=await api('POST', `/projects/${projectId}/sections/${sectionId}/candidates/${candidateId}/promote`, {ceremony_token:token.ceremony_token,session_id:session.session_id,actor_kind:'human',actor_id:actorId,human_ceremony_passed:true,reason:document.getElementById('promoteReason').value.trim()});
+    if(!result.verification?.ok) throw new Error(result.verification?.reason||'Receipt verification failed.');
+    closePromotionModal(); toast(`Promotion complete. Receipt ${result.human_intent_receipt?.receipt_id}.`,'good'); await refreshAll();
+  } catch(error){toast(error.message||'Promotion failed.','bad')}
+  finally{button.textContent='Authorize and promote';button.disabled=promotionWord.value!=='PROMOTE'}
+}
+
+function findProtectedObject(projectId,sectionId,objectId){
+  const project=projects().find(p=>p.id===projectId);
+  const section=(project?.sections||[]).find(item=>item.id===sectionId);
+  const object=(section?.files||[]).find(item=>item.id===objectId);
+  return {project,section,object};
+}
+function openStateTransitionModal(action,projectId,sectionId,objectId){
+  const {project,section,object}=findProtectedObject(projectId,sectionId,objectId);
+  if(!project||!section||!object)return toast('The exact protected object is no longer available in this view.','bad');
+  if(action==='retire'&&!['raw','candidate','archived'].includes(object.state))return toast('Only a Raw Source, Candidate, or Archive object can be retired.','bad');
+  if(action==='restore'&&object.state!=='retired')return toast('Only a retired object can be restored.','bad');
+  const requiredWord=action==='retire'?'RETIRE':'RESTORE';
+  App.stateTransition={action,projectId,sectionId,objectId,requiredWord};
+  document.getElementById('stateTransitionTitle').textContent=action==='retire'?'Retire protected object':'Restore retired object';
+  document.getElementById('stateTransitionRequiredWord').textContent=requiredWord;
+  const summary=action==='retire'
+    ?`Retire <strong>${esc(object.name)}</strong> in ${esc(project.name)} / ${esc(section.name)}. Its protected content, identity, history, and evidence remain preserved. It can be restored later.`
+    :`Restore <strong>${esc(object.name)}</strong> in ${esc(project.name)} / ${esc(section.name)} to its exact prior state, <strong>${esc(object.retired_from_state||'preserved state')}</strong>. Its retirement history remains preserved.`;
+  document.getElementById('stateTransitionSummary').innerHTML=summary;
+  const input=document.getElementById('stateTransitionWord');input.value='';input.placeholder=requiredWord;
+  document.getElementById('stateTransitionReason').value='';
+  const button=document.getElementById('confirmStateTransition');button.disabled=true;button.textContent=action==='retire'?'Authorize Retire':'Authorize Restore';
+  document.getElementById('stateTransitionOverlay').classList.add('open');setTimeout(()=>input.focus(),80);
+}
+function closeStateTransitionModal(){
+  document.getElementById('stateTransitionOverlay').classList.remove('open');
+  App.stateTransition=null;
+}
+const stateTransitionWord=document.getElementById('stateTransitionWord');
+stateTransitionWord.addEventListener('paste',event=>{event.preventDefault();toast('Paste is blocked for this protected ceremony.','bad')});
+stateTransitionWord.addEventListener('input',()=>{
+  stateTransitionWord.value=stateTransitionWord.value.toUpperCase().replace(/[^A-Z]/g,'');
+  document.getElementById('confirmStateTransition').disabled=stateTransitionWord.value!==(App.stateTransition?.requiredWord||'');
+});
+async function performStateTransition(){
+  const transition=App.stateTransition;if(!transition||stateTransitionWord.value!==transition.requiredWord)return;
+  const actorId=document.getElementById('actorId').value.trim();
+  if(!actorId)return toast('Human actor ID is required.','bad');
+  const actionKey=transition.action==='retire'?'retire_object':'restore_retired_object';
+  const endpoint=transition.action==='retire'?'retire':'restore';
+  const button=document.getElementById('confirmStateTransition');button.disabled=true;button.textContent='Waiting for passkey…';
+  try{
+    const session=await ensureIdentitySession(actorId);
+    await ensureVaultOpen(actorId,session);
+    const context={project_id:transition.projectId,section_id:transition.sectionId,object_id:transition.objectId};
+    const hardware_gate_token=await hardwareTokenFor(actionKey,context);
+    button.textContent=transition.action==='retire'?'Retiring…':'Restoring…';
+    const token=await api('POST','/ceremony/tokens',{action_key:actionKey,session_id:session.session_id,...context,ttl_seconds:300,hardware_gate_token});
+    const completed=await api('POST',`/projects/${transition.projectId}/sections/${transition.sectionId}/objects/${transition.objectId}/${endpoint}`,{ceremony_token:token.ceremony_token,session_id:session.session_id,reason:document.getElementById('stateTransitionReason').value.trim()});
+    if(!completed.verification?.ok)throw new Error(completed.verification?.reason||'Receipt verification failed.');
+    const resultState=completed.result?.state||'updated';
+    const receiptId=completed.human_intent_receipt?.receipt_id||'recorded';
+    closeStateTransitionModal();toast(`Protected object is now ${resultState}. Content remains preserved. Receipt ${receiptId}.`,'good');await refreshAll();
+  }catch(error){toast(error.message||'Protected state transition failed.','bad')}
+  finally{
+    const active=App.stateTransition;
+    button.textContent=active?.action==='restore'?'Authorize Restore':'Authorize Retire';
+    button.disabled=true;
+  }
+}
+
+function renderGenerations() {
+  const rows=[];
+  for(const project of projects()) for(const section of project.sections||[]) for(const item of section.files||[]) rows.push({project,section,item});
+  const el=document.getElementById('generationRows');
+  if(!rows.length){el.innerHTML='<div class="empty">Create a project, section, and Candidate to begin.</div>';return}
+  el.innerHTML=rows.map(({project,section,item})=>{
+    let action='';
+    if(['raw','candidate','archived'].includes(item.state))action=`<button class="btn" type="button" onclick='openStateTransitionModal("retire",${JSON.stringify(project.id)},${JSON.stringify(section.id)},${JSON.stringify(item.id)})'>Retire</button>`;
+    else if(item.state==='retired')action=`<button class="btn brass" type="button" onclick='openStateTransitionModal("restore",${JSON.stringify(project.id)},${JSON.stringify(section.id)},${JSON.stringify(item.id)})'>Restore</button>`;
+    else if(item.state==='prime')action='<small>Promote a replacement before retirement.</small>';
+    const stateClass=item.state==='prime'?'good':item.state==='retired'?'':'good';
+    return `<div class="row"><div><strong>${esc(item.name)}</strong><small>${esc(project.name)} / ${esc(section.name)}</small></div><div><span class="pill ${stateClass}">${esc(item.state)}</span></div><div><small>${Number(item.size_bytes||0).toLocaleString()} bytes</small></div><div class="row-actions">${action}</div><code>${esc(item.id)}</code></div>`;
+  }).join('');
+}
+function renderEvents() {
+  const events=App.state?.events||[], el=document.getElementById('eventList');
+  if(!events.length){el.innerHTML='<div class="empty">No local catalog events yet.</div>';return}
+  el.innerHTML=events.slice(0,12).map(event=>`<div class="receipt"><strong>${esc(event.type)}</strong><div>${esc(event.desc)}</div><small>${esc(event.ts)}</small></div>`).join('');
+}
+async function loadReceipts(showErrors=true) {
+  try { const result=await api('GET','/blackbox/receipts'); App.receipts=result.receipts||[]; document.getElementById('receiptCount').textContent=String(App.receipts.length); const el=document.getElementById('receiptList'); if(!App.receipts.length){el.innerHTML='<div class="empty">No Human Intent receipts yet.</div>';return} el.innerHTML=App.receipts.slice().reverse().map(r=>`<div class="receipt"><strong>${esc(r.action_key||'Human Intent')}</strong><div>${esc(r.object_name||r.object_id||'Unknown object')}</div><code>${esc(r.receipt_id)}</code></div>`).join(''); }
+  catch(error){if(showErrors)toast(error.message,'bad')}
+}
+
+try { App.session=JSON.parse(sessionStorage.getItem('iw_session')||'null'); } catch(_){App.session=null}
+const socketScheme=location.protocol==='https:'?'wss':'ws';
+function connectSocket(){const ws=new WebSocket(`${socketScheme}://${location.host}/ws`);ws.onmessage=event=>{try{const message=JSON.parse(event.data);if(message.type&&message.type!=='ping')refreshAll()}catch(_){}};ws.onclose=()=>setTimeout(connectSocket,2500)}
+refreshAll(); connectSocket();
+
+const trayShapeModes=['mechanical','soft','faceted'];
+let trayShapeIndex=0;
+const TrayRuntime={
+  field:null,cards:[],history:[],z:10,layoutIndex:0,saveTimer:null,activeWorkspace:'Studio',
+  storageKey:'iw.tray.workspaces.v2',materials:['sapphire','pearl','emerald','amethyst','obsidian','copper','pearl','sapphire','emerald'],
+  layouts:[
+    /* Studio: deliberate asymmetric hierarchy with LabCopy as the visual anchor. */
+    [[.02,.02,.31,.15],[.35,.02,.30,.15],[.02,.20,.63,.31],[.67,.02,.31,.21],[.67,.26,.31,.25],[.02,.55,.63,.20],[.67,.54,.31,.14],[.02,.79,.46,.18],[.50,.79,.48,.18]],
+    /* Review: wider evidence and generation surfaces. */
+    [[.02,.02,.27,.20],[.31,.02,.37,.16],[.02,.25,.46,.31],[.70,.02,.28,.24],[.50,.21,.48,.27],[.02,.60,.46,.22],[.50,.52,.23,.19],[.75,.52,.23,.25],[.50,.75,.48,.21]],
+    /* Ceremony: promotion and hardware gate share the upper right stage. */
+    [[.02,.02,.38,.17],[.42,.02,.26,.17],[.02,.23,.54,.31],[.70,.02,.28,.27],[.58,.33,.40,.27],[.02,.58,.54,.21],[.58,.64,.19,.16],[.79,.64,.19,.16],[.58,.83,.40,.14]]
+  ],
+  key(card,index){return card.dataset.trayId||card.id||`tray-${index}`},
+  dimensions(){const box=this.field.getBoundingClientRect();return{w:Math.max(1,box.width),h:Math.max(1,this.field.clientHeight)}},
+  serialize(){const {w,h}=this.dimensions();return{schema:'iteration-wallet-tray-layout/2',layoutIndex:this.layoutIndex,shape:document.body.dataset.trayShape||'mechanical',theme:document.body.dataset.theme||'pearl',cards:this.cards.map((card,index)=>({id:this.key(card,index),x:(parseFloat(card.style.left)||card.offsetLeft)/w,y:(parseFloat(card.style.top)||card.offsetTop)/h,w:card.offsetWidth/w,h:card.offsetHeight/h,material:card.dataset.material,collapsed:card.classList.contains('collapsed'),docked:card.dataset.docked||'',z:Number(card.style.zIndex||0)}))}},
+  workspaces(){try{const value=JSON.parse(localStorage.getItem(this.storageKey)||'null');if(value?.schema==='iteration-wallet-tray-workspaces/2'&&value.items)return value}catch(_){}return{schema:'iteration-wallet-tray-workspaces/2',active:'Studio',items:{}}},
+  storeWorkspaces(value){localStorage.setItem(this.storageKey,JSON.stringify(value));this.renderWorkspaceSelect(value)},
+  renderWorkspaceSelect(value=this.workspaces()){const select=document.getElementById('workspaceSelect');if(!select)return;const names=Object.keys(value.items);if(!names.length)names.push('Studio');select.innerHTML=names.map(name=>`<option value="${esc(name)}">${esc(name)}</option>`).join('');select.value=value.active&&names.includes(value.active)?value.active:names[0];this.activeWorkspace=select.value;select.onchange=()=>this.switchWorkspace(select.value)},
+  saveActiveWorkspace(showToast=true){if(!this.field)return;const value=this.workspaces(),name=this.activeWorkspace||'Studio';value.active=name;value.items[name]={savedAt:new Date().toISOString(),state:this.serialize()};this.storeWorkspaces(value);if(showToast)toast(`Saved tray workspace “${name}”.`,'good')},
+  scheduleSave(){clearTimeout(this.saveTimer);this.saveTimer=setTimeout(()=>this.saveActiveWorkspace(false),320)},
+  newWorkspace(){const name=(prompt('Name this tray workspace:','New workspace')||'').trim();if(!name)return;const value=this.workspaces();value.active=name;value.items[name]={savedAt:new Date().toISOString(),state:this.serialize()};this.activeWorkspace=name;this.storeWorkspaces(value);toast(`Created workspace “${name}”.`,'good')},
+  switchWorkspace(name){const value=this.workspaces(),entry=value.items[name];this.activeWorkspace=name;value.active=name;this.storeWorkspaces(value);if(entry?.state)this.applyState(entry.state,true);else this.applyLayout(0,true)},
+  snapshot(){this.history.push(this.serialize());if(this.history.length>30)this.history.shift()},
+  applyState(state,animate=true){if(!this.field||innerWidth<1100||!state?.cards)return;this.layoutIndex=Number(state.layoutIndex||0);document.body.dataset.trayShape=state.shape||'mechanical';document.body.dataset.theme=state.theme||'pearl';const {w,h}=this.dimensions();for(const [index,card] of this.cards.entries()){const item=state.cards.find(x=>x.id===this.key(card,index))||state.cards[index];if(!item)continue;if(!animate)card.style.transition='none';card.style.left=Math.max(8,item.x*w)+'px';card.style.top=Math.max(8,item.y*h)+'px';card.style.width=Math.max(270,item.w*w)+'px';card.style.height=Math.max(220,item.h*h)+'px';card.dataset.material=item.material||this.materials[index%this.materials.length];card.dataset.docked=item.docked||'';card.classList.toggle('collapsed',Boolean(item.collapsed));card.style.zIndex=String(item.z||10+index);if(!animate)requestAnimationFrame(()=>card.style.transition='')}this.cards.forEach(card=>this.clamp(card));tuneMechanicalBubbles()},
+  applyLayout(index=this.layoutIndex,animate=true){if(!this.field||innerWidth<1100)return;this.layoutIndex=(index+this.layouts.length)%this.layouts.length;const box=this.field.getBoundingClientRect(),pad=20,usableW=box.width-pad*2,usableH=2250,layout=this.layouts[this.layoutIndex];this.field.style.minHeight=(usableH+pad*2)+'px';this.cards.forEach((card,i)=>{const[x,y,w,h]=layout[i]||layout[layout.length-1];if(!animate)card.style.transition='none';card.style.left=(pad+x*usableW)+'px';card.style.top=(pad+y*usableH)+'px';card.style.width=Math.max(270,w*usableW-9)+'px';card.style.height=Math.max(220,h*usableH-9)+'px';card.dataset.docked='';if(!animate)requestAnimationFrame(()=>card.style.transition='')});this.scheduleSave();},
+  bringFront(card){this.z++;card.style.zIndex=this.z;this.cards.forEach(c=>c.classList.toggle('focused',c===card))},
+  clamp(card){const f=this.field.getBoundingClientRect(),c=card.getBoundingClientRect();let x=parseFloat(card.style.left)||0,y=parseFloat(card.style.top)||0;x=Math.max(8,Math.min(x,f.width-c.width-8));y=Math.max(8,Math.min(y,f.height-c.height-8));card.style.left=x+'px';card.style.top=y+'px'},
+  snap(card){const grid=12,edge=20,f=this.field.getBoundingClientRect();let x=parseFloat(card.style.left)||0,y=parseFloat(card.style.top)||0,w=card.offsetWidth,h=card.offsetHeight;x=Math.round(x/grid)*grid;y=Math.round(y/grid)*grid;w=Math.round(w/grid)*grid;h=Math.round(h/grid)*grid;if(x<edge)x=8;if(y<edge)y=8;if(f.width-(x+w)<edge)x=f.width-w-8;if(f.height-(y+h)<edge)y=f.height-h-8;card.style.left=x+'px';card.style.top=y+'px';card.style.width=Math.max(270,w)+'px';card.style.height=Math.max(220,h)+'px';this.clamp(card)},
+  drag(card,handle){handle.addEventListener('pointerdown',e=>{if(e.target.closest('button,input,select,textarea'))return;e.preventDefault();this.snapshot();this.bringFront(card);card.classList.add('dragging');handle.setPointerCapture(e.pointerId);const sx=e.clientX,sy=e.clientY,ox=parseFloat(card.style.left)||card.offsetLeft,oy=parseFloat(card.style.top)||card.offsetTop;const move=ev=>{card.style.left=(ox+ev.clientX-sx)+'px';card.style.top=(oy+ev.clientY-sy)+'px';this.clamp(card)};const up=ev=>{card.classList.remove('dragging');try{handle.releasePointerCapture(ev.pointerId)}catch(_){}handle.removeEventListener('pointermove',move);handle.removeEventListener('pointerup',up);handle.removeEventListener('pointercancel',up);this.snap(card);this.settle(5);this.scheduleSave()};handle.addEventListener('pointermove',move);handle.addEventListener('pointerup',up);handle.addEventListener('pointercancel',up)})},
+  resize(card,handle){handle.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();this.snapshot();this.bringFront(card);card.classList.add('resizing');handle.setPointerCapture(e.pointerId);const sx=e.clientX,sy=e.clientY,ow=card.offsetWidth,oh=card.offsetHeight;const move=ev=>{const maxW=this.field.clientWidth-card.offsetLeft-8,maxH=this.field.clientHeight-card.offsetTop-8;card.style.width=Math.max(270,Math.min(maxW,ow+ev.clientX-sx))+'px';card.style.height=Math.max(220,Math.min(maxH,oh+ev.clientY-sy))+'px'};const up=ev=>{card.classList.remove('resizing');try{handle.releasePointerCapture(ev.pointerId)}catch(_){}handle.removeEventListener('pointermove',move);handle.removeEventListener('pointerup',up);handle.removeEventListener('pointercancel',up);this.snap(card);this.settle(5);this.scheduleSave()};handle.addEventListener('pointermove',move);handle.addEventListener('pointerup',up);handle.addEventListener('pointercancel',up)})},
+  dock(card){const current=card.dataset.docked||'',next=current===''?'left':current==='left'?'right':'';card.dataset.docked=next;if(next){const width=Math.max(290,Math.min(430,card.offsetWidth));card.style.width=width+'px';card.style.left=(next==='left'?8:this.field.clientWidth-width-8)+'px';card.style.top='12px';card.style.height=Math.max(420,this.field.clientHeight-24)+'px'}this.scheduleSave()},
+  decorate(card,index){card.dataset.material=card.dataset.material||this.materials[index%this.materials.length];const materialSkin=document.createElement('div');materialSkin.className='material-skin';materialSkin.setAttribute('aria-hidden','true');card.prepend(materialSkin);const head=card.querySelector('.card-head');if(!head)return;head.tabIndex=0;head.setAttribute('aria-label',`${head.querySelector('h2')?.textContent||'Tray'} drag handle`);const tools=document.createElement('div');tools.className='tray-tools';tools.innerHTML='<button type="button" title="Cycle material" aria-label="Cycle tray material">◈</button><button type="button" title="Collapse or expand" aria-label="Collapse or expand tray">−</button><button type="button" title="Dock left, right, or free" aria-label="Dock tray">⇥</button><button type="button" title="Bring forward" aria-label="Bring tray forward">↥</button>';head.appendChild(tools);const resize=document.createElement('div');resize.className='tray-resize';resize.setAttribute('role','separator');resize.setAttribute('aria-label','Resize tray');card.appendChild(resize);const[mat,collapse,dock,front]=tools.querySelectorAll('button');mat.addEventListener('click',e=>{e.stopPropagation();const i=this.materials.indexOf(card.dataset.material);card.dataset.material=this.materials[(i+1)%this.materials.length];this.scheduleSave()});collapse.addEventListener('click',e=>{e.stopPropagation();if(!card.classList.contains('collapsed'))card.dataset.openHeight=card.style.height;card.classList.toggle('collapsed');collapse.textContent=card.classList.contains('collapsed')?'+':'−';if(!card.classList.contains('collapsed')&&card.dataset.openHeight)card.style.height=card.dataset.openHeight;this.scheduleSave()});dock.addEventListener('click',e=>{e.stopPropagation();this.snapshot();this.dock(card)});front.addEventListener('click',e=>{e.stopPropagation();this.bringFront(card);this.scheduleSave()});head.addEventListener('keydown',e=>{const step=e.shiftKey?24:8;if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();this.snapshot();let x=parseFloat(card.style.left)||0,y=parseFloat(card.style.top)||0;if(e.key==='ArrowLeft')x-=step;if(e.key==='ArrowRight')x+=step;if(e.key==='ArrowUp')y-=step;if(e.key==='ArrowDown')y+=step;card.style.left=x+'px';card.style.top=y+'px';this.clamp(card);this.scheduleSave()});card.addEventListener('pointerdown',()=>this.bringFront(card));this.drag(card,head);this.resize(card,resize)},
+  compact(){this.snapshot();this.applyLayout((this.layoutIndex+1)%this.layouts.length,true)},
+  scatter(){if(innerWidth<1100)return;this.snapshot();const w=this.field.clientWidth,h=this.field.clientHeight;this.cards.forEach(c=>{const cw=c.offsetWidth,ch=c.offsetHeight;c.style.left=(12+Math.random()*Math.max(10,w-cw-24))+'px';c.style.top=(20+Math.random()*Math.max(10,h-ch-40))+'px';c.style.transform=`rotate(${(Math.random()*2-1)*1.2}deg)`;setTimeout(()=>c.style.transform='',700)});setTimeout(()=>{this.settle(18);this.scheduleSave()},740)},
+  settle(passes=12){if(innerWidth<1100)return;for(let pass=0;pass<passes;pass++){for(let i=0;i<this.cards.length;i++)for(let j=i+1;j<this.cards.length;j++){const a=this.cards[i],b=this.cards[j];if(a.dataset.docked||b.dataset.docked)continue;const ar=a.getBoundingClientRect(),br=b.getBoundingClientRect(),overlapX=Math.min(ar.right,br.right)-Math.max(ar.left,br.left),overlapY=Math.min(ar.bottom,br.bottom)-Math.max(ar.top,br.top);if(overlapX>0&&overlapY>0){const delta=(Math.min(overlapX,overlapY))/2+5;if(overlapX<overlapY){a.style.left=(parseFloat(a.style.left)-delta)+'px';b.style.left=(parseFloat(b.style.left)+delta)+'px'}else{a.style.top=(parseFloat(a.style.top)-delta)+'px';b.style.top=(parseFloat(b.style.top)+delta)+'px'}this.clamp(a);this.clamp(b)}}}},
+  undo(){const state=this.history.pop();if(!state)return toast('No earlier tray movement to restore.','bad');this.applyState(state,true);this.scheduleSave()},
+  exportLayout(){const blob=new Blob([JSON.stringify(this.serialize(),null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`iteration-wallet-${this.activeWorkspace.replace(/\W+/g,'-').toLowerCase()}-layout.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)},
+  async importLayout(file){try{const value=JSON.parse(await file.text());const state=Array.isArray(value)?{schema:'legacy',cards:value.map((x,i)=>({id:this.key(this.cards[i],i),x:(parseFloat(x.left)||0)/this.field.clientWidth,y:(parseFloat(x.top)||0)/this.field.clientHeight,w:(parseFloat(x.width)||300)/this.field.clientWidth,h:(parseFloat(x.height)||240)/this.field.clientHeight,material:x.material}))}:value;if(!state.cards)throw new Error('This file does not contain a tray layout.');this.snapshot();this.applyState(state,true);this.saveActiveWorkspace(false);toast('Imported tray layout.','good')}catch(error){toast(error.message||'Could not import layout.','bad')}},
+  init(){this.field=document.querySelector('.tray-field');if(!this.field)return;this.cards=[...this.field.querySelectorAll('.card')];document.body.dataset.theme=localStorage.getItem('iw.theme')||'pearl';document.body.dataset.trayShape='mechanical';document.body.dataset.motion=localStorage.getItem('iw.motion')||'full';document.body.dataset.labels=localStorage.getItem('iw.labels')||'on';this.cards.forEach((c,i)=>this.decorate(c,i));let value=this.workspaces();if(!Object.keys(value.items).length){this.applyLayout(0,false);value.items.Studio={savedAt:new Date().toISOString(),state:this.serialize()};value.active='Studio';this.storeWorkspaces(value)}else{this.renderWorkspaceSelect(value);this.activeWorkspace=value.active||Object.keys(value.items)[0];requestAnimationFrame(()=>this.applyState(value.items[this.activeWorkspace]?.state,false))}const importer=document.getElementById('layoutImport');importer?.addEventListener('change',()=>{if(importer.files?.[0])this.importLayout(importer.files[0]);importer.value=''});let timer;window.addEventListener('resize',()=>{clearTimeout(timer);timer=setTimeout(()=>{const current=this.workspaces().items[this.activeWorkspace]?.state;if(current)this.applyState(current,false)},180)})}
+};
+function cycleTrayGeometry(){trayShapeIndex=(trayShapeIndex+1)%trayShapeModes.length;const mode=trayShapeModes[trayShapeIndex];document.body.dataset.trayShape=mode;TrayRuntime.compact();const button=document.getElementById('shapeButton');if(button)button.textContent={mechanical:'Reflow shapes',soft:'Soften shapes',faceted:'Facet shapes'}[mode];TrayRuntime.scheduleSave()}
+function tuneMechanicalBubbles(){document.querySelectorAll('.card').forEach(card=>{const body=card.querySelector('.card-body'),weight=body?body.scrollHeight:card.scrollHeight;card.dataset.mass=weight>680?'heavy':weight>330?'medium':'light';card.style.setProperty('--bubble-mass',Math.min(1.18,Math.max(.88,weight/520)).toFixed(2))})}
+function closeMenus(except){document.querySelectorAll('.menu-root.open').forEach(root=>{if(root!==except)root.classList.remove('open')})}
+document.querySelectorAll('[data-menu]').forEach(button=>button.addEventListener('click',e=>{e.stopPropagation();const root=button.closest('.menu-root'),open=root.classList.contains('open');closeMenus();root.classList.toggle('open',!open)}));
+document.addEventListener('click',()=>closeMenus());document.querySelectorAll('.menu-pop').forEach(p=>p.addEventListener('click',e=>e.stopPropagation()));
+document.querySelectorAll('[data-jump]').forEach(b=>b.addEventListener('click',()=>{closeMenus();scrollToId(b.dataset.jump)}));
+document.querySelectorAll('[data-theme]').forEach(b=>b.addEventListener('click',()=>{document.body.dataset.theme=b.dataset.theme;localStorage.setItem('iw.theme',b.dataset.theme);TrayRuntime.scheduleSave();closeMenus()}));
+document.querySelectorAll('[data-command]').forEach(button=>button.addEventListener('click',()=>{
+  const cmd=button.dataset.command;closeMenus();
+  if(cmd==='refresh')refreshAll();
+  else if(cmd==='open-vault')toggleVault();
+  else if(cmd==='new-project')scrollToId('workspace');
+  else if(cmd==='reflow'||cmd==='compact-layout')cycleTrayGeometry();
+  else if(cmd==='reset-layout'){TrayRuntime.snapshot();TrayRuntime.applyLayout(0,true);TrayRuntime.saveActiveWorkspace(false)}
+  else if(cmd==='undo-layout')TrayRuntime.undo();
+  else if(cmd==='scatter')TrayRuntime.scatter();
+  else if(cmd==='save-layout')TrayRuntime.saveActiveWorkspace();
+  else if(cmd==='import-layout')document.getElementById('layoutImport')?.click();
+  else if(cmd==='export-layout')TrayRuntime.exportLayout();
+  else if(cmd==='toggle-labels'){document.body.dataset.labels=document.body.dataset.labels==='off'?'on':'off';localStorage.setItem('iw.labels',document.body.dataset.labels)}
+  else if(cmd==='toggle-motion'){document.body.dataset.motion=document.body.dataset.motion==='reduced'?'full':'reduced';localStorage.setItem('iw.motion',document.body.dataset.motion)}
+  else if(cmd==='material-cycle'){TrayRuntime.cards.forEach((card,i)=>card.dataset.material=TrayRuntime.materials[(TrayRuntime.materials.indexOf(card.dataset.material)+1+i%2)%TrayRuntime.materials.length]);TrayRuntime.scheduleSave()}
+  else if(cmd==='spotlight-prime'){const card=document.getElementById('ceremony');TrayRuntime.bringFront(card);if(document.body.dataset.motion!=='reduced')card.animate([{filter:'brightness(1)'},{filter:'brightness(1.35) drop-shadow(0 0 28px #d8b267)'},{filter:'brightness(1)'}],{duration:1100})}
+}));
+document.addEventListener('keydown',event=>{
+  const tag=event.target?.tagName?.toLowerCase();if(['input','textarea','select'].includes(tag))return;
+  if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='s'){event.preventDefault();TrayRuntime.saveActiveWorkspace()}
+  if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='z'){event.preventDefault();TrayRuntime.undo()}
+  if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='r'){event.preventDefault();refreshAll()}
+  if(event.altKey&&['1','2','3','4','5'].includes(event.key)){event.preventDefault();scrollToId(['overview','workspace','labcopy','ceremony','evidence'][Number(event.key)-1])}
+  if(event.key==='Escape'){closePromotionModal();closeMenus()}
+});
+const GlobeRuntime={materials:['obsidian','crystal','wood','marble'],index:0,init(){const globe=document.getElementById('heirloomGlobe');if(!globe)return;globe.addEventListener('click',()=>{this.index=(this.index+1)%this.materials.length;globe.dataset.globeMaterial=this.materials[this.index];globe.querySelector('.globe-caption').textContent=({obsidian:'Custody Atlas',crystal:'Crystal Atlas',wood:'Archive Atlas',marble:'Marble Atlas'})[this.materials[this.index]];});}};
+window.addEventListener('load',()=>{TrayRuntime.init();tuneMechanicalBubbles();GlobeRuntime.init()});
+
+
+
+/* ===== Active Cinematic Lighting Runtime ===== */
+const LightingRuntime={
+  shell:null,field:null,cards:[],particles:[],pointer:{x:.62,y:.18},target:{x:.62,y:.18},raf:0,lastParticleTick:0,
+  init(){
+    this.shell=document.querySelector('.shell');this.field=document.querySelector('.tray-field');if(!this.shell||!this.field)return;
+    this.cards=[...this.field.querySelectorAll('.card')];
+    const ambient=document.createElement('div');ambient.className='ambient-light-field';ambient.setAttribute('aria-hidden','true');
+    const particles=document.createElement('div');particles.className='particle-field';particles.setAttribute('aria-hidden','true');
+    this.shell.prepend(particles);this.shell.prepend(ambient);this.particleLayer=particles;
+    this.cards.forEach((card,i)=>this.decorateCard(card,i));
+    this.createLanterns();this.seedParticles(26);
+    this.shell.addEventListener('pointermove',e=>{const r=this.shell.getBoundingClientRect();this.target.x=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));this.target.y=Math.max(0,Math.min(1,(e.clientY-r.top)/r.height))},{passive:true});
+    this.shell.addEventListener('pointerleave',()=>{this.target.x=.62;this.target.y=.18});
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!this.raf)this.tick(performance.now())});
+    this.tick(performance.now());
+  },
+  decorateCard(card,i){
+    const skin=document.createElement('div');skin.className='light-skin';skin.setAttribute('aria-hidden','true');
+    skin.innerHTML='<i class="specular"></i><i class="edge-light"></i><i class="occlusion"></i><i class="micro-shimmer"></i><i class="rim-spark"></i>';
+    card.prepend(skin);if(i===0||i===4||i===6)card.classList.add('backlit');
+  },
+  createLanterns(){
+    const points=[[.025,.035],[.97,.16],[.74,.73]];
+    points.forEach(([x,y],i)=>{const l=document.createElement('div');l.className='lantern-emitter';l.style.left=`calc(${x*100}% - 14px)`;l.style.top=`calc(${y*100}% - 14px)`;l.style.animationDelay=`-${i*.77}s`;this.shell.appendChild(l)});
+  },
+  seedParticles(count){
+    const colors=['255,226,166','135,213,255','255,255,255'];
+    for(let i=0;i<count;i++){
+      const p=document.createElement('i');p.className='light-particle';
+      const size=(1+Math.random()*2.8).toFixed(2)+'px';
+      p.style.setProperty('--p-size',size);p.style.setProperty('--p-color',colors[i%colors.length]);p.style.setProperty('--p-alpha',(0.12+Math.random()*.36).toFixed(2));p.style.setProperty('--p-blur',(Math.random()*1.1).toFixed(2)+'px');
+      p.style.setProperty('--p-duration',(7+Math.random()*13).toFixed(2)+'s');p.style.setProperty('--p-delay',(-Math.random()*12).toFixed(2)+'s');p.style.setProperty('--p-dx',(-18+Math.random()*36).toFixed(1)+'px');p.style.setProperty('--p-dy',(-30+Math.random()*12).toFixed(1)+'px');
+      p.style.left=(2+Math.random()*96).toFixed(2)+'%';p.style.top=(4+Math.random()*92).toFixed(2)+'%';this.particleLayer.appendChild(p);this.particles.push(p);
+    }
+  },
+  tick(now){
+    this.pointer.x+=(this.target.x-this.pointer.x)*.035;this.pointer.y+=(this.target.y-this.pointer.y)*.035;
+    const x=(this.pointer.x*100).toFixed(2)+'%',y=(this.pointer.y*100).toFixed(2)+'%';
+    document.documentElement.style.setProperty('--light-x',x);document.documentElement.style.setProperty('--light-y',y);
+    const sr=this.shell.getBoundingClientRect();
+    this.cards.forEach((card,i)=>{
+      const r=card.getBoundingClientRect(),cx=(r.left+r.width/2-sr.left)/sr.width,cy=(r.top+r.height/2-sr.top)/sr.height;
+      const lx=Math.max(0,Math.min(100,(this.pointer.x-cx+r.width/(2*sr.width))*sr.width/r.width*100));
+      const ly=Math.max(0,Math.min(100,(this.pointer.y-cy+r.height/(2*sr.height))*sr.height/r.height*100));
+      card.style.setProperty('--local-light-x',lx.toFixed(1)+'%');card.style.setProperty('--local-light-y',ly.toFixed(1)+'%');
+      const dx=cx-this.pointer.x,dy=cy-this.pointer.y,dist=Math.hypot(dx,dy)||1;
+      card.style.setProperty('--shadow-x',(dx/dist*13).toFixed(2));card.style.setProperty('--shadow-y',(18+Math.max(0,dy)*16).toFixed(2));
+    });
+    if(now-this.lastParticleTick>1800){this.lastParticleTick=now;this.particles.forEach((p,i)=>{if(Math.random()<.13)p.style.opacity=(.18+Math.random()*.68).toFixed(2)})}
+    this.raf=requestAnimationFrame(t=>this.tick(t));
+  }
+};
+window.addEventListener('load',()=>LightingRuntime.init());
+
+
+/* ===== VectorTrayRenderer: authored SVG construction, not CSS-painted boxes ===== */
+const VectorTrayRenderer={
+  observers:new Map(),
+  palettes:{
+    pearl:{base:'#d8d8d2',mid:'#f7f3e8',deep:'#87939c',rim:'#d6b46d',rimHi:'#fff0b5',line:'#665b4d',glow:'#dff5ff'},
+    sapphire:{base:'#0e2b43',mid:'#315f7a',deep:'#06101b',rim:'#83c8e8',rimHi:'#e7fbff',line:'#a1d8ed',glow:'#64c6ff'},
+    emerald:{base:'#0b2d24',mid:'#1f5a47',deep:'#040d0a',rim:'#c39b4f',rimHi:'#ffe3a0',line:'#d4b46e',glow:'#65d3a2'},
+    amethyst:{base:'#291237',mid:'#663c78',deep:'#0b0710',rim:'#c991de',rimHi:'#f8dbff',line:'#d8a4e5',glow:'#d68cff'},
+    obsidian:{base:'#111216',mid:'#292126',deep:'#030405',rim:'#b87835',rimHi:'#ffd18a',line:'#d29552',glow:'#f09849'},
+    copper:{base:'#4b2015',mid:'#965334',deep:'#140707',rim:'#e19b62',rimHi:'#ffe0b8',line:'#efb37f',glow:'#ff884f'}
+  },
+  path(w,h,variant){
+    const s=Math.max(14,Math.min(34,Math.min(w,h)*.065));
+    if(variant%3===1)return `M ${s*1.7} 2 H ${w-s*1.15} Q ${w-4} 2 ${w-2} ${s*1.15} L ${w-7} ${h-s*1.35} Q ${w-10} ${h-5} ${w-s*1.6} ${h-2} H ${s*.9} Q 3 ${h-5} 2 ${h-s} L 7 ${s*.85} Q 10 4 ${s*1.7} 2 Z`;
+    if(variant%3===2)return `M ${s*.9} 2 H ${w-s*2} L ${w-2} ${s*1.15} V ${h-s*1.2} L ${w-s*1.25} ${h-2} H ${s*1.4} L 2 ${h-s*.75} V ${s*.9} Z`;
+    return `M ${s*1.3} 2 H ${w-s*1.15} Q ${w-3} 3 ${w-2} ${s} V ${h-s*1.15} Q ${w-3} ${h-3} ${w-s*1.15} ${h-2} H ${s} Q 3 ${h-3} 2 ${h-s*1.15} V ${s} Q 3 3 ${s*1.3} 2 Z`;
+  },
+  insetPath(w,h,v,inset){const p=this.path(w-2*inset,h-2*inset,v);return p.replace(/([0-9]+(?:\.[0-9]+)?)/g,m=>String(+m+inset));},
+  build(card,index){
+    let svg=card.querySelector('.tray-illustration');if(!svg){svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.classList.add('tray-illustration');svg.setAttribute('aria-hidden','true');card.prepend(svg)}
+    const w=Math.max(260,card.clientWidth),h=Math.max(120,card.clientHeight),v=index%3,p=this.palettes[card.dataset.material]||this.palettes.pearl;
+    const uid=`tray${index}_${Math.round(w)}_${Math.round(h)}`.replace(/\W/g,'');
+    const outer=this.path(w,h,v),inner=this.path(w-12,h-12,v).replace(/([0-9]+(?:\.[0-9]+)?)/g,m=>String(+m+6));
+    const seam=this.path(w-34,h-34,v).replace(/([0-9]+(?:\.[0-9]+)?)/g,m=>String(+m+17));
+    const rivets=[[18,18],[w-18,18],[18,h-18],[w-18,h-18]];
+    const lines=[];for(let y=88;y<h-30;y+=42)lines.push(`<path d="M 28 ${y} C ${w*.28} ${y-3}, ${w*.58} ${y+4}, ${w-28} ${y}" fill="none" stroke="${p.line}" stroke-opacity=".10" stroke-width=".7" class="engrave"/>`);
+    svg.setAttribute('viewBox',`0 0 ${w} ${h}`);svg.innerHTML=`
+    <defs>
+      <linearGradient id="${uid}body" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${p.mid}"/><stop offset=".22" stop-color="${p.base}"/><stop offset=".72" stop-color="${p.deep}"/><stop offset="1" stop-color="${p.base}"/></linearGradient>
+      <linearGradient id="${uid}rim" x1="0" y1="0" x2="0" y2="1"><stop stop-color="${p.rimHi}"/><stop offset=".22" stop-color="${p.rim}"/><stop offset=".55" stop-color="#5b3b1d"/><stop offset=".78" stop-color="${p.rim}"/><stop offset="1" stop-color="#241408"/></linearGradient>
+      <radialGradient id="${uid}light" cx="24%" cy="10%" r="95%"><stop stop-color="#fff" stop-opacity=".42"/><stop offset=".2" stop-color="${p.glow}" stop-opacity=".16"/><stop offset=".72" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></radialGradient>
+      <filter id="${uid}texture" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency=".012 .19" numOctaves="2" seed="${index+7}" result="n"/><feColorMatrix in="n" values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 .09 0"/><feBlend in="SourceGraphic" mode="soft-light"/></filter>
+      <filter id="${uid}shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="12" stdDeviation="12" flood-color="#000" flood-opacity=".58"/></filter>
+    </defs>
+    <path d="${outer}" fill="url(#${uid}rim)" filter="url(#${uid}shadow)"/>
+    <path d="${inner}" fill="url(#${uid}body)" stroke="${p.rimHi}" stroke-opacity=".72" stroke-width="1.15" filter="url(#${uid}texture)"/>
+    <path d="${inner}" fill="url(#${uid}light)"/>
+    <path d="${seam}" fill="none" stroke="#000" stroke-opacity=".52" stroke-width="3" class="engrave"/>
+    <path d="${seam}" fill="none" stroke="${p.line}" stroke-opacity=".56" stroke-width=".85" class="engrave"/>
+    <path d="M 22 66 C ${w*.26} 58, ${w*.63} 72, ${w-24} 61" fill="none" stroke="${p.rimHi}" stroke-opacity=".38" stroke-width="1" class="engrave"/>
+    ${lines.join('')}
+    ${rivets.map(([x,y])=>`<g class="fastener"><circle cx="${x}" cy="${y}" r="5.4" fill="#171717" stroke="${p.rim}" stroke-width="2"/><path d="M ${x-2.5} ${y} H ${x+2.5}" stroke="${p.rimHi}" stroke-opacity=".75" stroke-width="1"/></g>`).join('')}
+    <path d="M 9 ${h*.35} Q 2 ${h*.5} 9 ${h*.66}" fill="none" stroke="${p.rimHi}" stroke-opacity=".52" stroke-width="1.2" class="engrave"/>
+    <path d="M ${w-9} ${h*.35} Q ${w-2} ${h*.5} ${w-9} ${h*.66}" fill="none" stroke="#000" stroke-opacity=".55" stroke-width="1.4" class="engrave"/>
+    `;
+  },
+  attach(card,index){this.build(card,index);const ro=new ResizeObserver(()=>requestAnimationFrame(()=>this.build(card,index)));ro.observe(card);this.observers.set(card,ro);new MutationObserver(()=>this.build(card,index)).observe(card,{attributes:true,attributeFilter:['data-material','class']});},
+  init(){document.querySelectorAll('.tray-field .card').forEach((c,i)=>this.attach(c,i));}
+};
+window.addEventListener('load',()=>VectorTrayRenderer.init());
+
+</script>
+</body>
+</html>

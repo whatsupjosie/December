@@ -1,0 +1,7 @@
+Rear View Foresight — Private Alpha Source
+
+Copyright (c) 2026. All rights reserved.
+
+This package is supplied for private alpha evaluation and internal development.
+No certification, warranty, legal-evidence guarantee, compliance claim, or fitness
+for a particular purpose is provided.

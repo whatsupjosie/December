@@ -1,0 +1,65 @@
+{
+  "generated_at": "2026-07-19",
+  "inputs": [
+    {
+      "name": "append_only_recorder(1).py",
+      "source_path": "/mnt/data/append_only_recorder(1).py",
+      "size_bytes": 6365,
+      "sha256": "97b01d774925c805e096999c4558516e6afaefe0a339251b0964eef70d1c305a"
+    },
+    {
+      "name": "pubcast_event_adapter(1).py",
+      "source_path": "/mnt/data/pubcast_event_adapter(1).py",
+      "size_bytes": 3373,
+      "sha256": "b10b19ae4fb5e82b0d4a16527782c7c1d2c7dde822ad7f5b9a45a9c69b087e99"
+    },
+    {
+      "name": "README(7).md",
+      "source_path": "/mnt/data/README(7).md",
+      "size_bytes": 924,
+      "sha256": "fae8dc2b9be4100bcd9912f8cea42637e1f947f5d76f94845d5c95c24623b503"
+    },
+    {
+      "name": "__init__(8).py",
+      "source_path": "/mnt/data/__init__(8).py",
+      "size_bytes": 376,
+      "sha256": "5d9845490e70654cae4baa361703ed791e0b67a0e22a389cf8edf3e73712efc4"
+    },
+    {
+      "name": "modules__pub_manager_recovery.py",
+      "source_path": "/mnt/data/modules__pub_manager_recovery.py",
+      "size_bytes": 6019,
+      "sha256": "90112c3bdda931c54ef49fc8069f323fa4c38cc7ecf7f98e2277100d0c641ab4"
+    },
+    {
+      "name": "tests__test_pub_manager_recovery.py",
+      "source_path": "/mnt/data/tests__test_pub_manager_recovery.py",
+      "size_bytes": 1359,
+      "sha256": "3943d9ff6d89a318113c3371632ea1c5143cb595bdfdba73bda4242870a6ab5c"
+    },
+    {
+      "name": "config__ai_runtime.json",
+      "source_path": "/mnt/data/config__ai_runtime.json",
+      "size_bytes": 1732,
+      "sha256": "c507bdba810ed83a36d81f4cdf6a687dd19d55b84f342d99d8b4b78e27e69f71"
+    },
+    {
+      "name": "config__menu_coverage.json",
+      "source_path": "/mnt/data/config__menu_coverage.json",
+      "size_bytes": 2688,
+      "sha256": "608c712bc1c370d69def2acddf30a45496900ad0abb326da73e74fbfa128bbf4"
+    },
+    {
+      "name": "main(6).py",
+      "source_path": "/mnt/data/main(6).py",
+      "size_bytes": 148617,
+      "sha256": "65478b20655da58befe8b65c515ba2364e8e940ab00afe48237d79d7b3f40e54"
+    },
+    {
+      "name": "IterationWallet_BlackBox_Complete_Gathering_20260719_DELIVERABLE.zip",
+      "source_path": "/mnt/data/library_materialized/IterationWallet_BlackBox_Complete_Gathering_20260719_DELIVERABLE.zip",
+      "size_bytes": 1978757,
+      "sha256": "d0a41b61e354a1119891383905a429b44cd8714dd3336b7de3955f221887ef55"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "architecture": "single-installed-blackbox-authority",
+  "blackbox_distribution": "bbx1-iteration-wallet-plugin",
+  "blackbox_version": "0.6.0a4",
+  "client_schema": "bbx1-client/1",
+  "core_package_owner": "bbx1-iteration-wallet-plugin",
+  "wallet_adapter_package": "iteration_wallet_blackbox",
+  "wallet_adapter_owner": "iteration-wallet",
+  "wallet_wheel_contains_blackbox_core": false,
+  "blackbox_wheel_contains_wallet_adapter": false,
+  "host_adapters_live_with_hosts": true,
+  "evidence_transport": "local-in-process",
+  "authority_note": "Wallet owns custody and event meaning; BlackBox owns canonical validation, append, verification, and receipts. Neither wheel owns the other product's package files."
+}
