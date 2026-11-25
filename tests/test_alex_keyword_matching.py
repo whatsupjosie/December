@@ -133,9 +133,10 @@ def test_correction_is_not_stored_as_a_negative_memory(alex):
     assert "negative" not in tags and "distress" not in tags, tags
 
 
-@pytest.mark.xfail(strict=True, reason="Known limit of _keyword_hit, not fixed on 2026-11-13: "
-                   "the three-word negation window crosses a comma, so the 'not' before "
-                   "'happy' also cancels 'angry'. Changing the window is a matcher design "
-                   "decision that also affects the stress and fatigue reads.")
-def test_negation_window_does_not_cross_a_clause_boundary(alex):
-    assert alex._estimate_valence("I'm not happy, I'm angry.") == -1.0
+@pytest.mark.parametrize("text,expected", [
+    ("I'm not happy, I'm angry.", -1.0),
+    ("I'm not angry. Happy to help.", 1.0),
+    ("I'm not sad, angry.", 0.0),
+])
+def test_negation_window_respects_clause_and_list_boundaries(alex, text, expected):
+    assert alex._estimate_valence(text) == expected

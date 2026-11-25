@@ -51,6 +51,26 @@ def media_duration(video, info):
     return end - start, "packets"
 
 
+def minimum_tone_amplitude(samples, frequency):
+    # Independent guest clocks can change phase within a second. Require the
+    # tone in every complete 50 ms window at the same amplitude threshold.
+    window = 2400
+    assert len(samples) >= 43200, "Less than 900 ms of decoded audio"
+    return min(amplitude(samples[start:start + window], frequency)
+               for start in range(0, len(samples) - window + 1, window))
+
+
+def test_tone_check_detects_dropped_audio_and_accepts_phase_changes():
+    t = np.arange(48000) / 48000
+    samples = .12 * np.sin(2 * np.pi * 440 * t)
+    samples[24000:] *= -1
+    assert amplitude(samples, 440) < .01
+    assert minimum_tone_amplitude(samples, 440) > .01
+    assert minimum_tone_amplitude(samples, 880) < .01
+    samples[24000:26400] = 0
+    assert minimum_tone_amplitude(samples, 440) < .01
+
+
 def download_selected(page, selection, destination):
     previous_url = page.locator("#playback").get_attribute("src")
     selection.click()
@@ -158,7 +178,7 @@ def test_thirty_minute_program_two_admitted_peers_and_reload(studio,production_b
         assert duration >= target_seconds
         for at in [1,duration*.4,max(1,duration-2)]:
             decoded=subprocess.run(['ffmpeg','-v','error','-ss',str(at),'-i',str(video),'-t','1','-vn','-ac','1','-ar','48000','-f','f32le','pipe:1'],capture_output=True,check=True,timeout=45)
-            samples=np.frombuffer(decoded.stdout,dtype='<f4');values=[amplitude(samples,f) for f in [440,880]]
+            samples=np.frombuffer(decoded.stdout,dtype='<f4');values=[minimum_tone_amplitude(samples,f) for f in [440,880]]
             report.setdefault('decoded_audio',[]).append({'at':at,'amplitudes':values});assert all(v>.01 for v in values)
         page.reload();page.wait_for_function("document.documentElement.dataset.production25d==='ready'")
         restored = tmp_path / 'endurance-reopened.webm'

@@ -936,7 +936,11 @@ class AlexCore:
         and errs toward noticing."""
         for word in words:
             for m in re.finditer(r"(?<![\w'])" + re.escape(word) + r"(?![\w'])", text):
-                before = re.findall(r"[a-z']+", text[max(0, m.start() - 40):m.start()])[-3:]
+                prefix = text[max(0, m.start() - 40):m.start()]
+                # A new sentence or a comma followed by a new subject ends
+                # the old negation. A comma in a list can still share it.
+                clause = re.split(r"[.!?;\n]|,\s*(?=(?:i|you|we|they|he|she|it)\b)", prefix)[-1]
+                before = re.findall(r"[a-z']+", clause)[-3:]
                 if any(tok in cls._NEGATORS for tok in before):
                     continue
                 return True
