@@ -1,0 +1,489 @@
+diff --git a/docs/PUBPARTNER_CARTRIDGE_CONTINUITY_2026-11-22.md b/docs/PUBPARTNER_CARTRIDGE_CONTINUITY_2026-11-22.md
+new file mode 100644
+--- /dev/null
++++ b/docs/PUBPARTNER_CARTRIDGE_CONTINUITY_2026-11-22.md
+@@ -0,0 +1,67 @@
++# PubPartner cartridge continuity: reconciliation and activation
++**Branch:** `feat/pubpartner-cartridge-context-2026-11-22` from `whatsupjosie/pre-dec` main
++**Status:** implementation written to isolated branch. Local bridge smoke test passed using a stand-in for the existing loader. Full PubPartner startup, current repository pytest, real provider and browser tests have **not** been executed in this environment.
++
++## What was inspected
++- `pubpartner/cartridge.py`: validated YAML character, voice, appearance, seed JSONL; creates/reuses `memories.db`.
++- `pubpartner/memory_store.py`: existing SQLite store and offline TF-IDF + recency + importance ranking.
++- `pubpartner/portable_runtime.py`: independent standalone loop that stores user turns as episodic memories; not the FCP1 app's memory admission policy.
++- `modules/pubpartner_cartridges.py`: creates a cartridge and registers its friend profile; routes existed but were missing from the minimal `pubpartner_app.py`.
++- `modules/pubpartner_core.py`: VerbatimVault, user-owned work notes, relationship lessons and FCP1, plus Alex vessel binding.
++- `modules/pubpartner_vessel/{runtime,memory,context}.py`: Alex's evidence-backed and correction-capable vessel. This is a separate authority, not a source to flatten into generic cartridge DBs.
++- `modules/alex_memory.py`: specialist Alex recall and emotional state.
++- `modules/cc_memory_store.py`: Code Collector *engineering/code-session* memory, not the correct authority for a companion's personal or project memory.
++- `modules/universal_memory_system.py`: per-character / room-conductor memory, separate from user-owned relationship continuity.
++- `docs/PUBPARTNER_PROJECT_NOTES_2026-11-19.md`: saved notes per user/project, draft autosaves, no unreviewed draft given to the model.
++- `docs/alex_eq_2026-11-10/PUBPARTNER_MEMORY_EVALUATION_2026-11-10.txt`: historical limitation that saved conversation history wasn't recalled across new sessions.
++
++## Authority map
++| State | Authority | Do not do |
++| --- | --- | --- |
++| Original user text | VerbatimVault | Do not summarize or overwrite the raw source. |
++| Replies/receipt trail | PubPartner turn log / receipts | Do not claim all replies are sealed like user text. |
++| User/project decisions | WorkNotesStore | Do not put drafts or project IP in the character cartridge. |
++| User/companion relationship | RelationshipEngine / authorized vessel | Do not write other users' private data into a shared cartridge. |
++| Character's authored identity/voice/seed memories | Cartridge YAML and `memories.db` | Do not substitute CC or universal scene memory as a new master. |
++| Studio scene characters | UniversalMemorySystem | Do not treat it as the user's personal journal. |
++| Code/engineering capture | Code Collector | Keep its context store separate. |
++
++## Exact reversible changes
++1. **`pubpartner_app.py`** mounts existing `create_pubpartner_cartridge_router(DATA_DIR)` in the local control plane, preserving authentication.
++2. **`modules/pubpartner_cartridge_context.py`** checks the server-side registered friend profile and canonical cartridge folder; uses the existing `load_cartridge()` and `MemoryStore.query()` rather than inventing new store/ranking. It reads authored identity, voice and appearance, with bounded fields, and includes cartridge memories **only** for the recorded creator in a private turn.
++3. **`modules/pubpartner_core.py`** incorporates the loaded cartridge into FCP1, carries the canonical character fields to providers, and merges cartridge laws into the friend profile without replacing authored friend instructions. Failures report `cartridge_context.status=error` without destroying the verbatim turn path.
++4. **`tests/test_pubpartner_cartridge_context.py`** tests identity, recall, isolation, path rejection and FCP1 integration.
++
++No databases, canonical Alex vessel, project notes, personal records, old cartridges, or models were migrated or replaced.
++
++## How to activate on a local computer
++Use a working copy of `whatsupjosie/pre-dec` at this branch, with its dependencies installed.
++
++```bash
++git fetch origin
++git switch feat/pubpartner-cartridge-context-2026-11-22
++python run_pubpartner.py --preflight
++python run_pubpartner.py
++```
++
++Then open the locally served `http://127.0.0.1:8000/pubpartner`. Use the existing **File → New Cartridge** workflow. New characters are stored in `data/pubpartner/cartridges/<id>`; their friend profiles are registered alongside them.
++
++The app is loopback-only by default and authenticated unless explicitly opted out. Do not expose the server publicly or disable authentication. A real generative response still requires a configured working model/provider; offline diagnostic/mock responses are not proof of model quality.
++
++### Readback checks
++- `GET /api/pubpartner/cartridges` works for an authenticated user.
++- Select the created character and send a private turn using an appropriate working provider.
++- The turn's `cartridge_context.status` should be `ok`; `fcp1.cartridge` should match the YAML.
++- When the creator has stored eligible cartridge memories, `fcp1.m` should include entries with `src=character_cartridge`. Other users or shared rooms must not receive them.
++- Verify the original message restores byte-for-byte through VerbatimVault, and that restarting doesn't lose the cartridge/profile/DB.
++- Run `pytest -q tests/test_pubpartner_cartridge_context.py tests/pubpartner_core/test_memory_store.py tests/test_pubpartner_cartridges.py` in an environment containing all program dependencies. The latter suite includes browser cases and may need a browser installation.
++
++## Next merge stages, not claimed complete
++1. Verify real app startup, authenticated HTTP routes, UI creation, provider turn, reload, model swap, and user isolation on the exact PR head. Run independent browser/phone acceptance.
++2. Audit whether **new** cartridges should have their own evidence-backed, per-user vessel memory, using the existing vessel infrastructure and authorization. The present change gives them authored character memory and separately already-existing user/work relationship memory, not Alex's full vessel automatically.
++3. Reconcile portable-runtime automatic episodic capture with core's explicit lesson admission. Do **not** blindly import every old chat as an accepted biographical memory.
++4. Extend cross-session conversation retrieval by user/project/friend from existing original logs and work notes; add cited provenance, correction, superseding, deletion controls and token budgeting.
++5. Independently check migration/backups/rollback, path traversal, cross-account permissions, model fallback, corruption, file locks and Windows/offline operation before offering a merge to main.
++
++## Rollback
++Don't merge until accepted. Delete/close the proposed branch if rejected; current main stays unchanged. If merged later, revert only the commits in this branch, preserving all existing databases and user-generated cartridge folders.
+diff --git a/modules/pubpartner_cartridge_context.py b/modules/pubpartner_cartridge_context.py
+new file mode 100644
+--- /dev/null
++++ b/modules/pubpartner_cartridge_context.py
+@@ -0,0 +1,176 @@
++"""Bridge authored PubPartner cartridges into the FCP1 live-turn pathway.
++
++Cartridge files remain the authority for character identity and voice. The
++cartridge's SQLite store is only read here; user-specific relationship facts
++remain in RelationshipEngine / the owner's vessel, never in a shared cartridge.
++No database schema migration or replacement is performed.
++"""
++from __future__ import annotations
++
++import json
++import re
++from dataclasses import dataclass
++from pathlib import Path
++from typing import Any, Optional
++
++_CARTRIDGE_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{1,47}$")
++_MAX_FILE_BYTES = 64 * 1024
++_MAX_MEMORIES = 6
++_MAX_SUMMARY = 480
++_MAX_FIELD = 240
++
++
++class CartridgeContextError(RuntimeError):
++    """A registered cartridge is broken or its files are inaccessible."""
++
++
++@dataclass(frozen=True)
++class CartridgeRecall:
++    cartridge: dict[str, Any]
++    memories: tuple[dict[str, Any], ...]
++    owner_matched: bool
++
++
++class CartridgeContextBridge:
++    """Read-only turn context for an existing, registered character cartridge.
++
++    There is intentionally no code here to learn from conversations. Verbatim
++    archival, explicit lessons, work notes, and user-owned memory already have
++    their own authors and retention/authorization policies in PubPartner.
++    """
++
++    def __init__(self, data_dir: str | Path):
++        self.data_dir = Path(data_dir).resolve()
++        self.root = (self.data_dir / "pubpartner" / "cartridges").resolve()
++        self.profile_root = (self.data_dir / "pubpartner" / "profiles" / "friends").resolve()
++
++    def _profile(self, friend_id: str) -> Optional[dict[str, Any]]:
++        if not _CARTRIDGE_ID.fullmatch(friend_id):
++            return None
++        path = self.profile_root / f"{friend_id}.json"
++        if not path.is_file() or path.is_symlink():
++            return None
++        if path.stat().st_size > _MAX_FILE_BYTES:
++            raise CartridgeContextError("registered friend profile is too large")
++        try:
++            result = json.loads(path.read_text(encoding="utf-8"))
++        except (OSError, UnicodeError, ValueError) as exc:
++            raise CartridgeContextError("registered friend profile is unreadable") from exc
++        if not isinstance(result, dict):
++            raise CartridgeContextError("registered friend profile must be an object")
++        registration = result.get("cartridge")
++        if not isinstance(registration, dict):
++            return None
++        if registration.get("id") != friend_id or registration.get("format") != "pubpartner-cartridge":
++            raise CartridgeContextError("friend-to-cartridge registration mismatch")
++        if registration.get("path") != f"pubpartner/cartridges/{friend_id}":
++            raise CartridgeContextError("friend cartridge path is not canonical")
++        return result
++
++    def resolve(
++        self,
++        *,
++        friend_id: str,
++        user_id: str,
++        query: str,
++        audience: str,
++        max_memories: int = 4,
++    ) -> Optional[CartridgeRecall]:
++        profile = self._profile(str(friend_id))
++        if profile is None:
++            return None
++        folder = self.root / friend_id
++        if not folder.is_dir() or folder.is_symlink() or folder.resolve().parent != self.root:
++            raise CartridgeContextError("registered cartridge folder is missing or unsafe")
++        for name in ("character.yaml", "voice_profile.yaml", "appearance.yaml", "memories.db", "memories.jsonl"):
++            target = folder / name
++            if target.is_symlink():
++                raise CartridgeContextError(f"cartridge contains symlink: {name}")
++        for name in ("character.yaml", "voice_profile.yaml", "appearance.yaml", "memories.jsonl"):
++            target = folder / name
++            if target.is_file() and target.stat().st_size > _MAX_FILE_BYTES:
++                raise CartridgeContextError(f"cartridge file exceeds allowed size: {name}")
++        # Only the authenticated creator can receive memories from the
++        # cartridge's shared SQLite file. Other users can see the public
++        # character definition without receiving its stored recollections.
++        registration = profile["cartridge"]
++        owner = str(registration.get("created_by") or "")
++        owner_matched = bool(owner) and owner == str(user_id)
++        # The existing loader is authoritative for validation and its SQLite
++        # retrieval algorithm. Reusing it avoids another competing ranker.
++        from pubpartner.cartridge import CartridgeValidationError, load_cartridge
++
++        try:
++            cartridge = load_cartridge(folder)
++        except (CartridgeValidationError, OSError, ValueError, RuntimeError) as exc:
++            raise CartridgeContextError(f"cartridge load failed: {type(exc).__name__}") from exc
++        try:
++            d = cartridge.definition
++            kernel = {
++                "id": friend_id,
++                "name": d.identity.name[:80],
++                "summary": d.identity.summary[:_MAX_SUMMARY],
++                "values": [v[:_MAX_FIELD] for v in d.identity.values[:16]],
++                "boundaries": [v[:_MAX_FIELD] for v in d.identity.boundaries[:16]],
++                "tendencies": [v[:_MAX_FIELD] for v in d.identity.tendencies[:16]],
++                "voice": {
++                    "cadence": d.voice.cadence[:_MAX_FIELD],
++                    "vocabulary": d.voice.vocabulary[:_MAX_FIELD],
++                    "verbal_tics": [v[:_MAX_FIELD] for v in d.voice.verbal_tics[:16]],
++                    "sentence_length": d.voice.sentence_length[:_MAX_FIELD],
++                    "formality": d.voice.formality[:_MAX_FIELD],
++                },
++                "appearance": {
++                    "description": d.appearance.description[:_MAX_SUMMARY],
++                    "details": [v[:_MAX_FIELD] for v in d.appearance.details[:16]],
++                },
++                "memory_policy": "creator_only_private_turns",
++            }
++            rows = []
++            count = min(max(0, int(max_memories)), _MAX_MEMORIES)
++            if owner_matched and audience == "private" and count:
++                for scored in cartridge.memory.query(str(query), top_k=count):
++                    m = scored.memory
++                    rows.append({
++                        "id": f"cartridge:{friend_id}:{m.id}",
++                        "kind": str(m.memory_type),
++                        "text": m.text,
++                        "importance": max(1, min(10, round(m.importance * 10))),
++                        "source": "character_cartridge",
++                    })
++            return CartridgeRecall(kernel, tuple(rows), owner_matched)
++        finally:
++            cartridge.close()
++
++    @staticmethod
++    def enrich_friend(friend: dict[str, Any], recalled: CartridgeRecall) -> dict[str, Any]:
++        """Preserve an authored friend profile while supplying cartridge laws.
++
++        The full cartridge is also included independently in the FCP1 packet;
++        merged values here reach older provider prompts that only read f.
++        """
++        out = dict(friend)
++        c = recalled.cartridge
++        out.setdefault("self_concept", c["summary"])
++        out.setdefault("display_name", c["name"])
++        base = list(out.get("principles") or out.get("law") or [])
++        for value in c["values"]:
++            entry = "Value: " + value
++            if entry not in base:
++                base.append(entry)
++        for value in c["tendencies"]:
++            entry = "Tendency: " + value
++            if entry not in base:
++                base.append(entry)
++        out["principles"] = base[:16]
++        boundaries = list(out.get("boundaries") or out.get("bound") or [])
++        for value in c["boundaries"]:
++            if value not in boundaries:
++                boundaries.append(value)
++        out["boundaries"] = boundaries[:16]
++        cadence = list(out.get("cadence") or out.get("cad") or [])
++        for entry in (c["voice"]["cadence"], "Vocabulary: " + c["voice"]["vocabulary"]):
++            if entry and entry not in cadence:
++                cadence.append(entry)
++        out["cadence"] = cadence[:16]
++        return out
+diff --git a/modules/pubpartner_core.py b/modules/pubpartner_core.py
+--- a/modules/pubpartner_core.py
++++ b/modules/pubpartner_core.py
+@@ -52,6 +52,7 @@
+ from .pubpartner_relationship import RelationshipEngine
+ from .pubpartner_knowledge import PubPartnerKnowledgeBroker
+ from .pubpartner_work_notes import WorkNotesStore
++from .pubpartner_cartridge_context import CartridgeContextBridge
+ from .companion_advisory import CompanionAdvisor
+ 
+ FCP_VERSION = "FCP1"
+@@ -541,6 +542,7 @@ class FCP1Packet:
+     vessel_context: Dict[str, Any] = field(default_factory=dict)
+     conversation: List[Dict[str, str]] = field(default_factory=list)
+     work_notes: Dict[str, Any] = field(default_factory=dict)
++    cartridge: Dict[str, Any] = field(default_factory=dict)
+     created_at: float = field(default_factory=_now)
+ 
+     def canonical(self, *, include_source_text: bool = False) -> Dict[str, Any]:
+@@ -587,6 +589,8 @@ def canonical(self, *, include_source_text: bool = False) -> Dict[str, Any]:
+         # users without notes are byte-for-byte what they were before.
+         if self.work_notes:
+             packet["notes"] = self.work_notes
++        if self.cartridge:
++            packet["cartridge"] = self.cartridge
+         return packet
+ 
+     def as_compact_text(self, *, include_source_text: bool = True) -> str:
+@@ -598,6 +602,8 @@ def j(value: Any) -> str:
+         lines.append(f"lang={data['lang']}")
+         lines.append(f"u={j(data['u'])}")
+         lines.append(f"f={j(data['f'])}")
++        if data.get("cartridge"):
++            lines.append(f"cartridge={j(data['cartridge'])}")
+         if data["m"]:
+             lines.append(f"m={j(data['m'])}")
+         lines.append(f"proj={j(data['proj'])}")
+@@ -686,6 +692,7 @@ def __init__(
+         # User-owned project notes: shared by every friend and model the user
+         # talks to, never stored inside a character cartridge or vessel.
+         self.work_notes = WorkNotesStore(self.data_dir)
++        self.cartridges = CartridgeContextBridge(self.data_dir)
+ 
+     def _default_vessel_friend(self) -> Dict[str, Any]:
+         """Combine the single authored Alex voice with her persistent vessel.
+@@ -829,6 +836,37 @@ async def build_turn_packet(
+         if friend is None and self.vessel_runtime is not None:
+             friend = self._default_vessel_friend()
+         friend = self.profiles.resolve_friend(friend)
++        # A cartridge is an authored character definition, not a new owner for
++        # private user memory. The existing loader validates it, and any
++        # stored cartridge recollections are exposed only to its creator in
++        # private turns. Relationship lessons remain in RelationshipEngine.
++        cartridge_context: Dict[str, Any] = {}
++        cartridge_memory_refs: List[MemoryRef] = []
++        cartridge_status: Dict[str, Any] = {"status": "not_cartridge", "in_context": 0}
++        try:
++            found = self.cartridges.resolve(
++                friend_id=str(friend.get("friend_id") or friend.get("id") or ""),
++                user_id=user_id,
++                query=message,
++                audience=_turn_audience(task, room_id),
++                max_memories=min(max_memories, 4),
++            )
++            if found is not None:
++                friend = self.cartridges.enrich_friend(friend, found)
++                cartridge_context = found.cartridge
++                cartridge_memory_refs = [MemoryRef(**row) for row in found.memories]
++                cartridge_status = {
++                    "status": "ok",
++                    "in_context": len(cartridge_memory_refs),
++                    "owner_matched": found.owner_matched,
++                }
++        except Exception as exc:
++            # Keep the original friend and verbatim path usable, but expose
++            # cartridge failures instead of quietly pretending it loaded.
++            cartridge_status = {
++                "status": "error", "in_context": 0,
++                "error": f"{type(exc).__name__}: {exc}"[:240],
++            }
+         if self.vessel_runtime is not None and str(friend.get("friend_id") or friend.get("id")) == "alex" and not (friend.get("self_concept") or friend.get("identity")):
+             friend = {**friend, "self_concept": self.vessel_runtime.friend_profile().get("self_concept", "")}
+         user_primer = self.profiles.resolve_user(user_id, user_primer)
+@@ -891,6 +929,7 @@ async def build_turn_packet(
+             self.memory_scope(user_id, profile.friend_id, project_id, room_id),
+             message, history or [], max_memories=max_memories,
+         )
++        memories.extend(cartridge_memory_refs)
+         alex_packet = None
+         whisper = ""
+         if self.alex_bridge is not None:
+@@ -1003,6 +1042,7 @@ async def build_turn_packet(
+             vessel_context=vessel_context,
+             conversation=[{"role": row["role"], "content": row["content"]} for row in (history or [])],
+             work_notes=work_notes_block,
++            cartridge=cartridge_context,
+         )
+         prompt_policy = self.prompt_policy(source, prompt_mode=prompt_mode)
+         llm_prompt_text = packet.as_compact_text(include_source_text=prompt_policy["include_source_text"])
+@@ -1031,6 +1071,7 @@ async def build_turn_packet(
+             "vessel_event_count": len(vessel_context.get("events") or []),
+             "vessel_recorded_event_id": vessel_event_id,
+             "work_notes_context": work_notes_status,
++            "cartridge_context": cartridge_status,
+         }
+         if log_turn:
+             if companion is not None:
+diff --git a/pubpartner_app.py b/pubpartner_app.py
+--- a/pubpartner_app.py
++++ b/pubpartner_app.py
+@@ -32,6 +32,7 @@
+     create_pub_manager_control_router,
+ )
+ from modules.pubpartner_backup import create_friend_backup
++from modules.pubpartner_cartridges import create_pubpartner_cartridge_router
+ from modules.pubpartner_vessel import PubPartnerVesselRuntime
+ 
+ try:
+@@ -147,6 +148,7 @@ async def execute_engineering_action(row: dict[str, Any]) -> dict[str, Any]:
+     # yields, so the control plane is live before the first request is served.
+     if not getattr(app.state, "control_plane_routes_registered", False):
+         app.include_router(alex_routes.router)
++        app.include_router(create_pubpartner_cartridge_router(DATA_DIR))
+         app.include_router(create_pub_manager_authority_router(pub_manager, alex_bridge))
+         app.include_router(create_pub_manager_control_router(pub_manager, alex_bridge))
+         app.include_router(
+diff --git a/tests/test_pubpartner_cartridge_context.py b/tests/test_pubpartner_cartridge_context.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test_pubpartner_cartridge_context.py
+@@ -0,0 +1,105 @@
++"""Cartridge identity and memory must reach FCP1 without crossing users/rooms."""
++from __future__ import annotations
++
++from pathlib import Path
++
++import pytest
++
++from modules.pubpartner_cartridge_context import (
++    CartridgeContextBridge,
++    CartridgeContextError,
++)
++from modules.pubpartner_profiles import PubPartnerProfileStore
++from modules.pubpartner_core import PubPartnerSpine
++from pubpartner.cartridge import init_cartridge, load_cartridge
++
++
++def _make(tmp_path: Path, owner: str = "author") -> Path:
++    cart_dir = tmp_path / "pubpartner" / "cartridges" / "nova"
++    init_cartridge(cart_dir, "Nova", "A curious radio host", "slow and crisp", "radio slang")
++    (cart_dir / "character.yaml").write_text(
++        "name: Nova\nsummary: A curious radio host\nvalues:\n  - Never invent a guest's history\n"
++        "boundaries:\n  - Do not fabricate memories\ntendencies:\n  - Ask about music\n", encoding="utf-8"
++    )
++    with load_cartridge(cart_dir) as cartridge:
++        cartridge.memory.add("Nova once discovered a rare synth in the attic.", "episodic", importance=0.9)
++        cartridge.memory.add("Nova loves 1940s radio plays.", "semantic", importance=0.7)
++    profiles = PubPartnerProfileStore(tmp_path)
++    profiles.save_profile("friend", "nova", {
++        "id": "nova", "display_name": "Nova", "self_concept": "A curious radio host",
++        "tone": ["warm"], "cadence": ["slow"], "boundaries": ["Respect the user"],
++        "cartridge": {"id": "nova", "format": "pubpartner-cartridge",
++                      "path": "pubpartner/cartridges/nova", "created_by": owner},
++    })
++    return cart_dir
++
++
++def test_registered_cartridge_recalls_identity_voice_and_memories(tmp_path):
++    _make(tmp_path)
++    bridge = CartridgeContextBridge(tmp_path)
++    recall = bridge.resolve(friend_id="nova", user_id="author", query="synth", audience="private")
++    assert recall and recall.owner_matched
++    assert recall.cartridge["summary"] == "A curious radio host"
++    assert recall.cartridge["voice"]["vocabulary"] == "radio slang"
++    assert recall.cartridge["values"] == ["Never invent a guest's history"]
++    assert recall.memories and recall.memories[0]["id"].startswith("cartridge:nova:")
++    assert recall.memories[0]["source"] == "character_cartridge"
++    enriched = bridge.enrich_friend({"boundaries": ["Respect the user"]}, recall)
++    assert "Respect the user" in enriched["boundaries"]
++    assert "Do not fabricate memories" in enriched["boundaries"]
++    assert "Value: Never invent a guest's history" in enriched["principles"]
++
++
++@pytest.mark.parametrize("request_user,audience", [
++    ("stranger", "private"), ("author", "shared"), ("author", "public")
++])
++def test_cartridge_memories_not_exposed_to_others_or_public_rooms(tmp_path, request_user, audience):
++    _make(tmp_path)
++    recall = CartridgeContextBridge(tmp_path).resolve(
++        friend_id="nova", user_id=request_user, query="synth", audience=audience
++    )
++    assert recall and recall.memories == ()
++    assert recall.cartridge["id"] == "nova"
++
++
++def test_missing_or_unregistered_cartridge_is_not_injected(tmp_path):
++    profiles = PubPartnerProfileStore(tmp_path)
++    assert CartridgeContextBridge(tmp_path).resolve(
++        friend_id="alex", user_id="author", query="synth", audience="private"
++    ) is None
++    profiles.save_profile("friend", "bad", {
++        "id": "bad", "cartridge": {"id": "nova", "format": "pubpartner-cartridge", "path": "../nova"}
++    })
++    with pytest.raises(CartridgeContextError, match="registration mismatch"):
++        CartridgeContextBridge(tmp_path).resolve(friend_id="bad", user_id="author", query="", audience="private")
++
++
++def test_rejects_unsafe_file_links(tmp_path):
++    cart_dir = _make(tmp_path)
++    (cart_dir / "memories.jsonl").unlink()
++    (cart_dir / "memories.jsonl").symlink_to(tmp_path / "out_of_folder")
++    with pytest.raises(CartridgeContextError, match="symlink"):
++        CartridgeContextBridge(tmp_path).resolve(friend_id="nova", user_id="author", query="", audience="private")
++
++
++@pytest.mark.asyncio
++async def test_main_spine_includes_cartridge_in_fcp1_and_keeps_vault(tmp_path):
++    _make(tmp_path)
++    spine = PubPartnerSpine(tmp_path, companion_advisory_enabled=False)
++    result = await spine.build_turn_packet(
++        user_id="author", session_id="test_session", message="Tell me about the synth",
++        friend="nova", room_id="pubpartner", log_turn=False,
++    )
++    packet = result["fcp1"]
++    assert result["cartridge_context"]["status"] == "ok"
++    assert packet["cartridge"]["id"] == "nova"
++    assert "Never invent a guest's history" in packet["cartridge"]["values"]
++    assert any(m["src"] == "character_cartridge" for m in packet["m"])
++    assert "cartridge=" in result["llm_prompt_text"]
++    restored = spine.vault.load(user_id="author", session_id="test_session", source_id=result["source"]["id"])
++    assert restored.text == "Tell me about the synth"
++    other = await spine.build_turn_packet(
++        user_id="other", session_id="test_other", message="Tell me about the synth",
++        friend="nova", room_id="pubpartner", log_turn=False,
++    )
++    assert not any(m["src"] == "character_cartridge" for m in other["fcp1"]["m"])
