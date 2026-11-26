@@ -27,6 +27,8 @@ The next four are collections, not installable parts. They keep each file at its
 
 PEQ and cre_eq are EQ work, so they are in the alex branch, not here.
 
+14. **PubPartner cartridge continuity:** patches/pubpartner-cartridge-context/. Five original donor blobs, source comparison patch and acceptance gates. Newly harvested from `feat/pubpartner-cartridge-context-2026-11-22`; not installed. See `PRE_DEC_HARVEST_LEDGER.md` for the branch review queue.
+
 ## What these parts still need from other branches
 
 Found by reading the import lines of the Python files here (read by script, not run):
