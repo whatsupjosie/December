@@ -1,0 +1,3 @@
+# Operator integration
+
+Exact source/test files selected from pre-dec finish/control-room-operator b4ac093a003e267f49ab30451944279bddc6cd4e. Browser controls and matching dependencies installed together after engine and timeline integration. Script/link dependency closure checked against the resulting tree; no missing local page script references. Donor verification: 82 targeted assertions, 3 isolated browser tests passed, 1 skipped. No fresh end-to-end test of the combined Main Assembly. Performance frame publishing, audio channel wiring, VTR output and 30-minute production acceptance remain to be completed; not a production release declaration.

@@ -8,21 +8,61 @@
 (function initStations() {
   const bar = document.getElementById('stations-bar');
   if (!bar) return;
+  const dock = document.getElementById('director-dock');
+  const summonedArea = document.getElementById('summoned-area');
+  const originalSlots = new Map();
+
+  function syncSwitcherKeys() {
+    const activeTab = bar.querySelector('[data-station].active');
+    const editor = document.getElementById('station-editor');
+    const controlKeys = window.PubCastControlKeys?.km;
+    if (!controlKeys) return;
+    // A docked editor still handles Space for playback.
+    if (activeTab?.dataset.station === 'director' && !originalSlots.has(editor)) {
+      controlKeys.open('switcher');
+    } else {
+      controlKeys.close();
+    }
+  }
+
+  if (dock && summonedArea) {
+    dock.addEventListener('click', event => {
+      const button = event.target.closest('button[data-summon]');
+      if (!button) return;
+      const station = button.dataset.summon;
+      const panel = document.getElementById(`station-${station}`);
+      if (!panel) return;
+
+      const slot = originalSlots.get(panel);
+      if (slot) {
+        slot.replaceWith(panel);
+        originalSlots.delete(panel);
+        const activeTab = bar.querySelector('[data-station].active');
+        panel.classList.toggle('hidden', activeTab?.dataset.station !== station);
+      } else {
+        const placeholder = document.createComment(`Director Dock: ${station}`);
+        panel.before(placeholder);
+        originalSlots.set(panel, placeholder);
+        summonedArea.appendChild(panel);
+        panel.classList.remove('hidden');
+      }
+      button.classList.toggle('active', !slot);
+      button.setAttribute('aria-pressed', String(!slot));
+      if (station === 'editor') syncSwitcherKeys();
+    });
+  }
+
   bar.addEventListener('click', e => {
     const btn = e.target.closest('[data-station]'); if (!btn) return;
     const target = btn.dataset.station;
-    document.querySelectorAll('[id^="station-"]').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('[id^="station-"]').forEach(panel => {
+      panel.classList.toggle('hidden', !originalSlots.has(panel));
+    });
     bar.querySelectorAll('[data-station]').forEach(b => b.classList.remove('active'));
     const panel = document.getElementById(`station-${target}`);
     if (panel) panel.classList.remove('hidden');
     btn.classList.add('active');
-    // This page shares keys with the studio switcher. Keep the switcher
-    // disarmed in the editor: SPACE must PLAY, never cut live Program.
-    const controlKeys = window.PubCastControlKeys?.km;
-    if (controlKeys) {
-      if (target === 'director') controlKeys.open('switcher');
-      else controlKeys.close();
-    }
+    syncSwitcherKeys();
     if (target === 'recorder') loadRecorderStation();
   });
   // Default to director on load
@@ -112,7 +152,7 @@ async function prodPatch(patch) {
   const response = await fetch('/api/state/production', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(patch)
+    body: JSON.stringify(patch),signal:AbortSignal.timeout(15000)
   });
   let data = null;
   try { data = await response.json(); } catch (_) {}
@@ -129,17 +169,20 @@ async function prodPatch(patch) {
   return data;
 }
 
+const stationBusy=new Set();
 async function stationAction(station, buttonId, task, success) {
   const button = document.getElementById(buttonId);
-  if (!button || button.disabled) return;
-  button.disabled = true;
+  if (!button || button.disabled || stationBusy.has(station)) return;
+  stationBusy.add(station);
+  const controls=[...document.querySelectorAll("#station-"+station+" button")].filter(b=>!b.disabled);
+  controls.forEach(b=>b.disabled=true);
   try {
     await task();
     stationFeedback(station, success);
   } catch (error) {
     stationFeedback(station, error.message || 'The command failed', true);
   } finally {
-    button.disabled = false;
+    stationBusy.delete(station);controls.forEach(b=>b.disabled=false);
   }
 }
 
@@ -153,7 +196,13 @@ document.getElementById('chy-apply')?.addEventListener('click', () => stationAct
   }, 'Graphics confirmed in the shared production state'
 ));
 
+document.getElementById('chy-clear')?.addEventListener('click',()=>stationAction('chyron','chy-clear',()=>prodPatch({lower_third:''}),'Lower third cleared in shared production state'));
+
 // ── Teleprompter ──────────────────────────────────────────────────────────────
+document.getElementById('pro-handoff')?.addEventListener('click',()=>{
+  const script=document.getElementById('pro-script')?.value||'';
+  window.PubCastPrompterHandoff.send(script,(message,failed)=>stationFeedback('prompter',message,failed));
+});
 let _proTimer = null;
 document.getElementById('pro-start')?.addEventListener('click', () => {
   const el = document.getElementById('pro-script');
@@ -164,7 +213,7 @@ document.getElementById('pro-start')?.addEventListener('click', () => {
   const inputSpeed = Number(document.getElementById('pro-speed')?.value || 5);
   const speed = Number.isFinite(inputSpeed) ? Math.max(1, Math.min(20, inputSpeed)) : 5;
   if (_proTimer) clearInterval(_proTimer);
-  _proTimer = setInterval(() => { el.scrollTop += speed * 0.4; }, 50);
+  _proTimer = setInterval(() => {const previous=el.scrollTop;el.scrollTop+=speed*0.4;if(el.scrollTop===previous&&el.scrollHeight-el.clientHeight-el.scrollTop<=1){clearInterval(_proTimer);_proTimer=null;stationFeedback("prompter","End of local script");}}, 50);
   stationFeedback('prompter', 'Local teleprompter scrolling');
 });
 document.getElementById('pro-stop')?.addEventListener('click', () => {
@@ -193,7 +242,7 @@ function replayAsset(raw) {
 }
 async function requireReplayAsset(asset) {
   const url = '/assets/' + asset.split('/').map(encodeURIComponent).join('/');
-  const response = await fetch(url, {method: 'HEAD', cache: 'no-store'});
+  const response = await fetch(url, {method: 'HEAD', cache: 'no-store',signal:AbortSignal.timeout(8000)});
   if (!response.ok) throw Error('Replay asset not found: ' + asset + ' (HTTP ' + response.status + ')');
   const type = response.headers?.get('content-type') || '';
   if (type && !type.toLowerCase().startsWith('video/')) {
@@ -201,7 +250,7 @@ async function requireReplayAsset(asset) {
   }
 }
 async function readProductionState() {
-  const response = await fetch('/api/state/production', {cache: 'no-store'});
+  const response = await fetch('/api/state/production', {cache: 'no-store',signal:AbortSignal.timeout(8000)});
   if (!response.ok) throw Error('Cannot read production state (HTTP ' + response.status + ')');
   const result = await response.json();
   if (!result || typeof result !== 'object') throw Error('Invalid production state');
@@ -213,7 +262,8 @@ document.getElementById('vtr-load')?.addEventListener('click', () => stationActi
     await requireReplayAsset(path);
     await prodPatch({mode: 'REPLAY', replay_asset: path, on_air: false});
     document.getElementById('vtr-asset').value = path;
-  }, 'Replay asset verified and loaded; press Play to put it on air'
+    const preview=document.getElementById('vtr-confidence');if(preview){preview.pause();preview.src='/assets/'+path.split('/').map(encodeURIComponent).join('/');preview.hidden=false;}
+  }, 'Replay asset verified and loaded for confidence preview; Play sends the shared replay cue'
 ));
 document.getElementById('vtr-play')?.addEventListener('click', () => stationAction(
   'vtr', 'vtr-play', async () => {
@@ -221,10 +271,10 @@ document.getElementById('vtr-play')?.addEventListener('click', () => stationActi
     if (state.mode !== 'REPLAY' || !state.replay_asset) throw Error('Load a replay asset first');
     await requireReplayAsset(replayAsset(state.replay_asset));
     await prodPatch({on_air: true});
-  }, 'Replay on air (browser playback may require interaction)'
+  }, 'Replay cue acknowledged by host; actual Program playback is not verified'
 ));
 document.getElementById('vtr-stop')?.addEventListener('click', () => stationAction(
-  'vtr', 'vtr-stop', () => prodPatch({on_air: false}), 'Replay taken off air'
+  'vtr', 'vtr-stop', () => prodPatch({on_air: false}), 'Replay stop cue acknowledged; Program playback not independently verified'
 ));
 
 // ── Shared program audio mixer ───────────────────────────────────────────────

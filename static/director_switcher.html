@@ -562,6 +562,8 @@ html.drag-scroll-active,html.drag-scroll-active *{cursor:grabbing!important;user
     <div class="rail-actions">
       <a href="/control">Classic Control</a>
       <a href="/static/control_room.html">Image Console</a>
+      <a href="/static/mini_console.html">On-set Mini Console</a>
+      <button type="button" data-open-production-slate>Production slate</button>
       <a href="/stage">Stage</a>
       <button id="dangerPanelBtn" type="button">Status/Danger</button>
       <button id="publicChatBtn" type="button">Public Chat</button>
@@ -623,6 +625,7 @@ html.drag-scroll-active,html.drag-scroll-active *{cursor:grabbing!important;user
         <div style="height:10px"></div>
         <div class="button-grid cameras" id="programButtons"></div>
         <div style="height:14px"></div>
+        <div id="operatorRecordingOptions" style="margin-bottom:12px"></div><button id="recReconcile" type="button">CHECK TAKE STATUS</button><button id="recRelease" type="button" hidden>RELEASE MISSING TAKE</button>
         <div class="button-grid transport">
           <button class="switch cut-button" type="button" id="cutBtn">CUT</button>
           <button class="switch" type="button" id="fadeBtn">FADE</button>
@@ -654,15 +657,18 @@ html.drag-scroll-active,html.drag-scroll-active *{cursor:grabbing!important;user
           <button class="switch" type="button" data-preset="wrap">Wrap</button>
         </div>
         <div style="height:12px"></div>
+        <div data-operator-timeline style="margin-bottom:12px"></div>
         <div class="event-log" id="eventLog"></div>
       </div>
     </section>
   </main>
 </div>
 <div class="utility-dock">
+  <button type="button" id="openTakeLibrary">Take library</button>
   <button type="button" id="selfTestBtn">Run Console Self-Test</button>
   <button type="button" id="refreshTruthBtn">Refresh Truth</button>
 </div>
+<aside class="side-panel" id="takeLibraryPanel" aria-label="Recording library"><div class="panel-head"><span>Recording library</span><button type="button" data-close="takeLibraryPanel">Close</button></div><div class="panel-body" id="operatorTakeLibrary"></div></aside>
 <aside class="side-panel" id="dangerPanel" aria-label="Status and danger panel">
   <div class="panel-head"><span>Status / Danger</span><button type="button" data-close="dangerPanel">Close</button></div>
   <div class="panel-body" id="dangerBody"></div>
@@ -681,31 +687,48 @@ html.drag-scroll-active,html.drag-scroll-active *{cursor:grabbing!important;user
 <div class="status-toast" id="toast">READY</div>
 
 <script src="/static/studio_console_hotspots.js"></script>
+<script src="/static/operator_recording_controls.js"></script>
+<script src="/static/operator_recording_session.js"></script>
+<script src="/static/operator_recording_library.js"></script>
 <script src="/static/studio25d_remote_feed.js"></script>
+<script src="/static/operator_confidence_guard.js"></script>
 <script>
-const cameras = [
-  {id: "cam1", sourceId: "wide_shot", label: "Camera 1", shot: "Wide"},
-  {id: "cam2", sourceId: "medium_shot", label: "Camera 2", shot: "Host"},
-  {id: "cam3", sourceId: "close_up", label: "Camera 3", shot: "Guest"},
-  {id: "cam4", sourceId: "overhead", label: "Camera 4", shot: "Desk"},
-  {id: "cam5", sourceId: "cam1_ndi", label: "Camera 5", shot: "Stage"}
-];
+const cameras = []; // Populate only with acknowledged server camera IDs.
+const recordingOptions=window.PubCastRecordingControls.mount("operatorRecordingOptions");
+const takeLibrary=window.PubCastRecordingLibrary.mount(document.getElementById("operatorTakeLibrary"));
+let lastPostError="";
 // One audio mixer shared by all studios. These are real server buses, NOT a
 // fabricated separation of individual speakers (host/guest/Pete routing is future work).
 const audio = [
+  {name:"Master",bus:"master",muted:false,volume:1,activeSources:0},
   {name:"Dialogue",bus:"dialogue",muted:false,volume:1,activeSources:0},
   {name:"Music",bus:"music",muted:false,volume:1,activeSources:0},
   {name:"Sound FX",bus:"sfx",muted:false,volume:1,activeSources:0},
-  {name:"VTR",bus:"vtr",muted:false,volume:1,activeSources:0}
+  {name:"VTR",bus:"vtr",muted:false,volume:1,activeSources:0},
+  {name:"Room",bus:"room",muted:false,volume:1,activeSources:0},
+  {name:"UI",bus:"ui",muted:false,volume:1,activeSources:0}
 ];
-let program = "cam1";
-let preview = "cam3";
+let program = "";
+let preview = "";
 let recording = false;
 let paused = false;
 let directorBlackout = false, directorPreviewBars = false;
 let fadeInProgress = false;
 let activeRecordingSessionId = "";
-let clockStart = performance.now();
+// Cameras whose recording did not start or came back with problems. The backend names them
+// (capture_errors when a take starts, capture_report warnings when it stops); a take with any
+// of them is an incomplete take, and the control room says so instead of "REC CONFIRMED".
+let failedRecordingSources = [];
+function startFailures(result){
+  return (Array.isArray(result?.capture_errors) ? result.capture_errors : [])
+    .map(item => String(item?.source_id || item?.source || "a source"));
+}
+function stopFailures(result){
+  return (Array.isArray(result?.capture_report) ? result.capture_report : [])
+    .filter(item => Array.isArray(item?.warnings) && item.warnings.length)
+    .map(item => String(item.source_id || "a source"));
+}
+let clockStart = performance.now(),truthPolling=false,exportBusy=false,exportReceipt=false;
 let backendTruth = {
   health: null,
   studio: null,
@@ -740,6 +763,7 @@ function createRemoteViewer(){
   return window.PubCast25DRemoteFeed.create({targets});
 }
 const remoteViewer=createRemoteViewer();
+const confidenceGuard=window.PubCastConfidenceGuard.create(remoteViewer,()=>backendTruth.switcher);
 const studioActions = window.PubCastStudioConsoleHotspots
   ? new window.PubCastStudioConsoleHotspots.StudioConsoleHotspots()
   : null;
@@ -753,12 +777,15 @@ function headers() {
 
 async function postJSON(url, payload) {
   try {
-    const res = await fetch(url, {method: "POST", headers: headers(), body: JSON.stringify(payload || {})});
-    if (!res.ok) throw new Error(String(res.status));
-    const data = await res.json().catch(() => ({}));
+    const res = await fetch(url, {method: "POST", headers: headers(), body: JSON.stringify(payload || {}),signal:AbortSignal.timeout(url==="/api/production/panic"?120000:15000)});
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(window.PubCastRecordingControls.errorText(data,res.status));
+    if(!data||typeof data!=="object"||Array.isArray(data))throw Error("Invalid JSON receipt");
+    lastPostError="";
     log("backend ok: " + url);
     return data;
   } catch (err) {
+    lastPostError=err.message;
     const msg = `${url} backend unavailable: ${err.message}`;
     backendTruth.failures.push(msg);
     log("visible failure: " + msg);
@@ -768,9 +795,9 @@ async function postJSON(url, payload) {
 
 async function getJSON(url) {
   try {
-    const res = await fetch(url, {headers: headers()});
+    const res = await fetch(url, {headers: headers(),cache:"no-store",signal:AbortSignal.timeout(8000)});
     if (!res.ok) throw new Error("HTTP " + res.status);
-    return await res.json();
+    const data=await res.json();if(!data||typeof data!=="object")throw Error("Invalid JSON response");return data;
   } catch (err) {
     const msg = `${url} unavailable: ${err.message}`;
     backendTruth.failures.push(msg);
@@ -816,7 +843,7 @@ function log(text) {
   const el = document.createElement("div");
   const t = new Date().toLocaleTimeString([], {hour12:false});
   el.textContent = t + "  " + text;
-  $("eventLog").prepend(el);
+  const events=$("eventLog");events.prepend(el);while(events.childElementCount>300)events.lastElementChild.remove();
 }
 
 function setTruthCard(id, state, value, detail) {
@@ -830,23 +857,24 @@ function setTruthCard(id, state, value, detail) {
 
 function renderDangerPanel() {
   const body = $("dangerBody");
-  const lines = [];
-  const healthOk = backendTruth.health && !backendTruth.health.error;
-  lines.push(`<div class="danger-line ${healthOk ? "ok" : "bad"}">Health: ${healthOk ? "OK" : "Unavailable"} ${backendTruth.health?.error || ""}</div>`);
-  lines.push(`<div class="danger-line ${recording ? "bad" : "ok"}">Recording: ${recording ? "LOCAL REC ARMED" : "IDLE"} - visible on truth rail and REC button.</div>`);
-  lines.push(`<div class="danger-line warn">Recording session: ${activeRecordingSessionId || "no backend session confirmed"}</div>`);
-  lines.push(`<div class="danger-line ${backendTruth.mocap?.available ? "ok" : "bad"}">Mocap: ${backendTruth.mocap?.available ? "Available" : "Unavailable"} ${backendTruth.mocap?.error || ""}</div>`);
-  lines.push(`<div class="danger-line ${backendTruth.timeline?.error ? "bad" : "ok"}">Timeline: ${backendTruth.timeline?.state || backendTruth.timeline?.error || "Unknown"}</div>`);
-  lines.push(`<div class="danger-line ${backendTruth.ai?.error ? "bad" : "warn"}">AI brains: ${backendTruth.ai?.error || backendTruth.ai?.status || "not proven"}</div>`);
-  lines.push(`<div class="danger-line warn">Feeds: monitors are labeled LOCAL PREVIEW unless a real backend feed confirms availability.</div>`);
-  lines.push(`<div class="danger-line warn">Export: ${exportDetail()}</div>`);
-  backendTruth.failures.slice(-8).forEach(f => lines.push(`<div class="danger-line bad">${escapeHTML(f)}</div>`));
-  body.innerHTML = lines.join("");
+  const s=sessionTracker.view();
+  const line=(kind,message)=>{const el=document.createElement("div");el.className="danger-line "+kind;el.textContent=message;return el;};
+  const healthOk=backendTruth.health&&!backendTruth.health.error;
+  body.replaceChildren(
+    line(healthOk?"ok":"bad","Health: "+(healthOk?"OK":"Unavailable")+" "+(backendTruth.health?.error||"")),
+    line(s.id?"warn":"ok","Recording: "+(s.id&&!s.verified?"UNVERIFIED":s.state.toUpperCase())),
+    line("warn","Recording session: "+(s.id||s.last||"No local take")),
+    line(backendTruth.mocap?.available?"ok":"bad","Mocap: "+(backendTruth.mocap?.available?"Available":"Unavailable")+" "+(backendTruth.mocap?.error||"")),
+    line(backendTruth.timeline?.error?"bad":"ok","Timeline: "+(backendTruth.timeline?.state||backendTruth.timeline?.error||"Unknown")),
+    line(backendTruth.ai?.error?"bad":"warn","AI brains: "+(backendTruth.ai?.error||backendTruth.ai?.status||"not proven")),
+    line("warn","Feeds: verified low-rate confidence images, not broadcast capture."),
+    line("warn","Export: "+exportDetail()),
+    ...backendTruth.failures.slice(-8).map(f=>line("bad",f)));
 }
 
 function exportDetail() {
-  if (recording) return "not ready while recording/local REC is active";
-  if (activeRecordingSessionId) return `stopped session ${activeRecordingSessionId} can request recording export`;
+  if (sessionTracker.view().id) return "not ready until the local take is confirmed closed";
+  if (sessionTracker.view().lastVerified) return `confirmed closed session ${activeRecordingSessionId} can request recording export`;
   if (backendTruth.health && !backendTruth.health.error) return "backend reachable; export package still requires recording/project proof";
   return "backend status unavailable; export readiness not proven";
 }
@@ -889,29 +917,45 @@ function renderButtons() {
   });
 }
 
+const audioEditing=new Set(), audioPending=new Set();
 function renderAudio() {
+  if(audioEditing.size||audioPending.size)return;
   $("audioRows").replaceChildren();
   const connected=!!backendTruth.programAudio?.ok;
-  audio.forEach(channel => {
+  audio.forEach(channel=>{
     const row=document.createElement("div");row.className="audio-row";
     const label=document.createElement("span");label.textContent=channel.name;row.append(label);
-    // A gain percentage is not an audio level meter. Do not fake VU activity.
-    const detail=document.createElement("span");
-    detail.style.cssText="flex:1;font-size:11px;color:#c7b4a0";
-    detail.textContent=connected
-      ?("GAIN "+Math.round(channel.volume*100)+"% · "+(channel.muted?"MUTED":"ON")+" · "+channel.activeSources+" source(s); VU unavailable")
-      :"AUDIO STATUS UNAVAILABLE";
+    const detail=document.createElement("span");detail.style.cssText="flex:1;font-size:11px;color:#c7b4a0";
+    detail.textContent=connected?("GAIN "+Math.round(channel.volume*100)+"%"+(channel.bus==="master"?"":" · "+(channel.muted?"MUTED":"ON")+" · "+channel.activeSources+" source(s)")+"; VU unavailable"):"AUDIO STATUS UNAVAILABLE";
     row.append(detail);
-    const btn=document.createElement("button");btn.className="switch";btn.type="button";btn.textContent=channel.muted?"UNMUTE":"MUTE";
-    btn.disabled=!connected;btn.title=channel.name+" mute through shared program audio";
-    btn.onclick=async ev=>{
-      btn.disabled=true;clickFlash(ev.currentTarget);
-      const result=await postJSON("/api/program-audio/event",{action:channel.muted?"unmute":"mute",bus:channel.bus});
-      if(result?.ok){await refreshAudioTruth();}
-      else {toast("AUDIO FAILED");log("Shared audio mute failed for "+channel.bus);}
-      btn.disabled=false;
-    };
-    row.append(btn);$("audioRows").append(row);
+    const gain=document.createElement("input");gain.type="range";gain.min="0";gain.max="100";gain.step="1";gain.value=String(Math.round(channel.volume*100));gain.disabled=!connected;gain.setAttribute("aria-label",channel.name+" gain");
+    gain.addEventListener("pointerdown",()=>audioEditing.add(channel.bus));
+    gain.addEventListener("pointerup",()=>audioEditing.delete(channel.bus));
+    gain.addEventListener("pointercancel",()=>{audioEditing.delete(channel.bus);renderAudio();});
+    gain.addEventListener("focus",()=>audioEditing.add(channel.bus));
+    gain.addEventListener("blur",()=>audioEditing.delete(channel.bus));
+    gain.addEventListener("input",()=>{detail.textContent="REQUESTED GAIN "+gain.value+"% (not yet applied)";});
+    gain.addEventListener("change",async()=>{
+      audioEditing.delete(channel.bus);
+      if(audioPending.has(channel.bus))return;
+      const requested=Number(gain.value)/100;
+      if(!Number.isFinite(requested)||requested<0||requested>1)return;
+      audioPending.add(channel.bus);gain.disabled=true;
+      try{const result=await postJSON("/api/program-audio/event",{action:"set_volume",bus:channel.bus,volume:requested});if(!result?.ok){toast("GAIN FAILED");log("Gain update failed for "+channel.bus);}}
+      finally{audioPending.delete(channel.bus);await refreshAudioTruth();}
+    });
+    row.append(gain);
+    if(channel.bus!=="master"){
+      const btn=document.createElement("button");btn.className="switch";btn.type="button";btn.textContent=channel.muted?"UNMUTE":"MUTE";btn.disabled=!connected;
+      btn.onclick=async ev=>{
+        if(audioPending.has(channel.bus))return;
+        audioPending.add(channel.bus);btn.disabled=true;clickFlash(ev.currentTarget);
+        try{const result=await postJSON("/api/program-audio/event",{action:channel.muted?"unmute":"mute",bus:channel.bus});if(!result?.ok){toast("AUDIO FAILED");log("Shared audio mute failed for "+channel.bus);}}
+        finally{audioPending.delete(channel.bus);await refreshAudioTruth();}
+      };
+      row.append(btn);
+    }
+    $("audioRows").append(row);
   });
 }
 async function refreshAudioTruth() {
@@ -919,6 +963,7 @@ async function refreshAudioTruth() {
   backendTruth.programAudio=status;
   if(status?.ok&&status.status?.buses){
     for(const channel of audio){
+      if(channel.bus==="master"){channel.volume=Number(status.status.master_volume??1);continue;}
       const bus=status.status.buses[channel.bus];
       if(!bus)continue;
       channel.muted=!!bus.muted;
@@ -935,12 +980,9 @@ async function refreshAudioTruth() {
 function updateMonitors() {
   $("programName").textContent = cameraById(program).label;
   $("previewName").textContent = cameraById(preview).label;
-  $("programSource").textContent = backendTruth.switcher?.sources ? "SERVER SWITCH STATE — VIDEO FEED UNBOUND" : "SWITCHER UNVERIFIED — NO LIVE FEED";
-  $("programSource").className = "feed-source unavailable";
-  $("previewSource").textContent = backendTruth.switcher?.sources ? "SERVER PREVIEW STATE — VIDEO FEED UNBOUND" : "PREVIEW UNVERIFIED — NO LIVE FEED";
-  $("previewSource").className = "feed-source unavailable";
+  if(!backendTruth.switcher?.sources){$("programSource").textContent="SWITCHER UNVERIFIED — NO LIVE FEED";$("previewSource").textContent="PREVIEW UNVERIFIED — NO LIVE FEED";}
   setTruthCard("truthScene","warn",`${cameraById(program).shot} / ${cameraById(preview).shot}`,
-    backendTruth.switcher?.sources ? "Shared camera state confirmed; video decoder not connected" : "Switcher unavailable; no live video claimed");
+    backendTruth.switcher?.sources ? "Shared camera state confirmed; JPEG confidence is not broadcast capture" : "Switcher unavailable; no live video claimed");
   renderButtons();
 }
 
@@ -948,37 +990,46 @@ function updateMonitors() {
 // The console labels remain provisional until the owner supplies final hardware imagery.
 function syncVideoSwitcherState(snapshot){
   if(!snapshot||!Array.isArray(snapshot.sources))return false;
-  const ids=new Map(cameras.map(c=>[c.sourceId,c.id]));
+  recordingOptions.setSnapshot(snapshot);
+  // IDs are local button slots, not camera identities. Rebuild consistently from the server order.
   const nextCameras=snapshot.sources.map((s,i)=>({
-    id:ids.get(s.id)||("cam"+(i+1)),sourceId:s.id,
+    id:"cam"+(i+1),sourceId:s.id,
     label:s.name||s.id,shot:s.name||s.id,transport:s.transport||"unknown"
   }));
   cameras.splice(0,cameras.length,...nextCameras);
-  program=cameras.find(c=>c.sourceId===snapshot.program)?.id||program;
-  preview=cameras.find(c=>c.sourceId===snapshot.preview)?.id||preview;
+  program=cameras.find(c=>c.sourceId===snapshot.program)?.id||"";
+  preview=cameras.find(c=>c.sourceId===snapshot.preview)?.id||"";
   backendTruth.switcher=snapshot;
-  remoteViewer?.setSources(snapshot.program,snapshot.preview);
+  confidenceGuard.apply();
   updateMonitors();
   renderAux("auxLeft",0);renderAux("auxRight",2);
   return true;
 }
-let lastSwitcherSignature="";
+let lastSwitcherSignature="",switcherPollBusy=false,switcherRevision=0,switcherActionBusy=false;
+function invalidateSwitcher(){lastSwitcherSignature="";backendTruth.switcher=null;cameras.splice(0);program="";preview="";confidenceGuard.apply();updateMonitors();}
 async function refreshSwitcherState() {
+  if(switcherPollBusy||switcherActionBusy)return;
+  switcherPollBusy=true;const revision=switcherRevision;
   try {
-    const response=await fetch("/api/switcher/state",{cache:"no-store"});
-    if(!response.ok)return;
+    const response=await fetch("/api/switcher/state",{cache:"no-store",signal:AbortSignal.timeout(1800)});
+    if(!response.ok)throw Error("HTTP "+response.status);
     const data=await response.json();
-    if(!Array.isArray(data.sources))return;
-    const signature=JSON.stringify({program:data.program,preview:data.preview,sources:data.sources.map(x=>[x.id,x.name])});
+    if(revision!==switcherRevision)return;
+    if(!Array.isArray(data.sources))throw Error("Invalid camera registry");
+    const signature=JSON.stringify({program:data.program,preview:data.preview,sources:data.sources.map(x=>[x.id,x.name,x.transport])});
     if(signature!==lastSwitcherSignature){lastSwitcherSignature=signature;syncVideoSwitcherState(data);}
-  }catch(_) { /* 10-second truth refresh owns visible connection diagnostics. */ }
+  }catch(_) {if(revision===switcherRevision)invalidateSwitcher();}
+  finally{switcherPollBusy=false;}
 }
 async function videoAction(path,payload,description){
-  const result=await postJSON(path,payload);
-  if(!result||!syncVideoSwitcherState(result)){toast("SWITCH FAILED");log(description+" failed: backend state unavailable");return false;}
-  log(description+" confirmed by shared switcher");
-  toast(description);
-  return true;
+  if(switcherActionBusy){toast("SWITCH COMMAND IN PROGRESS");return false;}
+  switcherActionBusy=true;switcherRevision++;
+  try{
+    const result=await postJSON(path,payload);
+    if(!result||!syncVideoSwitcherState(result)){invalidateSwitcher();toast("SWITCH FAILED");log(description+" failed: backend state unavailable");return false;}
+    lastSwitcherSignature="";
+    log(description+" confirmed by shared switcher");toast(description);return true;
+  }finally{switcherActionBusy=false;refreshSwitcherState();}
 }
 async function setPreview(id,btn){
   const cam=cameras.find(c=>c.id===id);
@@ -1002,87 +1053,40 @@ async function fade(){
   finally{fadeInProgress=false;}
 }
 
-async function toggleRecord(btn) {
-  if (!recording) {
-    const camera=cameraById(program);
-    if(!camera.sourceId){toast("NO VERIFIED CAMERA");log("Recording denied: no live Program source");return;}
-    const sessionId = `director_${Date.now()}`;
-    const started = await runStudioAction("recording.start", {
-      session_id: sessionId,
-      sources: [cameraById(program).sourceId],
-      profile_id: "broadcast_mp4",
-      countdown_seconds: 0
-    }, {
-      spec: {safety: "confirm", label: "Start recording"}
-    });
-    if (started?.result?.session_id) {
-      activeRecordingSessionId = started.result.session_id;
-      recording = true;
-      paused = false;
-      setTruthCard("truthRecording", "ok", "Backend REC", `Recording session ${activeRecordingSessionId} started`);
-    } else {
-      activeRecordingSessionId = "";
-      recording = false;
-      paused = false;
-      setTruthCard("truthRecording", "bad", "Blocked", "Recording did not start because the studio action was canceled or unavailable");
-    }
-  } else {
-    const stopped = activeRecordingSessionId ? await runStudioAction("recording.stop", {
-      session_id: activeRecordingSessionId,
-    }, {
-      spec: {safety: "confirm", label: "Stop recording"}
-    }) : null;
-    if (activeRecordingSessionId && !stopped) {
-      setTruthCard("truthRecording", "ok", "Backend REC", `Recording session ${activeRecordingSessionId} remains active`);
-      btn.classList.toggle("live", true);
-      return;
-    }
-    recording = false;
-    paused = false;
-    setTruthCard("truthRecording", stopped ? "ok" : "warn", "Idle", stopped ? `Stopped backend session ${activeRecordingSessionId}` : "Stopped local-only REC state");
-  }
-  btn.classList.toggle("live", recording);
-  setTruthCard("truthExport", recording ? "bad" : "warn", recording ? "Locked" : "Check", exportDetail());
-  log(recording ? "backend recording confirmed" : "recording stop outcome checked");
-  toast(recording ? "REC CONFIRMED" : "REC STOPPED");
-}
-
-async function pauseRecording(btn) {
-  clickFlash(btn);
-  if (!recording) {
-    log("pause not wired: no active recording");
-    toast("NO REC");
-    return;
-  }
-  if(!activeRecordingSessionId){toast("NO BACKEND REC");return;}
-  const desired=!paused;
-  const result=await postJSON(`/api/recording/${encodeURIComponent(activeRecordingSessionId)}/pause`,{paused:desired});
-  if(!result){toast("PAUSE FAILED");return;}
-  paused=desired;
-  btn.classList.toggle("active-preview",paused);
-  setTruthCard("truthRecording",paused?"warn":"bad",paused?"Backend Paused":"Backend REC",
-    `Backend confirmed pause=${paused}`);
-  log(paused?"backend recording paused":"backend recording resumed");
-  toast(paused?"PAUSED":"RESUMED");
-}
+const sessionTracker=window.PubCastRecordingSession.create({key:"director_console_take_v1",adapter:studioActions,prepare:()=>recordingOptions.prepare(),onState:s=>{
+  if(activeRecordingSessionId!==(s.id||s.last))exportReceipt=false;
+  activeRecordingSessionId=s.id||s.last;recording=s.live;paused=s.state==="paused";
+  failedRecordingSources=[...new Set([...startFailures(s.record),...stopFailures(s.record)])];
+  recordingOptions.setLocked(s.locked);
+  $("recordBtn").disabled=s.identityBlocked||s.busy||s.panicPending||!!s.id&&!s.canStop;
+  $("recordBtn").classList.toggle("live",s.live&&s.verified);
+  $("pauseBtn").disabled=!s.canPause;
+  $("pauseBtn").textContent=paused?"RESUME":"PAUSE";
+  $("pauseBtn").classList.toggle("active-preview",paused&&s.verified);
+  $("recRelease").hidden=!s.canRelease;
+  $("exportBtn").disabled=exportBusy||s.identityBlocked||s.busy||!!s.id||!s.lastVerified;
+  setTruthCard("truthRecording",s.identityBlocked||s.error||!s.verified&&s.id||failedRecordingSources.length?"bad":s.live?"warn":"ok",s.identityBlocked?"Operator changed":failedRecordingSources.length?"Incomplete take":s.busy?"Working":s.state==="active"?"Backend REC":s.state==="stopped"||s.state==="archived"?"Idle (closed)":s.state.toUpperCase(),(s.id||s.last||"No local take")+(failedRecordingSources.length?" | "+failedRecordingSources.join(", "):"")+(s.error?" | "+s.error:""));
+},onError:message=>{setTruthCard("truthRecording","bad","Take not confirmed",message);log(message);}});
+async function toggleRecord(btn){const s=sessionTracker.view();return s.id?sessionTracker.stop():sessionTracker.start();}
+async function pauseRecording(btn){return sessionTracker.pause();}
 
 async function marker() {
-  if(!activeRecordingSessionId){log("Marker denied: no confirmed backend recording");toast("NO REC");return;}
+  if(!sessionTracker.view().canPause){log("Marker denied: no confirmed backend recording");toast("NO REC");return;}
   const result=await postJSON(`/api/recording/${encodeURIComponent(activeRecordingSessionId)}/marker`,
-    {label:"Director marker",operator:"director"});
-  if(!result){toast("MARK FAILED");return;}
+    {label:"Director marker"});
+  if(!result?.ok){toast("MARK FAILED");return;}
   log("Director recording marker acknowledged");
   toast("MARK SAVED");
 }
 
 async function panic() {
+  if(sessionTracker.view().panicPending)return;
   // Do not update the local video source or claim recording stopped until
   // the backend has actually attempted the stop, black cue, and audio mute.
-  const result=await postJSON("/api/production/panic",{});
-  if(!result){setTruthCard("truthRecording","bad","PANIC FAILED","Backend not reached");toast("PANIC FAILED");return;}
-  if(activeRecordingSessionId&&result.sessions_stopped?.includes(activeRecordingSessionId)){
-    recording=false;paused=false;$("recordBtn").classList.remove("live");
-  }
+  const releaseConfidence=confidenceGuard.hold();sessionTracker.panicBegin();
+  let result;try{result=await postJSON("/api/production/panic",{});}finally{releaseConfidence();}
+  if(!result){sessionTracker.panicResult(null);setTruthCard("truthRecording","bad","PANIC FAILED","Backend not reached");toast("PANIC FAILED");return;}
+  sessionTracker.panicResult(result);
   directorBlackout=!!result.blackout_cued;
   setTruthCard("truthRecording",result.ok?"warn":"bad",result.ok?"PANIC SENT":"PANIC PARTIAL",
     `${result.sessions_stopped?.length||0} sessions stopped; ${result.capture_errors?.length||0} capture errors; audio mute ${result.audio_muted?"confirmed":"unverified"}`);
@@ -1093,7 +1097,8 @@ async function panic() {
 
 async function bars() {
   const desired=!directorPreviewBars;
-  const result=await postJSON("/api/production/video-cue",{cue:"preview_bars",enabled:desired});
+  const releaseConfidence=confidenceGuard.hold();
+  let result;try{result=await postJSON("/api/production/video-cue",{cue:"preview_bars",enabled:desired});}finally{releaseConfidence();}
   if(!result?.ok){log("Preview bars command failed; no local-only success state");toast("BARS FAILED");return;}
   directorPreviewBars=desired;$("previewMode").textContent=desired?"BARS":"Ready";
   log("Preview bars confirmed by backend: "+desired);
@@ -1113,7 +1118,9 @@ async function preset(name,btn) {
 
 async function exportRecording(btn) {
   clickFlash(btn);
-  if (recording) {
+  if (exportBusy)return;
+  const session=sessionTracker.view();
+  if (session.id||session.identityBlocked||session.busy||!session.lastVerified) {
     setTruthCard("truthExport", "bad", "Locked", "Stop recording before export");
     log("export blocked: recording is active");
     toast("EXPORT LOCKED");
@@ -1125,15 +1132,20 @@ async function exportRecording(btn) {
     toast("NO EXPORT SESSION");
     return;
   }
-  const result = await postJSON(`/api/recording/${encodeURIComponent(activeRecordingSessionId)}/export`, {format: "mp4"});
-  setTruthCard("truthExport", result ? "ok" : "bad", result ? "Requested" : "Failed", result ? `Export requested for ${activeRecordingSessionId}` : "Backend export unavailable or returned a file response not handled by this static fetch");
-  log("export requested for " + activeRecordingSessionId);
-  toast("EXPORT CHECK");
+  exportBusy=true;exportReceipt=true;btn.disabled=true;
+  try{
+    const result=await window.PubCastRecordingLibrary.download(activeRecordingSessionId,"mp4",message=>setTruthCard("truthExport","warn","Exporting",message));
+    if(result.canceled){setTruthCard("truthExport","warn","Canceled","No export saved");return;}
+    setTruthCard("truthExport","ok",result.saved?"Saved":"Download started",window.PubCastRecordingLibrary.formatBytes(result.bytes)+" ZIP bundle");
+    toast(result.saved?"EXPORT SAVED":"DOWNLOAD STARTED");
+  }catch(e){setTruthCard("truthExport","bad","Export failed",e.message);log("Export failed: "+e.message);toast("EXPORT FAILED");}
+  finally{exportBusy=false;sessionTracker.publish();}
 }
 
 async function refreshTruth() {
+  if(truthPolling)return;truthPolling=true;try{
   backendTruth.failures = [];
-  const [health, studio, camerasState, recordingStorage, mocap, timeline, voxel, ai, switcher] = await Promise.all([
+  const [health, studio, camerasState, recordingStorage, mocap, timeline, voxel, ai] = await Promise.all([
     getJSON("/health"),
     getJSON("/api/studio/status"),
     getJSON("/api/cameras"),
@@ -1141,22 +1153,22 @@ async function refreshTruth() {
     getJSON("/api/mocap/status"),
     getJSON("/api/timeline/status"),
     getJSON("/api/voxel/status"),
-    getJSON("/api/byok/ollama/status"),
-    getJSON("/api/switcher/state")
+    getJSON("/api/byok/ollama/status")
   ]);
-  backendTruth = {health, studio, cameras: camerasState, recordingStorage, mocap, timeline, voxel, ai, switcher, programAudio:backendTruth.programAudio, failures: backendTruth.failures};
-  if(!switcher.error) syncVideoSwitcherState(switcher);
+  backendTruth = {health, studio, cameras: camerasState, recordingStorage, mocap, timeline, voxel, ai, switcher:backendTruth.switcher, programAudio:backendTruth.programAudio, failures: backendTruth.failures};
+  refreshSwitcherState();
   setTruthCard("truthHealth", health.error ? "bad" : "ok", health.error ? "Offline" : "OK", health.error || `cameras=${health.systems?.cameras ?? "?"} recording_profiles=${health.systems?.recording_profiles ?? "?"}`);
   const studioState = studio.state || studio.status || (studio.available ? "available" : "unavailable");
-  setTruthCard("truthRecording", recording ? "bad" : (studio.available ? "ok" : "warn"), recording ? "Local REC" : "Idle", `studio=${studioState}; duration=${Math.round(studio.recording_duration || 0)}s; recording pipeline not proven without browser/backend test`);
+  sessionTracker.publish();sessionTracker.refresh();
   setTruthCard("truthMocap", mocap.available ? "ok" : "bad", mocap.available ? "Available" : "Unavailable", mocap.error || JSON.stringify(mocap).slice(0, 90));
   await refreshAudioTruth();
   setTruthCard("truthTimeline", timeline.error ? "bad" : "ok", timeline.state || "Unknown", `progress=${Math.round((timeline.progress || 0) * 100)}% timeline=${timeline.timeline_name || timeline.timeline || "none"}`);
   setTruthCard("truthAI", ai.error ? "bad" : "warn", ai.error ? "Unavailable" : (ai.status || "Reachable"), ai.error || `Studio/Architect model availability must be confirmed before show`);
-  setTruthCard("truthExport", recording ? "bad" : (health.error ? "bad" : "warn"), recording ? "Locked" : "Visible", exportDetail());
+  if(!exportBusy&&!exportReceipt)setTruthCard("truthExport", sessionTracker.view().id ? "bad" : (health.error ? "bad" : "warn"), sessionTracker.view().id ? "Locked" : "Visible", exportDetail());
   updateMonitors();
   renderDangerPanel();
   log("truth surface refreshed");
+  }finally{truthPolling=false;}
 }
 
 function togglePanel(id, open) {
@@ -1227,7 +1239,8 @@ function init() {
   $("barsBtn").onclick = (ev) => { clickFlash(ev.currentTarget); bars(); };
   $("blackoutBtn").onclick = async ()=>{
     const desired=!directorBlackout;
-    const result=await postJSON("/api/production/video-cue",{cue:"blackout",enabled:desired});
+    const releaseConfidence=confidenceGuard.hold();
+    let result;try{result=await postJSON("/api/production/video-cue",{cue:"blackout",enabled:desired});}finally{releaseConfidence();}
     if(!result?.ok){toast("BLACKOUT FAILED");log("Blackout command not acknowledged");return;}
     directorBlackout=desired;
     log("Server blackout "+(desired?"ON":"OFF"));
@@ -1239,6 +1252,9 @@ function init() {
   $("controlChatBtn").onclick = () => togglePanel("controlChatPanel");
   $("selfTestBtn").onclick = runSelfTest;
   $("refreshTruthBtn").onclick = refreshTruth;
+  $("recReconcile").onclick=()=>sessionTracker.refresh();$("recRelease").onclick=()=>sessionTracker.releaseMissing(id=>window.confirm("No server record found for "+id+". Release only after checking no pending capture remains?"));
+  sessionTracker.publish();sessionTracker.refresh();const takePoll=setInterval(()=>sessionTracker.refresh(),1500);window.addEventListener("pagehide",()=>{clearInterval(takePoll);sessionTracker.dispose();});
+  $("openTakeLibrary").onclick=()=>{togglePanel("takeLibraryPanel",true);takeLibrary.refresh(activeRecordingSessionId);};
   document.querySelectorAll("[data-close]").forEach(btn => btn.onclick = () => togglePanel(btn.dataset.close, false));
   $("publicChatForm").onsubmit = (ev) => { ev.preventDefault(); sendLocalChat("public", "publicChatInput", "publicChatLog"); };
   $("controlChatForm").onsubmit = (ev) => { ev.preventDefault(); sendLocalChat("control", "controlChatInput", "controlChatLog"); };
@@ -1250,6 +1266,7 @@ function init() {
     knob.setAttribute("aria-label",knob.dataset.knob+" not wired — requires approved effect mapping");
   });
   document.addEventListener("keydown", (ev) => {
+    if(ev.repeat||ev.target.closest?.("input,textarea,select,button,[contenteditable]"))return;
     if (/^[1-5]$/.test(ev.key)) setPreview("cam" + ev.key);
     if (ev.key === " " || ev.key.toLowerCase() === "c") { ev.preventDefault(); cut(); }
     if (ev.key.toLowerCase() === "f") fade();
@@ -1261,15 +1278,17 @@ function init() {
   refreshTruth();
   setInterval(refreshTruth, 10000);
   setInterval(refreshSwitcherState, 1000);
+  confidenceGuard.poll();const confidencePoll=setInterval(()=>confidenceGuard.poll(),800);
   setInterval(()=>remoteViewer?.refresh().catch(e=>log("Confidence preview: "+e.message)),350);
-  window.addEventListener("pagehide",()=>remoteViewer?.stop());
+  window.addEventListener("pagehide",()=>{clearInterval(confidencePoll);confidenceGuard.stop();});
   tick();
 }
 init();
 </script>
-<script src="./camera_pool_async.js"></script>
-<script src="./camera_pool_controller.js"></script>
-<script src="camera_pool_panel.js" defer></script>
+<script src="/static/operator_timeline_controls.js" defer></script>
+<script src="/static/camera_pool_async.js"></script>
+<script src="/static/camera_pool_controller.js"></script>
+<script src="/static/camera_pool_panel.js" defer></script>
 <script src="/static/drag_scroll.js"></script><script src="/static/show_clocks.js" defer></script>
 </body>
 </html>

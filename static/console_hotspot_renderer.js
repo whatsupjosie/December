@@ -44,10 +44,17 @@
 
   function actionPayload(hotspot, extra) {
     const payload = Object.assign({}, hotspot.payload || {}, extra || {});
-    if (payload.action === "set_volume" && payload.level === undefined) {
-      payload.level = payload.value !== undefined ? payload.value : 0.5;
+    if (payload.action === "set_volume") {
+      const raw = payload.volume ?? payload.level ?? payload.value ?? 0.5;
+      if (typeof raw !== "number" || !Number.isFinite(raw)) throw new Error("Invalid audio gain");
+      payload.volume = clamp01(raw);
+      payload.level = payload.volume;
     }
     return payload;
+  }
+  if (typeof module === "object" && module.exports) {
+    module.exports = { actionPayload };
+    return;
   }
 
   // Several controls can be in flight at once (two faders, a knob and a
@@ -68,6 +75,7 @@
         report(hotspot.label + " canceled.");
         return;
       }
+      if(result?.ok!==true)throw Error("Action not confirmed by studio");
       report(hotspot.label + " ok.");
     } catch (err) {
       // Signing out is not this control's fault and must be seen whatever is
