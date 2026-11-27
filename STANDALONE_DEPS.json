@@ -1,0 +1,594 @@
+{
+  "about": "Shared files this program imports, pinned by blob. Built into a run folder by tools/standalone/assemble.py; never copied into this branch.",
+  "program": "claude/pubpartner-prep-2026-11-27",
+  "entries": [
+    "handoffs/evidence_2026-11-13/live_trace_pubpartner_turn.py",
+    "modules/event_agency.py",
+    "modules/pub_partner_chat.py",
+    "modules/pubpartner_backup.py",
+    "modules/pubpartner_calibration.py",
+    "modules/pubpartner_cartridges.py",
+    "modules/pubpartner_chatgpt_link.py",
+    "modules/pubpartner_connector_host.py",
+    "modules/pubpartner_core.py",
+    "modules/pubpartner_guidance.py",
+    "modules/pubpartner_identity_checkpoint.py",
+    "modules/pubpartner_knowledge.py",
+    "modules/pubpartner_local_setup.py",
+    "modules/pubpartner_preflight.py",
+    "modules/pubpartner_profiles.py",
+    "modules/pubpartner_provider.py",
+    "modules/pubpartner_rate_limit.py",
+    "modules/pubpartner_receipts.py",
+    "modules/pubpartner_relationship.py",
+    "modules/pubpartner_rephrase.py",
+    "modules/pubpartner_routes.py",
+    "modules/pubpartner_tokens.py",
+    "modules/pubpartner_vessel/__init__.py",
+    "modules/pubpartner_vessel/__main__.py",
+    "modules/pubpartner_vessel/context.py",
+    "modules/pubpartner_vessel/errors.py",
+    "modules/pubpartner_vessel/memory.py",
+    "modules/pubpartner_vessel/models.py",
+    "modules/pubpartner_vessel/runtime.py",
+    "modules/pubpartner_vessel/schema.py",
+    "modules/pubpartner_vessel/search.py",
+    "modules/pubpartner_vessel/store.py",
+    "modules/pubpartner_voice.py",
+    "modules/pubpartner_work_notes.py",
+    "pubpartner/__init__.py",
+    "pubpartner/avatar_preference.py",
+    "pubpartner/cartridge.py",
+    "pubpartner/cli.py",
+    "pubpartner/companion_mode.py",
+    "pubpartner/connector.py",
+    "pubpartner/link.py",
+    "pubpartner/memory_store.py",
+    "pubpartner/portable_runtime.py",
+    "pubpartner/prompt_assembler.py",
+    "pubpartner/pubpartner_federation/__init__.py",
+    "pubpartner/pubpartner_federation/docking.py",
+    "pubpartner/pubpartner_federation/engine.py",
+    "pubpartner/pubpartner_federation/identity.py",
+    "pubpartner/pubpartner_federation/memory.py",
+    "pubpartner/pubpartner_federation/protocol.py",
+    "pubpartner/pubpartner_federation/service.py",
+    "pubpartner/pubpartner_federation/store.py",
+    "pubpartner/schema.py",
+    "pubpartner/sequence_controller.py",
+    "pubpartner/tokenizer.py",
+    "pubpartner_app.py",
+    "run_pubpartner.py",
+    "scripts/pubpartner_control_plane_probe.py",
+    "scripts/pubpartner_restart_probe.py",
+    "scripts/pubpartner_smoke.py",
+    "static/pub_partner_chat.html",
+    "static/pubpartner.css",
+    "static/pubpartner.html",
+    "static/pubpartner.js",
+    "static/pubpartner_calibration_ui.js",
+    "tests/horizon_ref_pubpartner_app_control_plane_wiring.py",
+    "tests/horizon_ref_pubpartner_backup.py",
+    "tests/horizon_ref_pubpartner_live_loop.py",
+    "tests/horizon_ref_pubpartner_relationship_engine.py",
+    "tests/horizon_ref_pubpartner_relationship_review_ui.py",
+    "tests/horizon_ref_pubpartner_repair10_cinematic_ui.py",
+    "tests/horizon_ref_pubpartner_repair11_living_systems.py",
+    "tests/horizon_ref_pubpartner_repair12_operable_living.py",
+    "tests/horizon_ref_pubpartner_repair4_continuity.py",
+    "tests/horizon_ref_pubpartner_repair7_activation.py",
+    "tests/horizon_ref_pubpartner_repair7_launch_check.py",
+    "tests/horizon_ref_pubpartner_repair8_lantern_ui.py",
+    "tests/horizon_ref_pubpartner_repair9_hyperreal_ui.py",
+    "tests/horizon_ref_pubpartner_routes.py",
+    "tests/horizon_ref_pubpartner_spine.py",
+    "tests/horizon_ref_pubpartner_vessel_integration_unittest.py",
+    "tests/horizon_ref_pubpartner_vessel_routes.py",
+    "tests/horizon_ref_pubpartner_vessel_unittest.py",
+    "tests/pubpartner_core/test_cartridge.py",
+    "tests/pubpartner_core/test_connector.py",
+    "tests/pubpartner_core/test_memory_store.py",
+    "tests/pubpartner_core/test_portable_runtime.py",
+    "tests/pubpartner_core/test_prompt_assembler.py",
+    "tests/pubpartner_core/test_sequence_controller.py",
+    "tests/pubpartner_federation/test_concurrency.py",
+    "tests/pubpartner_federation/test_service.py",
+    "tests/pubpartner_federation/test_sync.py",
+    "tests/pubpartner_vessel/test_agency_observation.py",
+    "tests/pubpartner_vessel/test_indexed_recall.py",
+    "tests/pubpartner_vessel/test_objective_observations.py",
+    "tests/pubpartner_vessel/test_pubpartner_vessel_integration_unittest.py",
+    "tests/pubpartner_vessel/test_pubpartner_vessel_routes.py",
+    "tests/pubpartner_vessel/test_pubpartner_vessel_unittest.py",
+    "tests/test_pub_partner_chat.py",
+    "tests/test_pubpartner_backup_isolation.py",
+    "tests/test_pubpartner_calibration.py",
+    "tests/test_pubpartner_calibration_approval.py",
+    "tests/test_pubpartner_calibration_integration_static.py",
+    "tests/test_pubpartner_cartridge_memory_wiring.py",
+    "tests/test_pubpartner_cartridges.py",
+    "tests/test_pubpartner_connections.py",
+    "tests/test_pubpartner_existing_wiring.py",
+    "tests/test_pubpartner_identity_checkpoint.py",
+    "tests/test_pubpartner_menus_browser.py",
+    "tests/test_pubpartner_rephrase.py",
+    "tests/test_pubpartner_shared_auth_authority.py",
+    "tests/test_pubpartner_work_notes.py",
+    "tools/standalone/assemble.py"
+  ],
+  "source_order": [
+    "pubpartner",
+    "claude/eq-prep-2026-11-27",
+    "blackbox",
+    "2i",
+    "main-assembly"
+  ],
+  "pins": [
+    {
+      "path": "companion_support/__init__.py",
+      "branch": "main-assembly",
+      "blob": "08d4d25436f28e2b5b17200b0e170b0635a40521"
+    },
+    {
+      "path": "companion_support/acceptance_engine.py",
+      "branch": "main-assembly",
+      "blob": "af3c9a0f8da5882c301fc55a05eba3049936dc7a"
+    },
+    {
+      "path": "companion_support/advisory.py",
+      "branch": "main-assembly",
+      "blob": "ded692aa60e4956c249ceac233849dae770f8ef7"
+    },
+    {
+      "path": "companion_support/anti_parroting.py",
+      "branch": "main-assembly",
+      "blob": "d76d2b41ac766c41b10cd9253a9daa5596b9f840"
+    },
+    {
+      "path": "companion_support/contradiction_tracker.py",
+      "branch": "main-assembly",
+      "blob": "5decd32efb48329cfae996c1bdf497a7cb08a2e1"
+    },
+    {
+      "path": "companion_support/conversation_pacing.py",
+      "branch": "claude/eq-prep-2026-11-27",
+      "blob": "1b127b9a5e4f137d0ab7b0bf2d3808b918a0ff05"
+    },
+    {
+      "path": "companion_support/eq_disambiguation_engine.py",
+      "branch": "claude/eq-prep-2026-11-27",
+      "blob": "90e581f8f4998dd111eac389186a4192940a5ac3"
+    },
+    {
+      "path": "companion_support/known_vs_novel.py",
+      "branch": "main-assembly",
+      "blob": "f6f58cd759e43bb9f77a9f4836a44c0eb06d9705"
+    },
+    {
+      "path": "companion_support/observation_engine.py",
+      "branch": "main-assembly",
+      "blob": "bdbb47133bd843e9ed3f931d11abc35e6193cc8c"
+    },
+    {
+      "path": "companion_support/safeguards.py",
+      "branch": "main-assembly",
+      "blob": "3efa6bf5b3de32b6b98a10bdc23d4a63d804296c"
+    },
+    {
+      "path": "modules/__init__.py",
+      "branch": "main-assembly",
+      "blob": "641594581710744b4eb2c31a778a07a797f81773"
+    },
+    {
+      "path": "modules/affect_context_engine.py",
+      "branch": "main-assembly",
+      "blob": "30718ff340e303e3ad78cae43fd60214dd4eef19"
+    },
+    {
+      "path": "modules/affect_dynamics.py",
+      "branch": "main-assembly",
+      "blob": "af5b04d14f141f99e22b4a7acef6d1a854c8f61d"
+    },
+    {
+      "path": "modules/agency_observation.py",
+      "branch": "main-assembly",
+      "blob": "c09b9ad5c9d325a199cac815e2a31e11b5e059ff"
+    },
+    {
+      "path": "modules/ai_providers.py",
+      "branch": "main-assembly",
+      "blob": "964b974b49970f9a3bcaaf82dc7bac5a4c5091c1"
+    },
+    {
+      "path": "modules/ai_runtime.py",
+      "branch": "main-assembly",
+      "blob": "668f2753d7f91b4b7ed81bb1b719f6769533aad9"
+    },
+    {
+      "path": "modules/ai_runtime_slots.py",
+      "branch": "main-assembly",
+      "blob": "1cb47ab99797ec5e67fd56b71dfdf7c3c4967787"
+    },
+    {
+      "path": "modules/alex_core.py",
+      "branch": "claude/eq-prep-2026-11-27",
+      "blob": "f6ec522bbb221d32d84df1d6d00681bf1c3e6e87"
+    },
+    {
+      "path": "modules/alex_jeremy_bridge.py",
+      "branch": "claude/eq-prep-2026-11-27",
+      "blob": "02bc077164c59f584faa3473960085c63a15268c"
+    },
+    {
+      "path": "modules/alex_routes.py",
+      "branch": "claude/eq-prep-2026-11-27",
+      "blob": "57af0782e6b7d24f1f94c96725834af7699b20e5"
+    },
+    {
+      "path": "modules/auth.py",
+      "branch": "main-assembly",
+      "blob": "0d5b44329d4aa782ab1b760e2394fca9308b9627"
+    },
+    {
+      "path": "modules/auth_rate_limit.py",
+      "branch": "main-assembly",
+      "blob": "d5b1de81ad789d7b42b96937fba9a7b7f7b695fd"
+    },
+    {
+      "path": "modules/auth_routes.py",
+      "branch": "main-assembly",
+      "blob": "a9fff6fb46217f386331bcc32d1922ee7b2eacd4"
+    },
+    {
+      "path": "modules/avatar_imports.py",
+      "branch": "main-assembly",
+      "blob": "0ea31e69f9533387b10c867bf14b40d79924ffdb"
+    },
+    {
+      "path": "modules/bot_llm_adapter.py",
+      "branch": "main-assembly",
+      "blob": "480d0408b5e935364820c4df1ae4f4e552cadff0"
+    },
+    {
+      "path": "modules/byok_manager.py",
+      "branch": "main-assembly",
+      "blob": "1f6f7c9b68c966dd0931dec004e7f38463d7f7ff"
+    },
+    {
+      "path": "modules/character_profiles.py",
+      "branch": "main-assembly",
+      "blob": "b644bf588aeca620d1706f7532532f515d321749"
+    },
+    {
+      "path": "modules/chat_commit_store.py",
+      "branch": "main-assembly",
+      "blob": "05113a3525ecc39045ac0532a4926244a48170a4"
+    },
+    {
+      "path": "modules/chat_rooms.py",
+      "branch": "main-assembly",
+      "blob": "efb2762137f9d64cc193d465a40bb0c315cf5d3d"
+    },
+    {
+      "path": "modules/companion_advisory.py",
+      "branch": "main-assembly",
+      "blob": "384ecf71ff0aac0d62f9fa74c13f0ff94db706bb"
+    },
+    {
+      "path": "modules/conversation_archive.py",
+      "branch": "main-assembly",
+      "blob": "ed4ae6024fc16bfe4acf9d34b2274d3f03a23443"
+    },
+    {
+      "path": "modules/credentials.py",
+      "branch": "main-assembly",
+      "blob": "b74922e96ebe317907f06ff9a45725340fb1d63b"
+    },
+    {
+      "path": "modules/dressing_room_security.py",
+      "branch": "main-assembly",
+      "blob": "1d1f28f40cb98a261ccebb79dc6331409fea0467"
+    },
+    {
+      "path": "modules/emotional_consultation.py",
+      "branch": "main-assembly",
+      "blob": "11e4def87382150a131d4526738a38fb559633cc"
+    },
+    {
+      "path": "modules/emotional_orchestrator.py",
+      "branch": "claude/eq-prep-2026-11-27",
+      "blob": "3986749583f1314078b05496ce213e53657da3f3"
+    },
+    {
+      "path": "modules/eq_observation/__init__.py",
+      "branch": "claude/eq-prep-2026-11-27",
+      "blob": "f93db48d7aeb080e5a46112ed5f79d0ad1a8e9a6"
+    },
+    {
+      "path": "modules/eq_observation/agreement.py",
+      "branch": "claude/eq-prep-2026-11-27",
+      "blob": "ee96398d7aea686370a3984695a4b6e966f4cffd"
+    },
+    {
+      "path": "modules/eq_observation/baseline.py",
+      "branch": "claude/eq-prep-2026-11-27",
+      "blob": "32fa5614a6dbd690a8a83bb6d66d4c99b133021c"
+    },
+    {
+      "path": "modules/eq_observation/dials.py",
+      "branch": "claude/eq-prep-2026-11-27",
+      "blob": "1766e618cdb6176c937fab6b5bf52a796c47ba2b"
+    },
+    {
+      "path": "modules/eq_observation/features.py",
+      "branch": "claude/eq-prep-2026-11-27",
+      "blob": "bbb73a310ebe6d887d100bd73f3cda5c46a439f5"
+    },
+    {
+      "path": "modules/eq_observation/layer.py",
+      "branch": "claude/eq-prep-2026-11-27",
+      "blob": "6a977d66192c430983d87c4d965d254d764c2489"
+    },
+    {
+      "path": "modules/eq_observation/readers.py",
+      "branch": "claude/eq-prep-2026-11-27",
+      "blob": "a4a8a04a3ba889ef06470e6c23e9773589896428"
+    },
+    {
+      "path": "modules/eq_observation/reliability.py",
+      "branch": "claude/eq-prep-2026-11-27",
+      "blob": "8b4e45b918c8d80cb13e9f398c90f9ace227ec33"
+    },
+    {
+      "path": "modules/eq_observation/scorecards.py",
+      "branch": "claude/eq-prep-2026-11-27",
+      "blob": "ee774f6f040c88a8bb2fae542388e1c750e6d37c"
+    },
+    {
+      "path": "modules/eq_observation/store.py",
+      "branch": "claude/eq-prep-2026-11-27",
+      "blob": "ccb761c49e729ddf36e17ebbc273750095a4bca6"
+    },
+    {
+      "path": "modules/governance.py",
+      "branch": "main-assembly",
+      "blob": "695aaf3ee8af463ff90b8b5cdb09e3cf396e5001"
+    },
+    {
+      "path": "modules/governance_routes.py",
+      "branch": "main-assembly",
+      "blob": "3192886ab15c432ad781173dc0879002e0a4d601"
+    },
+    {
+      "path": "modules/hub.py",
+      "branch": "main-assembly",
+      "blob": "4ab3666393ff27352ef48d7c46be5cbfb41ebb47"
+    },
+    {
+      "path": "modules/human_profiles.py",
+      "branch": "main-assembly",
+      "blob": "08d27e68409c432ef469e4f95f3a563469d292ab"
+    },
+    {
+      "path": "modules/jeremy_cricket.py",
+      "branch": "main-assembly",
+      "blob": "b871b84ba4538aeb40b549f58763da44c8df009c"
+    },
+    {
+      "path": "modules/limited_exposure.py",
+      "branch": "main-assembly",
+      "blob": "3444b754227a254ce4e1dcf4aac031d141697be4"
+    },
+    {
+      "path": "modules/llm_framework.py",
+      "branch": "main-assembly",
+      "blob": "da5c2390fb9bc16433d6cd9a0adfcaadb7af3fa9"
+    },
+    {
+      "path": "modules/local_model_config.py",
+      "branch": "main-assembly",
+      "blob": "abefec19a450f971e45fa2085cc8b83351fc2364"
+    },
+    {
+      "path": "modules/manuscript_intelligence.py",
+      "branch": "2i",
+      "blob": "dd38187c800ff11d433a6f792953711c991e7db4"
+    },
+    {
+      "path": "modules/model_registry.py",
+      "branch": "main-assembly",
+      "blob": "983afeba1100e732267cde4c0105264332743d54"
+    },
+    {
+      "path": "modules/models.py",
+      "branch": "main-assembly",
+      "blob": "6ec0477d16a6f7fd6a34ffd2fcde4050019d0d69"
+    },
+    {
+      "path": "modules/ollama_provider.py",
+      "branch": "main-assembly",
+      "blob": "6435d09edc139bfe4f8afcb706267c6412f9df6f"
+    },
+    {
+      "path": "modules/openai_compatible_provider.py",
+      "branch": "main-assembly",
+      "blob": "fe21447890510fac3d92909a36f343fd3577998b"
+    },
+    {
+      "path": "modules/openai_responses_provider.py",
+      "branch": "main-assembly",
+      "blob": "51be5ca168af8db15d36eefade2ba0a8cb241e8e"
+    },
+    {
+      "path": "modules/opencode_zen.py",
+      "branch": "main-assembly",
+      "blob": "d81a3961ab66eeaafed1db1bfef9fc8cc9669143"
+    },
+    {
+      "path": "modules/persistence.py",
+      "branch": "main-assembly",
+      "blob": "031a1fe2bed0f8d6ecf27df6e2199d15625e39d6"
+    },
+    {
+      "path": "modules/provider_capabilities.py",
+      "branch": "main-assembly",
+      "blob": "498c43dbaca48b9c268681047e1d8db479236ddf"
+    },
+    {
+      "path": "modules/provider_neutralizer.py",
+      "branch": "main-assembly",
+      "blob": "0400f828098e1148d47a956173f005ee5e8cea03"
+    },
+    {
+      "path": "modules/pub_manager_authority.py",
+      "branch": "main-assembly",
+      "blob": "47b4e7291212a643bde38fc3cf48256385df4453"
+    },
+    {
+      "path": "modules/pub_manager_decision.py",
+      "branch": "main-assembly",
+      "blob": "d7c3238e262f0f0f711e95e6d23057cadb792c36"
+    },
+    {
+      "path": "modules/pubpartner_blackbox_light.py",
+      "branch": "blackbox",
+      "blob": "f04f93298331dbf18e99c5ff0e1c530385a084b5"
+    },
+    {
+      "path": "modules/route_security.py",
+      "branch": "main-assembly",
+      "blob": "ab8ffd4ffe1b9e4a59a824c36fcfcd35b2e918a9"
+    },
+    {
+      "path": "modules/sir_purfluous_character_profile.py",
+      "branch": "main-assembly",
+      "blob": "6e6c2b31d0226b120ba93a3a9f2ed3274d7d40df"
+    },
+    {
+      "path": "modules/smollm_prompt.py",
+      "branch": "main-assembly",
+      "blob": "cd86ff3a23421cea9740b75fab7441b374fbf393"
+    },
+    {
+      "path": "modules/switchblade_router.py",
+      "branch": "main-assembly",
+      "blob": "12e3c67c0c0e489ee4a423814c22aa052a997ec3"
+    },
+    {
+      "path": "modules/turn_serialization.py",
+      "branch": "main-assembly",
+      "blob": "64805f78313ce8bb2cdae2a11dca821c78df7762"
+    },
+    {
+      "path": "modules/userdb.py",
+      "branch": "main-assembly",
+      "blob": "1218605414d42f5eb88a9260e156d3a36829600d"
+    },
+    {
+      "path": "modules/writers_room.py",
+      "branch": "2i",
+      "blob": "114b9615475464608da8412eec64bfeedb7d15e9"
+    },
+    {
+      "path": "static/avatar_import.html",
+      "branch": "main-assembly",
+      "blob": "c08db22ef40bdb05a44429af225913ffe277baa7"
+    },
+    {
+      "path": "static/js/avatar/avatar_import.js",
+      "branch": "main-assembly",
+      "blob": "b9f909ea46ea9e64ad48e50b4907c4740135148a"
+    },
+    {
+      "path": "static/reach_auth.js",
+      "branch": "main-assembly",
+      "blob": "ebddcf8f794d5d122cd7cf0baef72ce156b33531"
+    },
+    {
+      "path": "static/twoi_chat_archive.html",
+      "branch": "2i",
+      "blob": "25c33c03910049cbc4d09b9dd10704d5445ee497"
+    },
+    {
+      "path": "static/twoi_chat_archive.js",
+      "branch": "2i",
+      "blob": "bfa15d02514bff3a0024e1e8937e0c9d7dad40c4"
+    },
+    {
+      "path": "static/vendor/three-0.160.0/build/three.module.js",
+      "branch": "main-assembly",
+      "blob": "0bcc7a286da2c115853ceec9deea19923e10ddc1"
+    },
+    {
+      "path": "static/vendor/three-0.160.0/examples/jsm/controls/OrbitControls.js",
+      "branch": "main-assembly",
+      "blob": "f29e7feb0fe53082099bf718233e2c1baa8a5627"
+    },
+    {
+      "path": "static/vendor/three-0.160.0/examples/jsm/curves/NURBSCurve.js",
+      "branch": "main-assembly",
+      "blob": "8be8dde2d61b4b07eb3da5267195806e83e1f1b8"
+    },
+    {
+      "path": "static/vendor/three-0.160.0/examples/jsm/curves/NURBSUtils.js",
+      "branch": "main-assembly",
+      "blob": "fc77fdb58f06b19cd4699786265dcd2cd471ffac"
+    },
+    {
+      "path": "static/vendor/three-0.160.0/examples/jsm/exporters/GLTFExporter.js",
+      "branch": "main-assembly",
+      "blob": "a9eb9ff00fb37cf2e581ca5d54d2ab8152be9cb9"
+    },
+    {
+      "path": "static/vendor/three-0.160.0/examples/jsm/libs/fflate.module.js",
+      "branch": "main-assembly",
+      "blob": "808000a503cf63aea42659415d32bb6fbec041e1"
+    },
+    {
+      "path": "static/vendor/three-0.160.0/examples/jsm/loaders/FBXLoader.js",
+      "branch": "main-assembly",
+      "blob": "bc2d83758a07b6490b3fa9875afbd15eb580ea12"
+    },
+    {
+      "path": "static/vendor/three-0.160.0/examples/jsm/loaders/GLTFLoader.js",
+      "branch": "main-assembly",
+      "blob": "440ecb714846d41bcce840bec05eb9dcb5513793"
+    },
+    {
+      "path": "static/vendor/three-0.160.0/examples/jsm/loaders/MTLLoader.js",
+      "branch": "main-assembly",
+      "blob": "f277c973536ea45ca2159b6bb26dfbb45b319b02"
+    },
+    {
+      "path": "static/vendor/three-0.160.0/examples/jsm/loaders/OBJLoader.js",
+      "branch": "main-assembly",
+      "blob": "7792458abce807dcf6e5bbc81f289e1ee6925fa4"
+    },
+    {
+      "path": "static/vendor/three-0.160.0/examples/jsm/utils/BufferGeometryUtils.js",
+      "branch": "main-assembly",
+      "blob": "087878da3e5f593f586ea421da522fc0a8244c85"
+    },
+    {
+      "path": "static/vendor/three-0.160.0/examples/jsm/utils/TextureUtils.js",
+      "branch": "main-assembly",
+      "blob": "5954a246158fdc5af0adc321ae518e0e99de9bc5"
+    },
+    {
+      "path": "static/world_chat.css",
+      "branch": "main-assembly",
+      "blob": "125cd5e74582aac4c373c87980eca3c98b29c673"
+    },
+    {
+      "path": "static/world_chat.html",
+      "branch": "main-assembly",
+      "blob": "562bc4e51894cb5a76f4ef8c695f709ba8f4237d"
+    },
+    {
+      "path": "static/world_chat_widget.js",
+      "branch": "main-assembly",
+      "blob": "27ac795bd8e836e2b64eee598334e5e8735e135c"
+    }
+  ],
+  "unresolved_imports": []
+}

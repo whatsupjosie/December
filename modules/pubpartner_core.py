@@ -739,7 +739,17 @@ class PubPartnerSpine:
         if folder.is_symlink() or not (folder / "character.yaml").is_file():
             return [], {"status": "skipped", "reason": "cartridge_unavailable"}
         try:
+            import yaml
             from pubpartner.cartridge import load_cartridge
+
+            # The friend profile can be edited independently of the cartridge.
+            # Confirm the creator recorded at creation before opening memory.
+            appearance_path = folder / "appearance.yaml"
+            if appearance_path.is_symlink() or not appearance_path.is_file():
+                return [], {"status": "skipped", "reason": "owner_unverified"}
+            appearance = yaml.safe_load(appearance_path.read_text(encoding="utf-8"))
+            if not user_id or not isinstance(appearance, dict) or appearance.get("created_by") != user_id:
+                return [], {"status": "skipped", "reason": "owner_unverified"}
             with load_cartridge(folder) as loaded:
                 scored = loaded.memory.query(message, top_k=limit)
             rows = [
@@ -781,7 +791,11 @@ class PubPartnerSpine:
             return {}
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
-            return payload if isinstance(payload, dict) else {}
+            if not isinstance(payload, dict):
+                return {}
+            if payload.get("user_id") != user_id or payload.get("session_id") != session_id:
+                return {}
+            return payload
         except Exception:
             return {}
 
@@ -1416,7 +1430,9 @@ class PubPartnerSpine:
         # Reuse ConversationArchive as the searchable exact-dialogue projection.
         # Original user text still belongs to VerbatimVault; shared rooms stay out.
         archive_result: Dict[str, Any] = {"status": "skipped", "reason": "not_successful_private_turn"}
-        if provider_result.ok and _turn_audience(task, room_id) == "private":
+        effective_project = (turn.get("fcp1") or {}).get("proj") or {}
+        effective_room = str(effective_project.get("room") or room_id)
+        if provider_result.ok and _turn_audience(task, effective_room) == "private":
             try:
                 archive_result = self.blackbox_light.capture_exchange(
                     user_id=user_id or "anon", friend_id=friend_id,

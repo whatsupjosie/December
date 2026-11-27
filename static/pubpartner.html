@@ -119,7 +119,7 @@
           <button role="menuitem" data-command="focus-preview">Avatar preview</button><button role="menuitem" data-command="focus-setup">Companion selection</button><button role="menuitem" data-command="cartridge-avatar">Choose avatar…</button>
         </div></div>
         <div class="menu-root"><button type="button" data-menu="memory" aria-haspopup="menu" aria-expanded="false">Memory</button><div class="menu-pop" role="menu">
-          <button role="menuitem" data-command="focus-memory">What we’ve learned</button><button role="menuitem" id="openCalibrationMenu">Calibrate PubPartner…</button><button role="menuitem" data-command="focus-notes">Project notes</button><button role="menuitem" data-command="refresh-relationship">Refresh relationship</button><button role="menuitem" data-command="show-encounters">Evidence encounters</button><button role="menuitem" data-command="show-guidance">Guidance and corrections</button>
+          <button role="menuitem" data-command="focus-memory">What we’ve learned</button><button role="menuitem" data-command="focus-notes">Project notes</button><button role="menuitem" id="openCalibrationMenu">Calibrate PubPartner…</button><button role="menuitem" data-command="refresh-relationship">Refresh relationship</button><button role="menuitem" data-command="show-encounters">Evidence encounters</button><button role="menuitem" data-command="show-guidance">Guidance and corrections</button>
         </div></div>
         <div class="menu-root"><button type="button" data-menu="settings" aria-haspopup="menu" aria-expanded="false">Settings</button><div class="menu-pop menu-pop-right" role="menu">
           <button role="menuitem" data-command="focus-setup">Friend and provider setup</button><button role="menuitem" data-command="focus-knowledge">Reference settings</button><button role="menuitem" data-command="toggle-customize">Customize layout</button>
@@ -326,6 +326,7 @@
         <p>Formal questions are complete. You can keep talking, and your partner can ask for clarification.</p>
         <label>Additional feedback<textarea id="calibrationExtra" rows="3" maxlength="16000"></textarea></label>
         <button type="button" id="calibrationSaveExtra">Save additional feedback</button><button type="button" id="calibrationClarify">Ask for clarification</button><p id="calibrationClarificationText"></p>
+        <label>Answer this correction refers to <select id="calibrationEvidence"></select></label>
         <label>What should your partner remember or do differently? (optional, applied only when you approve)
           <textarea id="calibrationLesson" rows="3" maxlength="600"></textarea>
         </label>

@@ -44,11 +44,11 @@ def test_approved_correction_uses_existing_relationship_guidance():
     ui = read("static/pubpartner_calibration_ui.js")
     core = read("modules/pubpartner_core.py")
     relationship = read("modules/pubpartner_relationship.py")
-    assert "'/relationship/lessons'" in ui
-    assert "status: 'confirmed'" in ui
+    assert "'/approve'" in ui
+    assert "approve: true" in ui
     assert "self.relationship.compact(" in core
     assert 'globally_applicable = kind in {"boundary", "workflow", "identity"}' in relationship
-    assert "calibration_id" in ui
+    assert "question_id: selected.dataset.question" in ui
 
 
 def test_audio_capture_not_falsely_claimed():

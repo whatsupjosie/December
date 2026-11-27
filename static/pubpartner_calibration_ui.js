@@ -69,7 +69,36 @@
       ? 'You: ' + (state.moment.user_excerpt || '') + '\nPartner: ' + (state.moment.partner_excerpt || '')
       : 'Select an archived moment if you want to discuss a specific exchange.';
   }
+  function nextMove(doc) {
+    const latest = doc.questions?.at(-1);
+    const answer = (latest?.follow_up_answer || latest?.answer)?.text?.trim();
+    if (!answer) return null;
+    if (/^(?:please )?(?:stop|finish|that's all|that’s all|i'm done|i’m done)[.! ]*$/i.test(answer))
+      return {finish: true};
+    if (doc.questions.length >= 5) return {finish: true};
+    const phrase = answer.length > 140 ? answer.slice(0, 137) + '…' : answer;
+    const prior = new Set(doc.questions.flatMap(q => [q.text, q.follow_up?.text]));
+    const choices = [];
+    if (answer.startsWith('[Voice response recorded;'))
+      choices.push('Is there a part of your voice response you would like to put into words?');
+    else if (/\b(?:actually|misunderstood|assumed|wrong|instead)\b/i.test(answer))
+      choices.push('What could I have noticed in that moment that would have helped me understand you?');
+    else if (/\b(?:because|since|when you)\b/i.test(answer))
+      choices.push('Given what you just explained, how would you have liked me to respond at that point?');
+    else if (/\b(?:please|next time|i want you|i need you)\b/i.test(answer))
+      choices.push('What would doing that well look like in the moment?');
+    else if (answer.length < 36)
+      choices.push('When you say “' + phrase + '”, what was happening for you then?');
+    else
+      choices.push('You said “' + phrase + '”. Which part matters most for me to understand?');
+    const question = choices.find(q => !prior.has(q));
+    if (doc.questions.length >= 3 && !latest.follow_up && !/\b(?:actually|misunderstood|wrong)\b/i.test(answer))
+      return {finish: true};
+    return {clarify: !latest.follow_up && answer.length < 36, question: question || 'What else about that moment should I take into account?'};
+  }
   function questionText() {
+    const move = nextMove(state.doc);
+    if (move?.question) return move.question;
     const n = Math.min(state.asked, 4);
     if (state.doc.mode === 'user') {
       if (!state.moment && n === 0) return "How are you feeling today? Tell me what's been happening.";
@@ -156,6 +185,7 @@
     } else {
       show('calibrationInterview', false);
       show('calibrationContinuation', true);
+      renderEvidence();
     }
     say('Calibration resumed from saved interview.');
   }
@@ -189,13 +219,18 @@
       state.currentId = first.questions[first.questions.length - 1].id;
       state.asked = first.main_questions_asked;
     }
-    await event('answer', answer, state.currentId);
+    state.doc = await event('answer', answer, state.currentId);
     state.saved = true;
-    $('calibrationSubmit').disabled = true;
-    show('calibrationOfferFollowup', true);
-    show('calibrationNext', state.asked < 5);
-    $('calibrationProgress').textContent = state.asked + ' main questions recorded.';
-    say('Saved. An optional follow-up can clarify this answer, or you can continue or finish.');
+    const move = nextMove(state.doc);
+    if (move?.finish) { await finish(); return; }
+    if (move?.clarify) {
+      $('calibrationSubmit').disabled = true;
+      await followup();
+      return;
+    }
+    renderQuestion();
+    say('Answer saved.');
+
   }
   function suggestedFollowup() {
     return state.doc.mode === 'system'
@@ -205,8 +240,8 @@
   async function followup() {
     if (!state.saved || !state.currentId) { say('Save the main answer first.'); return; }
     if (state.followup) { say('One follow-up per main question.'); return; }
-    const follow = suggestedFollowup();
-    await event('follow_up', follow, state.currentId);
+    const follow = nextMove(state.doc)?.question || suggestedFollowup();
+    state.doc = await event('follow_up', follow, state.currentId);
     state.followup = true;
     $('calibrationFollowupQuestion').textContent = follow;
     $('calibrationFollowup').value = '';
@@ -217,8 +252,10 @@
   async function followupAnswer() {
     const text = $('calibrationFollowup').value.trim();
     if (!text) { say('Enter your answer, or skip it.'); return; }
-    await event('follow_up_answer', text, state.currentId);
+    state.doc = await event('follow_up_answer', text, state.currentId);
     $('calibrationAskFollowup').disabled = true;
+    if (nextMove(state.doc)?.finish) { await finish(); return; }
+    renderQuestion();
     say('Follow-up answer saved.');
   }
   async function finish() {
@@ -227,25 +264,41 @@
     state.doc = await call('/calibration/interviews/' + state.doc.id + '/finish', 'POST', {});
     show('calibrationInterview', false);
     show('calibrationContinuation', true);
+      renderEvidence();
     $('calibrationStatus').textContent = 'The formal interview is complete. You can keep talking.';
     say('Anything else you want your partner to understand can still be saved.');
   }
   async function saveExtra() {
     const text = $('calibrationExtra').value.trim();
     if (!text) { say('There is no additional feedback to save.'); return; }
-    await event('continuation', text);
+    state.doc = await event('continuation', text);
+    renderEvidence();
     $('calibrationExtra').value = '';
     say('Additional feedback saved with your interview.');
+  }
+  function renderEvidence() {
+    const selector = $('calibrationEvidence');
+    selector.replaceChildren();
+    for (const question of state.doc.questions || []) {
+      if (!question.answer) continue;
+      const option = new Option(question.answer.text.slice(0, 100));
+      option.dataset.question = question.id;
+      selector.add(option);
+    }
+    (state.doc.continuation || []).forEach((row, index) => {
+      if (row.kind === 'continuation') selector.add(new Option(row.text.slice(0, 100), String(index)));
+    });
   }
   async function approveLesson() {
     const text = $('calibrationLesson').value.trim();
     if (!text) { say('Write the specific correction you want your partner to retain.'); return; }
-    const evidence_ids = [state.doc.id, state.moment?.source_id].filter(Boolean);
-    await call('/relationship/lessons', 'POST', {
-      friend_id: state.doc.partner_id, text,
-      kind: state.doc.mode === 'system' ? 'identity' : 'workflow',
-      scope: 'global', status: 'confirmed', confidence: 1,
-      evidence_ids, metadata: { calibration_id: state.doc.id, calibration_mode: state.doc.mode }
+    const selected = $('calibrationEvidence').selectedOptions[0];
+    if (!selected) { say('Save an answer before approving a correction.'); return; }
+    const anchor = selected.dataset.question
+      ? {question_id: selected.dataset.question}
+      : {continuation_index: Number(selected.value)};
+    await call('/calibration/interviews/' + state.doc.id + '/approve', 'POST', {
+      ...anchor, approve: true, text
     });
     $('calibrationLesson').value = '';
     say('Approved correction saved in the existing Relationship Engine. It can inform future turns.');
@@ -338,7 +391,7 @@
   function dictate() {
     const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!Recognition) {
-      say('Speech dictation is not available in this browser. Type your response instead. Audio capture is not enabled in this version.');
+      say('Speech dictation is not available in this browser. Type your response or use Record voice sample.');
       return;
     }
     const recognition = new Recognition();
@@ -354,7 +407,13 @@
     recognition.start();
   }
   function wrap(fn) {
-    return () => Promise.resolve().then(fn).catch(e => say('Calibration error: ' + errText(e)));
+    let pending = false;
+    return async () => {
+      if (pending) return;
+      pending = true;
+      try { await fn(); } catch (e) { say('Calibration error: ' + errText(e)); }
+      finally { pending = false; }
+    };
   }
   $('openCalibrationMenu')?.addEventListener('click', () => {
     gate.hidden = false;
