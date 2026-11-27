@@ -592,6 +592,9 @@ class DistributedEngineNode:
     async def _process_work(self, work: WorkUnit) -> None:
         """Process a single work unit"""
         start_time = time.time()
+        work.completed = False
+        work.result = None
+        work.error = None
         
         try:
             if work.work_type == "voxel_render":
@@ -624,26 +627,20 @@ class DistributedEngineNode:
                 logger.error(f"Work complete callback error: {e}")
     
     async def _do_voxel_render(self, work: WorkUnit) -> bytes:
-        """Render voxels (placeholder for actual implementation)"""
-        # This would call into the voxel world mesh generation
-        await asyncio.sleep(0.001)  # Simulate work
-        return b"rendered"
+        """Fail honestly until a real voxel_render backend is connected."""
+        raise NotImplementedError("Native voxel rendering backend is not wired")
     
     async def _do_mesh_generate(self, work: WorkUnit) -> bytes:
-        """Generate mesh (placeholder)"""
-        await asyncio.sleep(0.002)
-        return b"mesh"
+        """Fail honestly until a real mesh_generate backend is connected."""
+        raise NotImplementedError("Distributed mesh generation backend is not wired")
     
     async def _do_audio_process(self, work: WorkUnit) -> bytes:
-        """Process audio - NEVER SACRIFICED"""
-        # Audio always gets highest priority
-        await asyncio.sleep(0.001)
-        return b"audio"
+        """Fail honestly until a real audio_process backend is connected."""
+        raise NotImplementedError("Distributed audio processing backend is not wired")
     
     async def _do_video_encode(self, work: WorkUnit) -> bytes:
-        """Encode video"""
-        await asyncio.sleep(0.005)
-        return b"video"
+        """Fail honestly until a real video_encode backend is connected."""
+        raise NotImplementedError("Distributed video encoding backend is not wired")
     
     def submit_work(self, work: WorkUnit) -> None:
         """Submit work to be processed"""
@@ -699,7 +696,7 @@ class DistributedEngineNode:
             payload.update({
                 'mode': self.mode.value,
                 'registration': True,
-                'capabilities': ['voxel_render', 'mesh_generate', 'video_encode'],
+                'capabilities': [],  # no implemented distributed media workers yet
             })
             self.bridge.send_heartbeat(payload)
     

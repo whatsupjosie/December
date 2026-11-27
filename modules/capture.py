@@ -751,8 +751,13 @@ class FFmpegCaptureEngine:
         pieces = cp.all_pieces(end)
         speed, encoded, any_unopened, recorded = None, None, False, 0.0
         warnings: List[str] = []
+        encoded_video_frames = 0
         for piece in pieces:
             piece_speed, piece_encoded, text = self._log_stats(piece.log_path)
+            # FFmpeg's progress counter is picture evidence, unlike its A/V clock.
+            counts = re.findall(r"(?:^|[\r\n])\s*frame=\s*(\d+)\b", text)
+            if counts:
+                encoded_video_frames += int(counts[-1])
             if piece_encoded is not None:
                 encoded = (encoded or 0.0) + piece_encoded
             speed = piece_speed if len(pieces) == 1 else speed
@@ -786,6 +791,7 @@ class FFmpegCaptureEngine:
                             "so each piece is kept beside the joined file")
         report = {"source_id": cp.source_id, "returncode": cp.proc.returncode, "output_bytes": size,
                   "wall_seconds": round(end - cp.started_at, 2), "encoded_seconds": encoded, "speed": speed,
+                  "encoded_video_frames": encoded_video_frames,
                   "warnings": warnings, "log": cp.log_path.as_posix() if cp.log_path else None}
         suspended = cp.suspended_seconds(end)
         if suspended > 0 or len(pieces) > 1:

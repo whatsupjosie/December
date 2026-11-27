@@ -753,10 +753,11 @@ class ModeTake:
             if not engine.running(seg.key):
                 return False
             report = engine.live_report(seg.key)
-            if report and (report[0].get("encoded_seconds") or 0) > 0:
+            if report and (report[0].get("encoded_video_frames") or 0) > 0:
                 return True
             await asyncio.sleep(0.05)
-        return engine.running(seg.key)
+        # A live process, or advancing audio clock, does not establish picture.
+        return False
 
     async def _close_segment(self, index: Optional[int]) -> None:
         if index is None:

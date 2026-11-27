@@ -178,7 +178,9 @@ class VoxelWebRTCBridge:
         if not self._port_open() and self.auto_start:
             try:
                 env = os.environ.copy()
-                env.setdefault("PUBCAST_WS_PORT", str(self.port))
+                # The selected bridge port must win over an inherited environment.
+                # This also works with older binaries that do not parse --port.
+                env["PUBCAST_WS_PORT"] = str(self.port)
                 self._process = subprocess.Popen(
                     [str(self.renderer_binary)],
                     stdout=subprocess.DEVNULL,
@@ -263,6 +265,8 @@ class VoxelWebRTCBridge:
             "renderer_binary": str(self.renderer_binary) if self.renderer_binary else None,
             "renderer_process_alive": process_alive,
             "renderer_websocket_url": f"ws://{self.host}:{self.port}",
+            "motion_protocol_acknowledged": self._connected,
+            "frame_path_proven": False,
             "webrtc_signaling_available": False,
             "shared_memory_available": False,
             "reason": None if self._connected else self._last_error,
