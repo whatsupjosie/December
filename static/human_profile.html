@@ -10,6 +10,13 @@ main{padding-bottom:140px}
 .profile-actions{position:fixed;z-index:20;bottom:0;left:0;right:0;display:flex;gap:10px;flex-wrap:wrap;justify-content:center;padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));background:#19130f;border-top:1px solid #8b7049}
 .profile-actions button{flex:1 1 120px;max-width:300px}
 @media(max-width:620px){main{padding-bottom:140px}.profile-actions{gap:8px}.profile-actions button{padding:9px 10px}}
+/* The slate launcher and active take control share the bottom edge. */
+html:has(#pubcast-slate-open:not([hidden]), #pubcast-stop-take:not([hidden])) {
+  --profile-slate-space: calc(4rem + env(safe-area-inset-bottom, 0px));
+}
+html { scroll-padding-bottom: calc(5rem + var(--profile-slate-space, 0px)); }
+.profile-actions { bottom: var(--profile-slate-space, 0px); }
+main { padding-bottom: calc(140px + var(--profile-slate-space, 0px)); }
 html.drag-scroll-active,html.drag-scroll-active *{cursor:grabbing!important;user-select:none!important}
 </style></head><body data-drag-scroll><main>
 <header><div><h1 id="title">Your PubCast profile</h1><div id="identity" class="identity"></div></div><a href="/foresight">Foresight</a></header>
