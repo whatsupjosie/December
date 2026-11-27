@@ -66,6 +66,8 @@ All 25 distinct commits on `codex/main-debug-20261119` now have a recorded desti
 | 11-12-merge candidate | December outcome |
 |---|---|
 | Filler Cream prototype 1bf605e | Already superseded in place by December's `modules/filler_cream.py` engine v7 and its `VoxelStudio` apply/status/regenerate/bake path. The current engine keeps the donor's separate reversible layer and bounded fill behavior while adding 1/128 internal units, outer-point fitting, ceiling and overhang protection, diagonal cracks, corner pieces, material/UV bake guards, deterministic fingerprints and stale-layer refusal. Sixty-four focused engine and VoxelStudio connection tests passed. The older module and fixture must not replace this live implementation. |
+| c4793b9 session handoff | Reproduced the handoff's GLB padding defect through the current VoxelStudio.bake_object path. Assembly 9d01a230 corrects the shared GLB writer for ordinary and cream geometry and exercises strict JSON decoding across all four padding alignments. The donor's proposed bake hookup already exists. |
+| ec36c41, b8df3fb, dd81940 and b534ed3 | VoxelStudio.apply_filler and bake_object reach the current v7 engine. December retains blueprint marks, selectable fidelity, outer-point fit and mixed-fidelity coverage. Destination tests exercised ridge reach, fingertip boundaries, all six face orientations, optimized versus exhaustive computation, bake and restart. dd81940 only corrected historical test counts. Both focused suites passed together (65 tests at 9d01a230). No second implementation needed. |
 
 ### Foresight and per-camera warnings
 
@@ -75,7 +77,7 @@ For 9e872cb and 310c858, static/control_room.html and static/director_switcher.h
 
 ## Resume point
 
-Beyond-October, `11-12-merge` at `d70952e52c81f89178f4ab557206fcde109bf970`. Candidate `1bf605e5d035f05f536d78076b6ef7aca3e8725d` is verified superseded by the live Filler Cream v7/VoxelStudio path. Next candidate: handoff-only `c4793b9243dd664fb780fef11beb29e918d39260`; check it for unique operating constraints not already retained in December's Filler Cream docs, then continue to code candidate `ec36c417427e6a3228154b85cf16b9cdc50bf098`. The branch has 107 commits not inherited by the completed main-debug branch, so it remains open. The branch inventory below pins sources only. Rows without a disposition above still require behavioral reconciliation.
+Beyond-October, `11-12-merge` at `d70952e52c81f89178f4ab557206fcde109bf970`. Next candidate: `daed761b2c866afd91fdcef103b62797c1b435d2`, the Primp and set-building applicator UI proposal. Compare its operator actions against the live destination controls. The branch has 107 commits not inherited by the completed main-debug branch, so it remains open. The branch inventory below pins sources only. Rows without a disposition above still require behavioral reconciliation.
 - `11-12-merge` — `d70952e52c81f89178f4ab557206fcde109bf970`
 - `2i-beta-polish` — `df737caaeff206e4128932532663776af74ec0e8`
 - `audit/standard-first-2026-11-19` — `6cccfd7a5b2b74f3c29829ed723c0e85128ee322`
