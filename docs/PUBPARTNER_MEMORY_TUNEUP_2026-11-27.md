@@ -120,3 +120,23 @@ shared files, no `2i/` folder):
 
 Run it yourself (app folder, venv active): `python -m pytest tests -q --ignore=tests\pubpartner_federation` and
 `python scripts\pubpartner_memory_probe.py`.
+
+## 8. Second pass: hard debugging (branch claude/pubpartner-memory-debug-2026-11-27)
+
+Fixed and covered by tests/test_pubpartner_memory_debug.py (27 tests; the ones for bugs 1-5 were shown failing on the old code):
+1. Backups: a copy that failed its check stayed under its real name and blocked every later backup; it is now checked before it is renamed. The file name now holds the state the copy really contains.
+2. Windows (EMULATED on Linux from documented behaviour, not run on Windows): flushing a read-only handle and opening a directory fail there, so the vessel backup and memory_status.json would likely never have been written. Fixed in store.backup_to and write_status; the status swap also retries when Windows has the file locked.
+3. Jeremy write/recall failures were swallowed with no log. Now logged and returned in save_errors (stage "jeremy"); turn dict has jeremy_status.
+4. A torn last log row (power cut) swallowed the next good row. New modules/pubpartner_durable.py: append_row starts a fresh line and flushes; exact words, audit rows, receipts and turn log are now flushed to disk.
+5. Messages holding U+2028, U+2029 or U+0085 tore turn-log rows into pieces (history, friend backup and encounter chain were affected). JSONL readers now split on newline only.
+6. Turn latency grew with session length (389 ms at turn 1000 on the mock provider). list_turns now reads from the end: about 100 ms at turn 1000. Remaining growth is the whole-chain receipt check each turn (her fail-closed design, left alone).
+7. A vessel that will not open now logs a plain recovery note (newest sound backup plus PowerShell copy steps). A vessel that is merely locked is told apart and gets NO restore advice.
+8. memory-map CLI no longer crashes on a console that cannot show a character in the data path.
+
+NOT fixed, need Josie's decision (both sides in the chat report):
+A. Two app processes on one data folder fork the verbatim audit chain (1 of 3 runs) and race on Alex Core's _affect_state.tmp (modules/alex_core.py line 754, a pinned file on another branch, not touched). One process stayed clean through 330 concurrent turns. Option: a data-folder lock that refuses a second start (needs Windows testing).
+B. A torn last receipt row makes every later turn in that session raise "receipt chain invalid" (fail-closed identity checkpoint). Option: treat an unterminated last row as a torn tail, warn, and continue from the last good row.
+C. Files are named user_session, so user "a_b"+session "c" and user "a"+session "b_c" share receipts and turn log (reproduced); ids over 120 characters and "/" vs "_" also merge. Fixing needs a naming change plus migration.
+D. The recall defect from section 5 is still open.
+
+Verification state: full suite on a fresh build 258 passed, 4 skipped, 1 xfailed, 1 failed (the same PubCast main.py test as before); federation 14 passed with PYTHONPATH=pubpartner. Run after the last code change. NOT re-run on the final code (interrupted): scripts/pubpartner_memory_probe.py and pubpartner_restart_probe.py (both passed before this pass's changes), and the two-instance stress. The SIGKILL-under-load test passed (0 acknowledged messages lost) after the flush changes but before the tail-read change. Nothing was run on Windows.

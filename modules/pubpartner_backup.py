@@ -56,7 +56,7 @@ def _receipt_matches(path: Path, *, user_id: str, friend_id: str, root: Path) ->
     if scope != {"user_id": user_id, "friend_id": friend_id}:
         return False
     try:
-        rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        rows = [json.loads(line) for line in path.read_text(encoding="utf-8").split("\n") if line.strip()]
         return bool(rows) and all(row.get("user_id") == user_id for row in rows)
     except (ValueError, OSError, TypeError):
         return False
@@ -76,7 +76,7 @@ def _session_is_exclusive(path: Path, *, user_id: str, friend_id: str) -> bool:
     if turns.is_symlink():
         return False
     try:
-        for line in turns.read_text(encoding="utf-8").splitlines():
+        for line in turns.read_text(encoding="utf-8").split("\n"):
             if not line.strip():
                 continue
             record = json.loads(line)
@@ -140,7 +140,7 @@ def _eligible_backup_files(root: Path, *, user_id: str, friend_id: str) -> List[
         encounters = pair_dir / "encounters.jsonl"
         if encounters.is_file() and not encounters.is_symlink():
             try:
-                rows = [json.loads(line) for line in encounters.read_text(encoding="utf-8").splitlines()
+                rows = [json.loads(line) for line in encounters.read_text(encoding="utf-8").split("\n")
                         if line.strip()]
                 if rows and all(isinstance(row, dict) and row.get("user_id") == user_id and
                                 row.get("friend_id") == friend_id for row in rows):
@@ -239,7 +239,7 @@ def _scoped_guidance(root: Path, *, user_id: str, friend_id: str) -> bytes:
     if not path.is_file() or path.is_symlink():
         return b""
     rows = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in path.read_text(encoding="utf-8").split("\n"):
         if not line.strip():
             continue
         try:

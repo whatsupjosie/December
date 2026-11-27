@@ -100,7 +100,7 @@ class PubPartnerGuidanceStore:
         if not path.exists():
             return []
         rows: List[Dict[str, Any]] = []
-        for line in path.read_text(encoding="utf-8").splitlines():
+        for line in path.read_text(encoding="utf-8").split("\n"):
             if not line.strip():
                 continue
             try:

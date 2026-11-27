@@ -341,7 +341,7 @@ class RelationshipEngine:
             return "GENESIS"
         last = "GENESIS"
         try:
-            for line in path.read_text(encoding="utf-8").splitlines():
+            for line in path.read_text(encoding="utf-8").split("\n"):
                 if line.strip():
                     last = str(json.loads(line).get("encounter_hash") or last)
         except Exception:
@@ -400,7 +400,7 @@ class RelationshipEngine:
         path = self._encounters_path(user_id, friend_id)
         rows: List[Dict[str, Any]] = []
         if path.exists():
-            for line in path.read_text(encoding="utf-8").splitlines():
+            for line in path.read_text(encoding="utf-8").split("\n"):
                 if not line.strip():
                     continue
                 try:
@@ -417,7 +417,7 @@ class RelationshipEngine:
             return {"ok": True, "entries": 0, "last_hash": "GENESIS"}
         prev = "GENESIS"
         count = 0
-        for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        for line_no, line in enumerate(path.read_text(encoding="utf-8").split("\n"), start=1):
             if not line.strip():
                 continue
             try:

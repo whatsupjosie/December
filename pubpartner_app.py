@@ -40,7 +40,7 @@ from modules.manuscript_intelligence import make_router as create_manuscript_int
 from modules.pubpartner_cartridges import create_pubpartner_cartridge_router
 from modules.avatar_imports import create_avatar_import_router
 from modules.pubpartner_vessel import PubPartnerVesselRuntime
-from modules.pubpartner_vessel_backup import backup_dir_for, backup_vessel_if_changed
+from modules.pubpartner_vessel_backup import backup_dir_for, backup_vessel_if_changed, explain_unopenable_vessel
 from modules.pubpartner_memory_map import build_memory_map, human_summary, write_status
 
 try:
@@ -158,9 +158,13 @@ async def lifespan(app: FastAPI):
             logger.warning("Jeremy memory unavailable; continuing without it: %s", exc)
             cricket = None
 
-    vessel = PubPartnerVesselRuntime.open_or_create(
-        DATA_DIR / "pubpartner" / "vessels" / "alex.pubpartner"
-    )
+    vessel_file = DATA_DIR / "pubpartner" / "vessels" / "alex.pubpartner"
+    try:
+        vessel = PubPartnerVesselRuntime.open_or_create(vessel_file)
+    except Exception as exc:
+        # Refuse to start rather than touch it, and say plainly how to recover.
+        logger.critical("\n%s", explain_unopenable_vessel(vessel_file, backup_dir_for(DATA_DIR), exc))
+        raise
     spine = pubpartner_routes.configure_pubpartner_spine(
         data_dir=DATA_DIR,
         alex_bridge=alex_bridge,

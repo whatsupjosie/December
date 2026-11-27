@@ -71,6 +71,22 @@ def _bounded_text(value: Any, field: str, *, maximum: int = 8_192, required: boo
     return text
 
 
+def _fsync_directory(directory: Path) -> None:
+    """Flush a directory entry so a rename survives power loss. POSIX only; Windows cannot open a directory this way."""
+    if os.name == "nt":
+        return
+    try:
+        descriptor = os.open(directory, os.O_RDONLY)
+    except OSError:
+        return  # the rename already happened; a failed extra flush must not make a good copy look failed
+    try:
+        os.fsync(descriptor)
+    except OSError:
+        pass
+    finally:
+        os.close(descriptor)
+
+
 class VesselStore:
     """A validated mount of one `.pubpartner` SQLite vessel.
 
@@ -788,15 +804,14 @@ class VesselStore:
                 source.backup(destination_connection)
                 destination_connection.close()
                 destination_connection = None
-            with temporary.open("rb") as handle:
+            # Windows only lets a file be flushed through a handle that can write, so open it r+b.
+            with temporary.open("r+b") as handle:
                 os.fsync(handle.fileno())
+            # Prove the copy is a sound vessel BEFORE it takes its final name. Checking it afterwards
+            # would leave a damaged file under the real name for every later start to trust.
+            validation = VesselStore.open(temporary, read_only=True).validate()
             os.replace(temporary, target)
-            parent_fd = os.open(target.parent, os.O_RDONLY)
-            try:
-                os.fsync(parent_fd)
-            finally:
-                os.close(parent_fd)
-            validation = VesselStore.open(target, read_only=True).validate()
+            _fsync_directory(target.parent)
             return {
                 "ok": True,
                 "path": str(target),

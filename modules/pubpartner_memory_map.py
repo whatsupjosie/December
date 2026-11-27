@@ -34,6 +34,8 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
 
 FORMAT = "PubPartnerMemoryMap.v1"
 STATUS_FILENAME = "memory_status.json"
+REPLACE_ATTEMPTS = 6
+REPLACE_WAIT_SECONDS = 0.1
 VERIFY_CHOICES = ("vessel", "receipts", "verbatim")
 
 # Jeremy memories below this importance are never offered to a reply
@@ -482,10 +484,27 @@ def write_status(data_dir: Path | str, report: Dict[str, Any]) -> Path:
     target = Path(data_dir).expanduser().resolve() / "pubpartner" / STATUS_FILENAME
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = target.with_name(f".{target.name}.{os.getpid()}.tmp")
-    temporary.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-    with temporary.open("rb") as handle:
-        os.fsync(handle.fileno())
-    os.replace(temporary, target)
+    try:
+        # Flush through the handle that wrote it: Windows refuses to flush a handle that cannot write.
+        with temporary.open("w", encoding="utf-8") as handle:
+            handle.write(json.dumps(report, ensure_ascii=False, indent=2))
+            handle.flush()
+            os.fsync(handle.fileno())
+        # On Windows a reader (antivirus, an editor, Explorer) holding the old file open makes the swap fail for a moment.
+        for attempt in range(REPLACE_ATTEMPTS):
+            try:
+                os.replace(temporary, target)
+                break
+            except PermissionError:
+                if attempt == REPLACE_ATTEMPTS - 1:
+                    raise
+                time.sleep(REPLACE_WAIT_SECONDS)
+    except BaseException:
+        try:
+            temporary.unlink()
+        except OSError:
+            pass
+        raise
     return target
 
 
@@ -537,15 +556,32 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--json", action="store_true", help="print JSON instead of text")
     parser.add_argument("--write", action="store_true", help="also write pubpartner/memory_status.json")
     args = parser.parse_args(argv)
+    _console_never_crashes()
     data_dir = Path(args.data_dir).expanduser()
     if not data_dir.is_dir():
         print(f"No data folder at {data_dir.resolve()}. Pass --data-dir with the folder PubPartner uses.", file=sys.stderr)
         return 2
     report = build_memory_map(data_dir, verify=args.verify)
     if args.write:
-        write_status(data_dir, report)
-    print(json.dumps(report, ensure_ascii=False, indent=2) if args.json else human_summary(report))
+        try:
+            write_status(data_dir, report)
+        except OSError as exc:
+            print(f"Could not write the status file: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 2
+    # ensure_ascii for the console: a legacy Windows code page cannot show every character in a folder or user name.
+    print(json.dumps(report, ensure_ascii=True, indent=2) if args.json else human_summary(report))
     return 0 if report["ok"] else 2
+
+
+def _console_never_crashes() -> None:
+    """A path or name the console's code page cannot show must print as an escape, not stop the report with a traceback."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            try:
+                reconfigure(errors="backslashreplace")
+            except (OSError, ValueError):
+                pass
 
 
 __all__ = ["build_memory_map", "write_status", "human_summary", "main", "FORMAT", "STATUS_FILENAME", "VERIFY_CHOICES"]

@@ -49,6 +49,7 @@ from .pubpartner_profiles import PubPartnerProfileStore
 from .pubpartner_guidance import PubPartnerGuidanceStore
 from .pubpartner_blackbox_light import PubPartnerBlackboxLight
 from .pubpartner_tokens import PubPartnerTokenCounter
+from .pubpartner_durable import append_row, tail_lines, write_bytes_durable, write_text_durable
 from .pubpartner_receipts import PubPartnerReceiptStore
 from .pubpartner_identity_checkpoint import checkpoint as identity_checkpoint
 from .pubpartner_relationship import RelationshipEngine
@@ -260,7 +261,7 @@ class VerbatimVault:
             return "GENESIS"
         last = "GENESIS"
         try:
-            for line in audit.read_text(encoding="utf-8").splitlines():
+            for line in audit.read_text(encoding="utf-8").split("\n"):
                 if not line.strip():
                     continue
                 last = json.loads(line).get("audit_hash") or last
@@ -291,8 +292,7 @@ class VerbatimVault:
         rec.prev_audit_hash = str(audit_payload.get("prev_audit_hash") or "GENESIS")
         rec.audit_hash = str(audit_payload.get("audit_hash") or "")
         audit = self._audit_path(rec.user_id, rec.session_id)
-        with audit.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(audit_payload, ensure_ascii=False, separators=(",", ":")) + "\n")
+        append_row(audit, json.dumps(audit_payload, ensure_ascii=False, separators=(",", ":")) + "\n")
         return rec
 
     def _append_audit(self, rec: SourceRecord, event: str = "store") -> SourceRecord:
@@ -353,8 +353,8 @@ class VerbatimVault:
         tmp_raw = raw_path.with_suffix(".utf8.tmp")
         tmp_json = path.with_suffix(".json.tmp")
         try:
-            tmp_raw.write_bytes(raw)
-            tmp_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            write_bytes_durable(tmp_raw, raw)
+            write_text_durable(tmp_json, json.dumps(payload, ensure_ascii=False, indent=2))
             tmp_raw.replace(raw_path)
             tmp_json.replace(path)
             self._write_audit(rec, audit_payload)
@@ -409,7 +409,7 @@ class VerbatimVault:
         prev = "GENESIS"
         entries = 0
         source_ids: List[str] = []
-        for lineno, line in enumerate(audit.read_text(encoding="utf-8").splitlines(), start=1):
+        for lineno, line in enumerate(audit.read_text(encoding="utf-8").split("\n"), start=1):
             if not line.strip():
                 continue
             try:
@@ -965,6 +965,7 @@ class PubPartnerSpine:
                 # detected below; an ordinary turn is not automatically a memory.
 
         # Jeremy receives a memory pointer, not a lossy rewrite of the user text.
+        jeremy_problems: List[str] = []
         await self._jeremy_remember(
             self.memory_scope(user_id, profile.friend_id, project_id, room_id),
             f"Exact user turn preserved as {source.source_id} sha256={source.sha256} kind={source.kind}: {_clip(message, 500)}",
@@ -972,11 +973,12 @@ class PubPartnerSpine:
             importance=7 if source.kind in _EXACT_TEXT_KINDS else 5,
             tags=["pubpartner", "verbatim", source.kind, user_id, project_id],
             source="conversation",
+            problems=jeremy_problems,
         )
 
         memories = await self._jeremy_memories(
             self.memory_scope(user_id, profile.friend_id, project_id, room_id),
-            message, history or [], max_memories=max_memories,
+            message, history or [], max_memories=max_memories, problems=jeremy_problems,
         )
         alex_packet = None
         whisper = ""
@@ -1146,6 +1148,7 @@ class PubPartnerSpine:
             "vessel_event_count": len(vessel_context.get("events") or []),
             "vessel_recorded_event_id": vessel_event_id,
             "work_notes_context": work_notes_status,
+            "jeremy_status": {"configured": self.cricket_keeper is not None, "problems": list(jeremy_problems)},
         }
         if eq_observation is not None:
             result["eq_observation"] = eq_observation
@@ -1309,6 +1312,8 @@ class PubPartnerSpine:
         # From here the provider reply exists and has been paid for. A failed write below
         # is reported in save_errors; it must never throw the reply away.
         save_errors: List[Dict[str, str]] = []
+        for problem in (turn.get("jeremy_status") or {}).get("problems") or []:
+            save_errors.append({"stage": "jeremy", "error": str(problem)[:300]})
         try:
             receipt_chain_row = self.receipts.append(user_id=user_id or "anon", session_id=session_id or "default", receipt=receipt)
             receipt_chain = {"ok": True, "receipt_chain_hash": receipt_chain_row.get("receipt_chain_hash"), "prev_receipt_hash": receipt_chain_row.get("prev_receipt_hash")}
@@ -1845,15 +1850,16 @@ class PubPartnerSpine:
     def list_turns(self, *, user_id: str, session_id: str, limit: int = 50) -> Dict[str, Any]:
         path = self.session_dir / f"{_safe_slug(user_id)}_{_safe_slug(session_id)}_turns.jsonl"
         rows: List[Dict[str, Any]] = []
+        wanted = max(1, min(500, int(limit)))
         if path.exists():
-            for line in path.read_text(encoding="utf-8").splitlines():
-                if not line.strip():
-                    continue
+            # Only the last rows are wanted, and each row is large (about 35 KB), so read from the end of the
+            # file. Parsing the whole log on every turn made each turn slower than the one before it.
+            for line in tail_lines(path, wanted):
                 try:
                     rows.append(json.loads(line))
                 except Exception:
                     rows.append({"error": "invalid turn log row"})
-        return {"ok": True, "turns": rows[-max(1, min(500, int(limit))):]}
+        return {"ok": True, "turns": rows[-wanted:]}
 
     def list_profiles(self, kind: str) -> Dict[str, Any]:
         return self.profiles.list_profiles(kind)
@@ -1946,6 +1952,7 @@ class PubPartnerSpine:
         importance: int = 5,
         tags: Optional[List[str]] = None,
         source: str = "system",
+        problems: Optional[List[str]] = None,
     ) -> int:
         if self.cricket_keeper is None:
             return -1
@@ -1953,7 +1960,11 @@ class PubPartnerSpine:
             cricket = await self.cricket_keeper.get(friend_id or "friend")
             mtype = JeremyMemoryType(memory_type) if JeremyMemoryType is not None else memory_type
             return await cricket.remember(content, memory_type=mtype, importance=importance, tags=tags or [], source=source)
-        except Exception:
+        except Exception as exc:
+            # A memory that cannot be written is the failure the owner most needs to hear about; it was silent before.
+            logging.getLogger(__name__).exception("Jeremy could not save a memory (%s)", friend_id)
+            if problems is not None:
+                problems.append(f"remember: {type(exc).__name__}: {exc}"[:300])
             return -1
 
     async def _jeremy_memories(
@@ -1963,6 +1974,7 @@ class PubPartnerSpine:
         history: Sequence[Dict[str, Any]],
         *,
         max_memories: int,
+        problems: Optional[List[str]] = None,
     ) -> List[MemoryRef]:
         if self.cricket_keeper is None:
             return []
@@ -1979,7 +1991,10 @@ class PubPartnerSpine:
                     source=mem.source,
                 ))
             return refs
-        except Exception:
+        except Exception as exc:
+            logging.getLogger(__name__).exception("Jeremy could not recall memories (%s)", friend_id)
+            if problems is not None:
+                problems.append(f"recall: {type(exc).__name__}: {exc}"[:300])
             return []
 
     def _task_block(self, task: Optional[Dict[str, Any]], source: SourceRecord) -> Dict[str, Any]:
@@ -2049,7 +2064,4 @@ class PubPartnerSpine:
             light["llm_prompt_json"] = _clip(light["llm_prompt_json"], 4000)
         # default=str: one value that JSON cannot encode (a Path, a dataclass) must not cost the whole turn row.
         row = json.dumps(light, ensure_ascii=False, default=str) + "\n"
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(row)
-            handle.flush()
-            os.fsync(handle.fileno())
+        append_row(path, row)

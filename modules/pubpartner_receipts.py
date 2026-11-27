@@ -12,6 +12,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List
 
+from .pubpartner_durable import append_row
+
 
 def _hash_payload(payload: Dict[str, Any]) -> str:
     core = dict(payload)
@@ -33,7 +35,7 @@ class PubPartnerReceiptStore:
         last = "GENESIS"
         if not path.exists():
             return last
-        for line in path.read_text(encoding="utf-8").splitlines():
+        for line in path.read_text(encoding="utf-8").split("\n"):
             if not line.strip():
                 continue
             try:
@@ -50,15 +52,14 @@ class PubPartnerReceiptStore:
         payload["session_id"] = session_id or "default"
         payload["prev_receipt_hash"] = self.last_hash(user_id, session_id)
         payload["receipt_chain_hash"] = _hash_payload(payload)
-        with self._path(user_id, session_id).open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n")
+        append_row(self._path(user_id, session_id), json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n")
         return payload
 
     def list(self, *, user_id: str, session_id: str, limit: int = 50) -> Dict[str, Any]:
         path = self._path(user_id, session_id)
         rows: List[Dict[str, Any]] = []
         if path.exists():
-            for line in path.read_text(encoding="utf-8").splitlines():
+            for line in path.read_text(encoding="utf-8").split("\n"):
                 if line.strip():
                     try:
                         rows.append(json.loads(line))
@@ -72,7 +73,7 @@ class PubPartnerReceiptStore:
             return {"ok": True, "entries": 0, "last_hash": "GENESIS"}
         prev = "GENESIS"
         entries = 0
-        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").split("\n"), start=1):
             if not line.strip():
                 continue
             try:
