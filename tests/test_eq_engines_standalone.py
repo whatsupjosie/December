@@ -1,7 +1,8 @@
 """The EQ engines run on their own, without PubPartner, Alex Core or the PubCast host.
 
 This copies only the EQ engine files, plus the few shared files they import
-(found by reading their import lines), into an empty folder and imports them
+(found by reading their import lines; in a branch checkout the shared ones come
+from the blobs pinned in STANDALONE_DEPS.json), into an empty folder and imports them
 there in a fresh Python process. If an engine starts to depend on PubPartner or
 the studio, this test fails and names the module it could not find.
 """
@@ -9,7 +10,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -46,35 +46,58 @@ def _assembler():
     return mod
 
 
-def _closure(assemble) -> list[str]:
-    """Engine files plus every December file they import, read from disk."""
-    seen: set[str] = set()
+def _pins() -> dict[str, str]:
+    manifest = ROOT / "STANDALONE_DEPS.json"
+    if not manifest.is_file():
+        return {}
+    return {p["path"]: p["blob"] for p in json.loads(manifest.read_text(encoding="utf-8"))["pins"]}
+
+
+def _body(rel: str, pins: dict[str, str]) -> bytes | None:
+    """A file from this folder, or, in a branch checkout, its pinned shared blob."""
+    if (ROOT / rel).is_file():
+        return (ROOT / rel).read_bytes()
+    if rel in pins:
+        out = subprocess.run(["git", "cat-file", "blob", pins[rel]], cwd=ROOT, capture_output=True)
+        if out.returncode == 0:
+            return out.stdout
+    return None
+
+
+def _closure(assemble) -> dict[str, bytes]:
+    """Engine files plus every December file they import, with their contents."""
+    pins = _pins()
+    files: dict[str, bytes] = {}
     queue = list(ENGINES)
     while queue:
         rel = queue.pop()
-        if rel in seen or not (ROOT / rel).is_file():
+        if rel in files:
             continue
-        seen.add(rel)
-        for name in assemble.imports_of((ROOT / rel).read_text(encoding="utf-8"), rel):
+        body = _body(rel, pins)
+        if body is None:
+            continue
+        files[rel] = body
+        names = assemble.imports_of(body.decode("utf-8"), rel)
+        for name in names:
             if not assemble.is_local(name):
                 continue
             parts = name.split(".")
             for i in range(1, len(parts) + 1):
                 for cand in assemble.module_to_candidates(".".join(parts[:i])):
-                    if (ROOT / cand).is_file():
+                    if (ROOT / cand).is_file() or cand in pins:
                         queue.append(cand)
                         break
         # peq and cre_eq are separate packages that live under modules/.
-        for name in assemble.imports_of((ROOT / rel).read_text(encoding="utf-8"), rel):
+        for name in names:
             if name.split(".")[0] in ("peq", "cre_eq"):
                 for cand in assemble.module_to_candidates("modules." + name):
-                    if (ROOT / cand).is_file():
+                    if (ROOT / cand).is_file() or cand in pins:
                         queue.append(cand)
-    return sorted(seen)
+    return files
 
 
 def test_engines_pull_in_no_pubpartner_alex_core_or_host():
-    files = _closure(_assembler())
+    files = sorted(_closure(_assembler()))
     modules = [f[:-3].replace("/", ".").removesuffix(".__init__") for f in files]
     assert "modules/cre_eq/engine.py" in files and "modules/peq/system.py" in files
     bad = [m for m in modules if m.startswith(FORBIDDEN_PREFIXES)]
@@ -83,10 +106,10 @@ def test_engines_pull_in_no_pubpartner_alex_core_or_host():
 
 def test_engines_import_and_read_in_an_empty_folder(tmp_path):
     files = _closure(_assembler())
-    for rel in files:
+    for rel, body in files.items():
         dest = tmp_path / rel
         dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(ROOT / rel, dest)
+        dest.write_bytes(body)
     probe = r"""
 import asyncio, importlib, json, os, sys
 sys.path.insert(0, sys.argv[1])
