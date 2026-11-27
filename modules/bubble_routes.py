@@ -101,9 +101,9 @@ def ingest_skeleton_frame(
         return {"ok": True, "room_id": room_id, "state": "AI_BLIND", "actor_id": payload.actor_id}
     if len(payload.bones) > 256 or not all(isfinite(v) for p in payload.bones.values() for v in p):
         raise HTTPException(status_code=422, detail="skeleton must contain at most 256 finite bone positions")
-    frame = SkeletonFrame(actor_id=payload.actor_id, bones=payload.bones)
     # Tracker history is room-local and shares the stack's serialization boundary.
     with stack._lock:
+        frame = SkeletonFrame(actor_id=payload.actor_id, bones=payload.bones)
         tracker = getattr(stack, "_route_tracker", None)
         if tracker is None:
             tracker = stack._route_tracker = SkeletonTracker()

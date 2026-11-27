@@ -56,3 +56,22 @@ def test_invalid_dt_and_duplicate_ids_leave_state_untouched():
 def test_grid_rejects_unrepresentable_spacing():
     with pytest.raises(ValueError, match="spacing must advance"):
         BubbleStack(BubbleGridConfig("bad", origin=(1e20,0,0), spacing=1))
+
+
+def test_pending_events_are_bounded_and_loss_is_reported():
+    from modules.bubble_stack import MAX_PENDING_EVENTS
+    s = BubbleStack(BubbleGridConfig("r"))
+    for i in range(MAX_PENDING_EVENTS + 10):
+        s._append_event({"type": "test", "i": i})
+    assert len(s._events) == MAX_PENDING_EVENTS
+    stat = s.build_stat()
+    assert stat.meaningful_events[0]["type"] == "bubble_event_backlog_dropped"
+    assert stat.meaningful_events[0]["count"] >= 10
+
+
+def test_bad_skeleton_preserves_previous_occupancy():
+    s = BubbleStack(BubbleGridConfig("r", radius=.5))
+    s.ingest_skeleton_frame("a", [BonePresence("a", "head", (0,0,0))])
+    with pytest.raises(ValueError):
+        s.ingest_skeleton_frame("a", [BonePresence("b", "head", (3,0,0))])
+    assert {b.center for b in s.bubbles.values() if b.bones} == {(0,0,0)}
