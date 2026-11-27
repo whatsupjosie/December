@@ -1,6 +1,6 @@
 # December source sweep
 
-Baseline assembly 06c69eb, parts 94ef55b, main 38787ec. Current verified installation 4a4576ed72c8c7ebeaa9524c1ba6ca60d9337b95. No repository has reached full accounting yet.
+Baseline assembly 06c69eb, parts 94ef55b, main 38787ec. Current verified installation 6a0f36fc451da307877082d6e9f7e461276e95a0. No repository has reached full accounting yet.
 
 Sir Purfluous recovery archive follow-up (PARTS.md item 10): the `sir_purfluous_bot(1).zip` member `sir_purfluous_bot/director.py` supplied the slow, underplay and stress transformations. December's existing `modules/sir_purfluous_runtime.py` applies these to explicit quoted-line demonstrations after existing intents. The offline BotManager path returned the actor's line with the rehearsal beat. All 17 focused responder checks passed. The full original director remains in the parts archive. Other archive behaviors and the repository-wide archive audit remain open.
 
@@ -84,9 +84,15 @@ December's Option C engineering branch at 401ecf057e52219e793f4d4422d5b1c4c2f450
 
 Two separately recoverable October 24 chat attachments are PubCast_October24_Integration_Source_Staging.zip (libfile_96530796d9188191a3268b9c8ce70b94) and PubCast_CI_Integration_Working_2026-10-24.zip (libfile_cad7bc86d3708191a2612a1f1a4c86f3). Compare at the October-24 queue entry before crediting the source import. The November 14 speech conversation also reported Pete character-voice routing committed locally at f185845. Beyond-October does not resolve the abbreviated SHA and its published speech branch tip is 6707e7c. Check actual Studio dialogue routing when reconciling that branch. These leads do not close either donor.
 
+### Beyond-October complete contents comparison
+
+[Branch and archive inventory](beyond-october-inventory/README.md). All 54 tips and 464 reachable commits were inspected for file versions and archives. Four exact source files were preserved in parts. The behavior sweep remains open.
+
+On 11-12-merge, c703bf4 regenerated the heart PNG through December's CLI (1,492 blocks and 1,050 cream cells). ecedd601, 1e379aaf, 0e50de58, 536d3ef0 and ad14b477 reach the current Filler Cream engine and VoxelStudio store. 6a6498fd and b1837712 document that implementation. Reproduced a partial-write failure through ordinary and cream object baking. Main-assembly 6a0f36fc now atomically replaces completed GLBs. Both failure regressions verify the previous bake survives and retry succeeds. Primp design revisions bf073508, 1f1a2947, 98cd37ba, ea8ed376, b2433083, 33120524 and 27529758 are retained cumulatively and outlined in PARTS.md. Wallet 0950d72d is a design note, identical in December. For 6006fa82, 29 of 30 changed files are exact, and the remaining orientation note gained a subsequent correction. The standalone reader and live-turn integration gap are outlined in parts. The combined destination voxel, Wallet spine and reader suites passed 137 tests, including the real affect engine. The current Primp Node suites passed 34 tests.
+
 ## Resume point
 
-Beyond-October, `11-12-merge` at `d70952e52c81f89178f4ab557206fcde109bf970`. Next candidate: `c703bf4af36ac159feffed0119211394b5256f68`, the reproducible Feic Mo Chroí heart. Check the generator, rendered asset and destination entry point. The branch has 107 commits not inherited by the completed main-debug branch, so it remains open. The branch inventory below pins sources only. Rows without a disposition above still require behavioral reconciliation.
+Beyond-October, `11-12-merge` at `d70952e52c81f89178f4ab557206fcde109bf970`. Next candidate: merge `3641f31ad57be61e04cb868edcbe3ccbe8595ee3`, beginning with second-parent commit `1e33789ba82d231384b04063b1b68325ca94df4c` (offline host-data checkpoint and safe restore). Trace its restore path and retain unique behavior before advancing through the merge. The branch has 107 commits not inherited by the completed main-debug branch, so it remains open. The branch inventory below pins sources only. Rows without a disposition above still require behavioral reconciliation.
 - `11-12-merge` — `d70952e52c81f89178f4ab557206fcde109bf970`
 - `2i-beta-polish` — `df737caaeff206e4128932532663776af74ec0e8`
 - `audit/standard-first-2026-11-19` — `6cccfd7a5b2b74f3c29829ed723c0e85128ee322`

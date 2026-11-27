@@ -61,3 +61,11 @@ Her words: "Can you please push everything that is waiting or in progress to Dec
 22. **Plans saved from Claude Docs:** handoffs/claude-docs/. The Pre-Dec merge plan (Nov 24, decisions 2 to 9 still hers) and the Big Zip inventory.
 23. **PubPartner Nov 22 commits on the EQ foundations branch:** patches/pubpartner-nov22-onto-eq/. Beyond-October `6cba39b` and `7fd1fea` rebuilt on pre-dec `claude/eq-foundations-2026-11-23` (pre-dec branch `claude/pubpartner-nov22-onto-eq-2026-11-27`, tip `04c8774`), with the two `pubpartner_core.py` clashes resolved as its README says. Not installed. Waiting on her: which cartridge-memory path to keep (this or item 14).
     Correction (Nov 27): superseded. Both commits were already in December's `pubpartner` branch (`da0f2a9`), which is newer; see the folder README.
+
+## Beyond-October archive and branch review
+
+The [complete contents comparison](beyond-october-inventory/README.md) includes the original 2i and PubPartner regression workflows and two handoffs recovered from four donor paths with no counterpart in either assembly at inspection. Their exact source pins, destination paths and next actions are in the comparison.
+
+**Live Primp makeup** — Beyond-October `11-12-merge`, bf073508 through 27529758. The cumulative source `docs/PRIMP_LIVE_MAKEUP_DESIGN.md` already matches main-assembly. Current Primp handles GLB texture painting and stroke undo. Camera-tracked pencil grip, virtual tip, voice engage/retreat and whole-engage undo need a live face/hand tracking session connected to the brush. First replay a known tracking sequence through a session and verify disengagement prevents further strokes.
+
+**Alex situation reading** — Beyond-October `11-12-merge` at 6006fa8237112748b10f948b3eb006a01c3ab655. December already has the exact modules/situation_reading.py, tests/test_situation_reading.py and tools/alex_eq_testkit sources. Its unit tests exercise the real affect engine. The production turn does not import the reader. The donor plan also requires a validated form provider and owner settings for outside-model cards. First connect a private, local test turn to the existing form validator and prove that a correction survives subsequent turns without passing private memory to an outside provider.
