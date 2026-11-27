@@ -1,0 +1,173 @@
+diff --git a/modules/pubpartner_core.py b/modules/pubpartner_core.py
+index bf8b3ba..2537461 100644
+--- a/modules/pubpartner_core.py
++++ b/modules/pubpartner_core.py
+@@ -47,6 +47,7 @@ from .pubpartner_profiles import PubPartnerProfileStore
+ from .pubpartner_guidance import PubPartnerGuidanceStore
+ from .pubpartner_tokens import PubPartnerTokenCounter
+ from .pubpartner_receipts import PubPartnerReceiptStore
++from .pubpartner_identity_checkpoint import checkpoint as identity_checkpoint
+ from .pubpartner_relationship import RelationshipEngine
+ from .pubpartner_knowledge import PubPartnerKnowledgeBroker
+ from .companion_advisory import CompanionAdvisor
+@@ -1064,6 +1065,14 @@ class PubPartnerSpine:
+             task=knowledge_task,
+         )
+         turn = self.knowledge.inject_reference(turn, knowledge_result)
++        # Receipt chain is durable per user/session and survives host restarts.
++        # Counting completed live dispatches, not packet-preview requests, keeps
++        # response 1, 4, 7... stable even when preview endpoints are called.
++        receipt_state = self.receipts.verify(user_id=user_id or "anon", session_id=session_id or "default")
++        if not receipt_state.get("ok"):
++            raise ValueError("Cannot establish identity checkpoint sequence: receipt chain invalid")
++        response_number = int(receipt_state["entries"]) + 1
++        turn["identity_checkpoint"] = await identity_checkpoint(turn, response_number)
+         provider_result = await self.provider_dispatcher.dispatch(turn, provider or {})
+         provider_fallback: Optional[Dict[str, Any]] = None
+         if allow_fallback and not provider_result.ok and provider_result.provider not in {"offline", "mock"}:
+@@ -1098,6 +1107,7 @@ class PubPartnerSpine:
+             review = companion_advisor.review(message, voice.friend_response, content_kind=str((turn.get("source") or {}).get("kind") or content_kind))
+             receipt["companion_review"] = review
+             live_result["companion_review"] = review
++        receipt["identity_checkpoint"] = turn["identity_checkpoint"]
+         receipt_chain_row = self.receipts.append(user_id=user_id or "anon", session_id=session_id or "default", receipt=receipt)
+         live_result.update({
+             "live_loop": True,
+diff --git a/modules/pubpartner_identity_checkpoint.py b/modules/pubpartner_identity_checkpoint.py
+new file mode 100644
+index 0000000..93b1c28
+--- /dev/null
++++ b/modules/pubpartner_identity_checkpoint.py
+@@ -0,0 +1,72 @@
++"""Experimental PubPartner pre-response identity checkpoint.
++
++The full checkpoint runs before response 1 and every third response thereafter
++(1, 4, 7, ...). Ordinary turns still carry the active FCP1 identity packet.
++The one-second minimum starts AFTER the model-facing packet has been assembled,
++so the time cannot accidentally overlap unrelated packet construction.
++"""
++from __future__ import annotations
++
++import asyncio
++import time
++from typing import Any, Mapping
++
++INTERVAL = 3
++MINIMUM_SECONDS = 1.0
++
++
++def scheduled(response_number: int) -> bool:
++    if response_number < 1:
++        raise ValueError("response_number must be positive")
++    return (response_number - 1) % INTERVAL == 0
++
++
++def validate_identity_packet(turn: Mapping[str, Any]) -> dict:
++    """Fail closed instead of dispatching a response with no character identity."""
++    fcp = turn.get("fcp1")
++    if not isinstance(fcp, dict):
++        raise ValueError("Missing FCP1 identity packet")
++    friend = fcp.get("f")
++    if not isinstance(friend, dict) or not str(friend.get("id") or friend.get("friend_id") or "").strip():
++        raise ValueError("Missing friend identity in FCP1 packet")
++    # A complete packet must contain the identity, user, policy, memory and
++    # guidance compartments even when a new character has zero memories.
++    for key in ("u", "m", "guide", "safe", "history", "source_policy"):
++        if key not in fcp:
++            raise ValueError(f"Missing FCP1 identity-review compartment: {key}")
++    prompt = turn.get("llm_prompt_text")
++    if not isinstance(prompt, str) or not prompt.strip():
++        raise ValueError("Missing model-facing identity context")
++    if not prompt.startswith("@FCP1") or "\nf=" not in prompt or "\nu=" not in prompt:
++        raise ValueError("Model-facing prompt omitted the FCP1 identity or user")
++    if fcp["m"] and "\nm=" not in prompt:
++        raise ValueError("Retrieved memories missing from model-facing prompt")
++    if fcp["guide"] and "\nguide=" not in prompt:
++        raise ValueError("Behavioral guidance missing from model-facing prompt")
++    return {
++        "friend_id": str(friend.get("id") or friend.get("friend_id")),
++        "memory_count": int(turn.get("memory_count") or 0),
++        "guidance_count": int(turn.get("guidance_count") or 0),
++    }
++
++
++async def checkpoint(turn: Mapping[str, Any], response_number: int, *,
++                     clock=time.monotonic, sleep=asyncio.sleep,
++                     minimum_seconds: float = MINIMUM_SECONDS) -> dict:
++    """Validate the prepared identity and enforce the full interval if scheduled."""
++    start = clock()
++    details = validate_identity_packet(turn)
++    full = scheduled(response_number)
++    if full:
++        await sleep(max(0.0, minimum_seconds - (clock() - start)))
++    elapsed = clock() - start
++    if full and elapsed < minimum_seconds:
++        await sleep(minimum_seconds - elapsed)
++        elapsed = clock() - start
++    return {
++        "response_number": response_number,
++        "full_refresh": full,
++        "minimum_seconds": minimum_seconds if full else 0.0,
++        "elapsed_ms": round(elapsed * 1000, 2),
++        **details,
++    }
+diff --git a/tests/test_pubpartner_identity_checkpoint.py b/tests/test_pubpartner_identity_checkpoint.py
+new file mode 100644
+index 0000000..5e6b1be
+--- /dev/null
++++ b/tests/test_pubpartner_identity_checkpoint.py
+@@ -0,0 +1,54 @@
++"""Focused checks for PP-IDENTITY-001 scheduling, duration and fail-closed behavior."""
++import asyncio
++import unittest
++
++from modules.pubpartner_identity_checkpoint import checkpoint, scheduled
++
++
++def packet():
++    return {
++        "fcp1": {
++            "f": {"id": "alex"},
++            "u": {"id": "owner"},
++            "m": [],
++            "guide": [],
++            "safe": [],
++            "history": [],
++            "source_policy": {"immutable": True},
++        },
++        "llm_prompt_text": "@FCP1\nu={}" + "\nf={\\\"id\\\":\\\"alex\\\"}",
++        "memory_count": 0,
++        "guidance_count": 0,
++    }
++
++
++class IdentityCheckpointTests(unittest.IsolatedAsyncioTestCase):
++    async def test_first_fourth_seventh_and_not_second_third(self):
++        self.assertEqual([n for n in range(1, 11) if scheduled(n)], [1, 4, 7, 10])
++
++    async def test_full_wait_and_receipt_fields(self):
++        clock_value = [0.0]
++        async def sleep(seconds):
++            clock_value[0] += seconds
++        result = await checkpoint(packet(), 1, clock=lambda: clock_value[0], sleep=sleep)
++        self.assertTrue(result["full_refresh"])
++        self.assertGreaterEqual(clock_value[0], 1.0)
++        self.assertEqual(result["friend_id"], "alex")
++
++    async def test_lightweight_turn_does_not_wait(self):
++        async def sleep(seconds):
++            self.fail("Lightweight turn should not sleep")
++        result = await checkpoint(packet(), 2, sleep=sleep)
++        self.assertFalse(result["full_refresh"])
++
++    async def test_missing_identity_fails_closed(self):
++        with self.assertRaises(ValueError):
++            await checkpoint({"fcp1": {"f": {}}, "llm_prompt_text": "hi"}, 1)
++
++    async def test_bad_response_number_fails(self):
++        with self.assertRaises(ValueError):
++            await checkpoint(packet(), 0)
++
++
++if __name__ == "__main__":
++    unittest.main()

@@ -35,3 +35,7 @@ Found by reading the import lines of the Python files here (read by script, not 
 
 - From blackbox: `blackbox_event_language/schema.py`, `blackbox_recorder/__init__.py`
 - From main-assembly: `modules/__init__.py`, `modules/auth.py`, `modules/avatar_imports.py`, `modules/governance.py`, `modules/route_security.py`
+
+## Beyond-October PubPartner candidates
+
+[November 22 source deltas](patches/pubpartner-nov22/) preserve the calibration, identity checkpoint, existing wiring, cartridge memory wiring and unification work as individual patches with provenance and remaining checks. These branches share source, and some backend paths overlap with the hardening donor. Review each patch against the current assembly before promoting individual changes.

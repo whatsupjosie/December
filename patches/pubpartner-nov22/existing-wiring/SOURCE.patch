@@ -1,0 +1,263 @@
+diff --git a/modules/pubpartner_core.py b/modules/pubpartner_core.py
+index bf8b3ba..caa5516 100644
+--- a/modules/pubpartner_core.py
++++ b/modules/pubpartner_core.py
+@@ -764,6 +764,16 @@ class PubPartnerSpine:
+             "friend": profile.compact(),
+             "user": primer.compact(),
+             "provider": provider_profile.compact(),
++            # Keep non-secret connection details for resumed sessions. The FCP1
++            # packet deliberately contains only the normalized provider name and
++            # model, so it cannot reconstruct a local host or BYOK reference.
++            "provider_runtime": {
++                key: value for key, value in
++                (provider.items() if isinstance(provider, dict) else [])
++                if key in {"provider", "name", "model", "host", "base_url",
++                           "credential_model_id", "require_api_key", "max_tokens"}
++                and isinstance(value, (str, int, float, bool))
++            },
+             "alex_bridge": alex_packet,
+             "jeremy_whisper": whisper,
+             "created_at": _now(),
+@@ -914,12 +924,17 @@ class PubPartnerSpine:
+                     pass  # recall is an enrichment; it must never break the turn
+ 
+ 
+-        guidance = self.guidance_store.compact(
+-            user_id=user_id,
+-            friend_id=profile.friend_id,
+-            project_id=project_id or "default",
+-            task=task or {},
+-            limit=8,
++        # User-owned guidance is private relationship material. Reuse the same
++        # audience boundary already applied to Vessel and Relationship Engine:
++        # shared studio rooms must not receive someone's private preferences.
++        guidance = (
++            self.guidance_store.compact(
++                user_id=user_id,
++                friend_id=profile.friend_id,
++                project_id=project_id or "default",
++                task=task or {},
++                limit=8,
++            ) if turn_audience == "private" else []
+         )
+         relationship_guidance = (
+             self.relationship.compact(
+@@ -1064,11 +1079,22 @@ class PubPartnerSpine:
+             task=knowledge_task,
+         )
+         turn = self.knowledge.inject_reference(turn, knowledge_result)
+-        provider_result = await self.provider_dispatcher.dispatch(turn, provider or {})
++        # A resumed session must use its saved non-secret provider connection,
++        # not silently fall back to localhost/default just because this turn
++        # omitted the provider object. Explicit per-turn configuration wins.
++        dispatch_config = provider
++        if dispatch_config is None:
++            saved = self._read_session_state(user_id or "anon", session_id or "default")
++            dispatch_config = saved.get("provider_runtime") or saved.get("provider")
++        if isinstance(dispatch_config, str):
++            dispatch_config = self.profiles.resolve_provider(dispatch_config)
++        if not isinstance(dispatch_config, dict):
++            dispatch_config = {}
++        provider_result = await self.provider_dispatcher.dispatch(turn, dispatch_config)
+         provider_fallback: Optional[Dict[str, Any]] = None
+         if allow_fallback and not provider_result.ok and provider_result.provider not in {"offline", "mock"}:
+             provider_fallback = provider_result.as_dict()
+-            fallback_config = dict(provider or {})
++            fallback_config = dict(dispatch_config)
+             fallback_config["provider"] = "offline"
+             provider_result = await self.provider_dispatcher.dispatch(turn, fallback_config)
+             provider_result.warnings.append("fell back to offline provider after requested provider was unavailable")
+diff --git a/pubpartner_app.py b/pubpartner_app.py
+index 86c6983..9394510 100644
+--- a/pubpartner_app.py
++++ b/pubpartner_app.py
+@@ -32,6 +32,8 @@ from modules.pub_manager_authority import (
+     create_pub_manager_control_router,
+ )
+ from modules.pubpartner_backup import create_friend_backup
++from modules.pubpartner_cartridges import create_pubpartner_cartridge_router
++from modules.avatar_imports import create_avatar_import_router
+ from modules.pubpartner_vessel import PubPartnerVesselRuntime
+ 
+ try:
+@@ -208,6 +210,11 @@ app.add_middleware(
+ # routers are mounted in lifespan after their stores and bridges exist.
+ app.include_router(auth_routes.router)
+ app.include_router(pubpartner_routes.router)
++# The standalone app uses the same existing cartridge studio as PubCast.
++# Without this mount, the shipped New Cartridge UI fails with 404.
++app.include_router(create_pubpartner_cartridge_router(DATA_DIR))
++# Existing cartridge editor asks the same avatar import library as PubCast.
++app.include_router(create_avatar_import_router(DATA_DIR))
+ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+ 
+ 
+diff --git a/requirements.txt b/requirements.txt
+index 963fbaa..064e200 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -28,6 +28,8 @@ numpy>=1.26.0,<3.0
+ # pubpartner/memory_store.py imports scikit-learn unguarded (TF-IDF memory scoring),
+ # and pubpartner/__init__.py imports memory_store, so it is a hard runtime dependency.
+ scikit-learn>=1.4,<2.0
++# Built-in PubPartner cartridge studio loads character/voice YAML at runtime.
++pyyaml>=6.0,<7.0
+ psutil>=5.9,<8.0
+ 
+ # POSIX shared-memory fast path. Native Windows intentionally skips this and
+diff --git a/static/pubpartner_calibration_ui.js b/static/pubpartner_calibration_ui.js
+index 065414b..8e0df8a 100644
+--- a/static/pubpartner_calibration_ui.js
++++ b/static/pubpartner_calibration_ui.js
+@@ -5,12 +5,13 @@
+   const gate = $('calibrationGate');
+   if (!gate) return;
+   const state = { doc: null, asked: 0, moment: null, moments: [], currentId: null, followup: false, saved: false, audioRef: '', recorder: null, recordingTimer: null, audioUrl: null, audioUploading: false, discardRecording: false };
++  // Ask for the person's own account before revealing or testing an EQ hypothesis.
+   const userQuestions = [
+-    "How are you feeling today? Tell me a little about your day.",
+-    "Thinking about this moment, were you upset, excited, or feeling something else?",
+-    "Was there anything in that exchange that I misunderstood?",
+-    "Was something I said bothering you, or was it something else?",
+-    "Is there anything important about that moment I still haven't understood?"
++    "Can you explain what you were feeling at this time, and what made you feel that way?",
++    "Is there anything else about what happened that would help me understand?",
++    "Did I understand you correctly, or is there something I missed?",
++    "Was there something else going on that matters to this experience?",
++    "Is there anything you'd like me to remember about that moment?"
+   ];
+   const systemQuestions = [
+     "How did I come across in this moment? Did I sound like myself?",
+@@ -63,18 +64,21 @@
+   function selectMoment() {
+     const v = $('calibrationMoment').value;
+     state.moment = v === '' ? null : state.moments[Number(v)] || null;
++    if (state.doc?.state === 'formal' && !state.currentId) $('calibrationQuestion').textContent = questionText();
+     $('calibrationExcerpt').textContent = state.moment
+       ? 'You: ' + (state.moment.user_excerpt || '') + '\nPartner: ' + (state.moment.partner_excerpt || '')
+       : 'Select an archived moment if you want to discuss a specific exchange.';
+   }
+   function questionText() {
+-    const list = state.doc.mode === 'user' ? userQuestions : systemQuestions;
+-    const n = Math.min(state.asked, list.length - 1);
+-    if (!state.moment && state.doc.mode === 'user' && n === 1)
+-      return "Was there a recent moment when you felt strongly about something? Tell me what happened.";
+-    if (!state.moment && state.doc.mode === 'system' && n === 0)
++    const n = Math.min(state.asked, 4);
++    if (state.doc.mode === 'user') {
++      if (!state.moment && n === 0) return "How are you feeling today? Tell me what's been happening.";
++      if (!state.moment && n === 1) return "Is there a particular experience you'd like to talk about?";
++      return userQuestions[n];
++    }
++    if (!state.moment && n === 0)
+       return "How have I been coming across lately? Is there a particular moment you want me to look at?";
+-    return list[n];
++    return systemQuestions[n];
+   }
+   function renderQuestion() {
+     $('calibrationProgress').textContent = 'Main question ' + (state.asked + 1) + ' of up to 5 (aiming for 3)';
+@@ -196,7 +200,7 @@
+   function suggestedFollowup() {
+     return state.doc.mode === 'system'
+       ? 'Was it something I said, or how I said it?'
+-      : 'Was that connected to this conversation, or something else?';
++      : 'Is there anything else you want to tell me about what was happening?';
+   }
+   async function followup() {
+     if (!state.saved || !state.currentId) { say('Save the main answer first.'); return; }
+@@ -354,7 +358,16 @@
+   }
+   $('openCalibrationMenu')?.addEventListener('click', () => {
+     gate.hidden = false;
+-    const current = $('friendId')?.value;
++    // The existing cartridge studio adds friends to the normal friend selector.
++    // Reuse those options instead of limiting calibration to the three defaults.
++    const friendSelector = $('friendId');
++    const partnerSelector = $('calibrationPartner');
++    for (const friend of friendSelector?.options || []) {
++      if (![...partnerSelector.options].some(option => option.value === friend.value)) {
++        partnerSelector.add(new Option(friend.textContent || friend.value, friend.value));
++      }
++    }
++    const current = friendSelector?.value;
+     if (current && [...$('calibrationPartner').options].some(o=>o.value===current)) $('calibrationPartner').value = current;
+     listPrevious().catch(e => say('Could not load previous calibrations: ' + errText(e)));
+   });
+diff --git a/tests/test_pubpartner_existing_wiring.py b/tests/test_pubpartner_existing_wiring.py
+new file mode 100644
+index 0000000..359452b
+--- /dev/null
++++ b/tests/test_pubpartner_existing_wiring.py
+@@ -0,0 +1,71 @@
++"""Focused wiring regressions for existing PubPartner components.
++
++Tests use the deterministic mock dispatch and temporary storage, no LLM API.
++"""
++import json
++
++import pytest
++from fastapi.testclient import TestClient
++
++from modules.pubpartner_core import PubPartnerSpine
++from modules.pubpartner_provider import ProviderResult
++
++
++def test_standalone_host_mounts_existing_cartridge_workflow(tmp_path, monkeypatch):
++    import pubpartner_app
++    monkeypatch.setattr(pubpartner_app, "DATA_DIR", tmp_path)
++    paths = set(pubpartner_app.app.openapi()["paths"])
++    assert "/api/pubpartner/cartridges" in paths
++    assert "/api/pubpartner/cartridges/{cartridge_id}" in paths
++    assert "/api/avatars/imports" in paths
++    with TestClient(pubpartner_app.app) as client:
++        response = client.get("/api/pubpartner/cartridges", headers={"X-Client-Id": "owner"})
++    assert response.status_code == 200, response.text
++    assert response.json()["ok"] is True
++
++
++@pytest.mark.asyncio
++async def test_existing_guidance_not_injected_into_shared_rooms(tmp_path):
++    spine = PubPartnerSpine(tmp_path)
++    spine.add_guidance(user_id="owner", friend_id="alex",
++                       text="Never publish my private preference", kind="preference")
++    private = await spine.build_turn_packet(
++        user_id="owner", session_id="private-session", message="Hello",
++        friend="alex", provider={"provider": "mock"}, room_id="phone")
++    public = await spine.build_turn_packet(
++        user_id="owner", session_id="public-session", message="Hello",
++        friend="alex", provider={"provider": "mock"}, room_id="stage")
++    assert any("Never publish" in str(row) for row in private["fcp1"]["guide"])
++    assert not any("Never publish" in str(row) for row in public["fcp1"]["guide"])
++
++
++@pytest.mark.asyncio
++async def test_resumed_session_reuses_provider_connection_without_secret(tmp_path, monkeypatch):
++    spine = PubPartnerSpine(tmp_path)
++    await spine.create_session(
++        user_id="owner", session_id="resume", friend="alex",
++        provider={
++            "provider": "ollama", "model": "example-local",
++            "host": "http://127.0.0.1:12345",
++            "credential_model_id": "saved-reference",
++            "api_key": "NEVER_WRITE_THIS",
++        },
++    )
++    state = spine._read_session_state("owner", "resume")
++    assert state["provider_runtime"]["host"] == "http://127.0.0.1:12345"
++    assert state["provider_runtime"]["credential_model_id"] == "saved-reference"
++    assert "NEVER_WRITE_THIS" not in json.dumps(state)
++    observed = []
++
++    async def fake_dispatch(turn, config):
++        observed.append(config)
++        return ProviderResult(ok=True, provider="ollama", model="example-local",
++                              raw_response="I remember the connection.")
++
++    monkeypatch.setattr(spine.provider_dispatcher, "dispatch", fake_dispatch)
++    result = await spine.run_turn(user_id="owner", session_id="resume", message="Hello",
++                                  allow_fallback=False)
++    assert result["provider_result"]["ok"] is True
++    assert observed[0]["host"] == "http://127.0.0.1:12345"
++    assert observed[0]["credential_model_id"] == "saved-reference"
++    assert "api_key" not in observed[0]
