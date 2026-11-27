@@ -280,6 +280,18 @@ def build_primitive_geometry(
     return verts, normals, faces
 
 
+def _publish_glb(path: Path, data: bytes) -> None:
+    """Publish a complete bake while keeping any previous GLB readable."""
+    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    stream = temporary.open("xb")
+    try:
+        with stream as writer:
+            writer.write(data)
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def pack_glb(verts: np.ndarray, normals: np.ndarray,
              faces: np.ndarray, name: str) -> bytes:
     """Pack geometry into a minimal valid GLB (glTF 2.0 binary)."""
@@ -614,7 +626,7 @@ class VoxelBaker:
         """Bake and write to output_dir/<object_id>.glb. Returns the path."""
         glb = self.bake(obj, world_position)
         out = output_dir / f"{obj.object_id}.glb"
-        out.write_bytes(glb)
+        _publish_glb(out, glb)
         logger.info("Baked '%s' → %s  (%d bytes)", obj.name, out, len(glb))
         return out
 
@@ -982,7 +994,7 @@ class VoxelStudio:
             store.save(path)                      # keep the regenerated cream
             logger.info("Filler Cream regenerated for '%s': %s", obj.name, sorted(report))
         out = self._bake_dir / f"{obj.object_id}.glb"
-        out.write_bytes(glb)
+        _publish_glb(out, glb)
         logger.info("Baked '%s' with Filler Cream → %s  (%d bytes)", obj.name, out, len(glb))
         return out
 
@@ -1052,7 +1064,7 @@ class VoxelStudio:
                     continue
                 try:
                     v, n, f = build_primitive_geometry(shape, size.value)
-                    path.write_bytes(pack_glb(v, n, f, name))
+                    _publish_glb(path, pack_glb(v, n, f, name))
                     generated += 1
                 except Exception as exc:
                     logger.warning("Could not generate primitive %s: %s", name, exc)

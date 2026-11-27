@@ -106,3 +106,39 @@ def test_deleting_the_object_deletes_its_cream(studio, tmp_path):
     assert studio.filler_status(oid) == {}
     with pytest.raises(FillerCreamError):
         studio.apply_filler(oid, "steps", FillerSelection(STEPS))
+
+
+@pytest.mark.parametrize("with_cream", [False, True])
+def test_interrupted_rebake_preserves_published_glb(studio, monkeypatch, with_cream):
+    from contextlib import contextmanager
+    from pathlib import Path
+
+    oid = "filler_cream_fixture"
+    if with_cream:
+        studio.apply_filler(oid, "steps", FillerSelection(STEPS), fixture_annotations())
+    path = studio.bake_object(oid)
+    expected = path.read_bytes()
+    before = set(path.parent.iterdir())
+    original_open = Path.open
+
+    @contextmanager
+    def interrupted_open(target, mode, *args, **kwargs):
+        with original_open(target, mode, *args, **kwargs) as stream:
+            class InterruptedWriter:
+                def write(self, data):
+                    stream.write(data[:12])
+                    raise OSError("interrupted GLB write")
+            yield InterruptedWriter()
+
+    def open_for_test(target, mode="r", *args, **kwargs):
+        if target.parent == path.parent and mode in {"wb", "xb"}:
+            return interrupted_open(target, mode, *args, **kwargs)
+        return original_open(target, mode, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "open", open_for_test)
+        with pytest.raises(OSError, match="interrupted GLB write"):
+            studio.bake_object(oid)
+    assert path.read_bytes() == expected
+    assert set(path.parent.iterdir()) == before
+    assert studio.bake_object(oid).read_bytes() == expected
