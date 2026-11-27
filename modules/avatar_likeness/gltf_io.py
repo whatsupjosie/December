@@ -218,3 +218,29 @@ def read_skeleton(data: bytes) -> Dict[str, Any]:
             dur = max(dur, float(t.max()))
         clips[an["name"]] = dur
     return {"joints": joints, "clips": clips}
+
+
+def read_clips(data: bytes) -> List[Any]:
+    """Every animation in the file as ``motion.Clip`` objects (rotations and absolute local translations per joint)."""
+    from .motion import Clip
+    doc, binb = read_glb(data)
+    names = {i: n.get("name", "") for i, n in enumerate(doc["nodes"])}
+    out: List[Clip] = []
+    for an in doc.get("animations", []):
+        times = None
+        clip = Clip(name=an["name"], duration=0.0, times=np.zeros(0))
+        for ch in an["channels"]:
+            smp = an["samplers"][ch["sampler"]]
+            t = _accessor_array(doc, binb, smp["input"]).astype(float).reshape(-1)
+            v = _accessor_array(doc, binb, smp["output"]).astype(float)
+            joint, path = names[ch["target"]["node"]], ch["target"]["path"]
+            if times is None:
+                times = t
+            if path == "rotation":
+                clip.rotations[joint] = v.reshape(-1, 4)
+            elif path == "translation":
+                clip.translations[joint] = v.reshape(-1, 3)
+        clip.times = times if times is not None else np.zeros(0)
+        clip.duration = float(clip.times.max()) if len(clip.times) else 0.0
+        out.append(clip)
+    return out

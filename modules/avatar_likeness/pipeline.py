@@ -22,6 +22,7 @@ import numpy as np
 from . import deps, gltf_io, intake, landmarks as lmk, matte as matte_mod, motion, parts, rig, shape, skeleton, texture
 from .skeleton import NAMES
 
+DEFAULT_CLIP_NAMES = ("Idle", "Walk")
 VERSION = "1"
 PUB_BLOCK_M = 0.254          # modules/voxel_set_contract.PUB_BLOCK_METERS; repeated here so the package imports alone, a test pins them equal
 MIN_HEIGHT_M, MAX_HEIGHT_M = 0.15, 3.5
@@ -155,6 +156,7 @@ def rebuild(glb: bytes, edits: Optional[Dict[str, Any]] = None, *, pose_model: O
             raise intake.IntakeError(f"unknown setting: {k}")
         setattr(s, k, tuple(v) if k == "hair_rgb" and v is not None else v)
     s.joints, s.depth = joints, depth
+    kept = [c for c in gltf_io.read_clips(glb) if c.name not in DEFAULT_CLIP_NAMES]      # recorded motion the person added; Idle and Walk are regenerated
     atlas = gltf_io.read_atlas(glb)
     front, back = texture.split_atlas(atlas)
     crop = tuple(recipe["crop"])
@@ -178,13 +180,19 @@ def rebuild(glb: bytes, edits: Optional[Dict[str, Any]] = None, *, pose_model: O
     back_mode = "custom" if (use_custom is not None and s.back_mode != "custom") else s.back_mode
     s_build = Settings.from_dict({**s.to_dict(), "back_mode": back_mode}) if back_mode != s.back_mode else s
     built = _assemble(cut, s_build, recipe["source"], use_custom, pose_model, data_dir)
+    if kept:
+        built.glb = add_clips(built, kept)
+        built.recipe["recorded_clips"] = [c.name for c in kept]
+        if "height_m" in edits or "build" in edits:
+            built.report["warnings"].append("Recorded clips (" + ", ".join(c.name for c in kept) + ") were kept as they were retargeted; their hip travel was scaled "
+                                            "for the earlier height, so run the recording through again after changing height or build.")
     if back_mode != s.back_mode:      # the recipe keeps the person's choice, not the mechanism used to preserve the file's own back
         built.recipe["settings"]["back_mode"] = s.back_mode
         built.recipe["report"]["atlas"]["back_mode"] = s.back_mode
         drawn_base = None if built.landmarks.pose_kind == "tpose" else rig.drawn_pose_rotations(built.fit)
         built.glb = gltf_io.write_glb(built.rigged.pos, built.shell.uv, built.shell.faces, built.rigged.joints, built.rigged.weights,
                                       built.rigged.local, built.rigged.ibm, built.atlas,
-                                      motion.default_clips(built.rigged.rest, built.rigged.local, list(NAMES), drawn_base),
+                                      motion.default_clips(built.rigged.rest, built.rigged.local, list(NAMES), drawn_base) + kept,
                                       built.recipe, s.name, s.unlit)
     return built
 
@@ -196,6 +204,16 @@ def add_clips(built: Built, extra: List[motion.Clip]) -> bytes:
     s = Settings.from_dict(built.recipe["settings"])
     return gltf_io.write_glb(built.rigged.pos, built.shell.uv, built.shell.faces, built.rigged.joints, built.rigged.weights,
                              built.rigged.local, built.rigged.ibm, built.atlas, clips, built.recipe, s.name, s.unlit)
+
+
+def attach_clips(built: Built, new: List[motion.Clip]) -> Built:
+    """``built`` with recorded clips added to the ones it already carries; a clip with an existing name replaces it. Returns ``built``."""
+    merged: Dict[str, motion.Clip] = {c.name: c for c in gltf_io.read_clips(built.glb) if c.name not in DEFAULT_CLIP_NAMES}
+    for c in new:
+        merged[c.name] = c
+    built.recipe["recorded_clips"] = list(merged)
+    built.glb = add_clips(built, list(merged.values()))
+    return built
 
 
 def fingerprint(glb: bytes) -> str:

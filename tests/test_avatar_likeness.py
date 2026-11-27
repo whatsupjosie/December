@@ -285,3 +285,18 @@ def test_the_studio_player_loads_walks_and_turns_the_avatar(pete, tmp_path):
         assert [p for p in studio.problems if "404" not in p] == []
     finally:
         studio.__exit__(None, None, None)
+
+
+def test_recorded_clips_survive_a_rebuild_and_a_change_of_height_warns(pete):
+    src = retarget.SourceRig(XBOT.read_bytes())
+    glb = pipeline.add_clips(pete, [retarget.retarget_clip(src, "run", pete.rigged.rest, pete.rigged.local, name="Mocap_run")])
+    again = pipeline.rebuild(glb, {"depth": {"torso": 1.1}})
+    assert set(gltf_io.read_skeleton(again.glb)["clips"]) == {"Idle", "Walk", "Mocap_run"}
+    before = {c.name: c for c in gltf_io.read_clips(glb)}["Mocap_run"]
+    after = {c.name: c for c in gltf_io.read_clips(again.glb)}["Mocap_run"]
+    assert np.allclose(before.rotations["Thigh_L"], after.rotations["Thigh_L"], atol=1e-5)
+    assert not any("Recorded clips" in w for w in again.report["warnings"])
+    taller = pipeline.rebuild(glb, {"height_m": PETE_M * 1.05})
+    assert any("Recorded clips" in w for w in taller.report["warnings"])
+    swapped = pipeline.rebuild(glb, {"back_mode": "mirror"})                             # the branch that rewrites the file
+    assert "Mocap_run" in gltf_io.read_skeleton(swapped.glb)["clips"]

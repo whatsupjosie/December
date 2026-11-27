@@ -758,6 +758,7 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
         ("/api/notes", 26 * 1024 * 1024),
         ("/api/studio/slate/takes/", 128 * 1024 * 1024),
         ("/api/avatars/imports", 210 * 1024 * 1024),  # avatar GLBs; the route caps the file at 200 MB
+        ("/api/avatars/likeness/", 64 * 1024 * 1024),  # a picture (25 MB cap) or a recorded-motion GLB (50 MB cap); the routes enforce their own caps
         # Replay uploads: the route refuses files over 5 MB (and requests over 5 MB + 256 KB) itself; the 1 MB default
         # rejected every replay between 1 and 5 MB before it got there.
         ("/api/upload", 5 * 1024 * 1024 + 256 * 1024),
@@ -2106,6 +2107,10 @@ app.include_router(_foresight_host_tools)
 from modules.avatar_imports import create_avatar_import_router  # noqa: E402
 _avatar_imports = create_avatar_import_router(DATA_DIR)
 app.include_router(_avatar_imports)
+# A picture in, an editable rigged avatar out (modules/avatar_likeness/routes.py). Needs requirements-avatar.txt; without it the
+# routes answer 503 with the install line and the rest of the host is unaffected. Nothing is downloaded at startup.
+from modules.avatar_likeness.routes import create_avatar_likeness_router  # noqa: E402
+app.include_router(create_avatar_likeness_router(DATA_DIR, _avatar_imports.store))
 # Bella Faux Pas Studio progress (room, spot, who you walk as, your avatars, size tuning), per owner on this host.
 from modules.studio_progress import create_studio_progress_router  # noqa: E402
 app.include_router(create_studio_progress_router(DATA_DIR))
@@ -2869,6 +2874,9 @@ async def page_director_switcher(request: Request): return _page("director_switc
 
 @app.get("/avatar-import", include_in_schema=False)
 async def page_avatar_import(request: Request): return _page("avatar_import.html", request)
+
+@app.get("/avatar-from-picture", include_in_schema=False)
+async def page_avatar_from_picture(request: Request): return _page("avatar_from_picture.html", request)
 
 @app.get("/avatar-walk-test", include_in_schema=False)
 async def page_avatar_walk_test(request: Request): return _page("avatar_walk_test.html", request)
