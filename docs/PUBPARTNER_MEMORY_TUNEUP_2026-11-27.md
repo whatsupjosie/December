@@ -25,7 +25,7 @@ All paths are inside the data folder (the launcher's `--data-dir`, default `data
 | Cartridges | `pubpartner/cartridges/<id>/` | For the person who created the cartridge only; read, not added to |
 | Backups | `pubpartner/backups/` (zips on request) and `pubpartner/backups/vessel/` (automatic) | No. Nothing deletes them |
 
-"Cartridge loaded": Alex has no cartridge to load. His memory is the vessel, which the app mounts (and creates if missing)
+"Cartridge loaded": Alex has no cartridge to load. Her memory is the vessel, which the app mounts (and creates if missing)
 at every start. A custom friend's cartridge is read automatically on each private turn for its creator (existing tests
 `tests/test_pubpartner_cartridge_memory_wiring.py`, run and passing).
 
