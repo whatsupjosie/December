@@ -89,3 +89,25 @@ def test_every_pubpartner_menu_item_is_visible_and_clickable(reach, width, heigh
             assert errors == []
         finally:
             browser.close()
+
+
+def test_calibration_answer_and_explicit_approval(reach):
+    base, token = reach
+    with sync_api.sync_playwright() as p:
+        browser = p.chromium.launch(args=["--no-sandbox"])
+        page = browser.new_page(viewport={"width": 360, "height": 800})
+        page.add_init_script("sessionStorage.setItem('pubcast_token', %r); sessionStorage.setItem('pubcast_user', JSON.stringify({username:'josie-check',user_id:'josie-check',role:'owner'}));" % token)
+        page.goto(base + "/pubpartner")
+        page.click("[data-menu=memory]")
+        page.click("#openCalibrationMenu")
+        page.click("#calibrationStart")
+        page.fill("#calibrationAnswer", "Please ask about the particular moment.")
+        page.click("#calibrationSubmit")
+        page.wait_for_selector("#calibrationOfferFollowup")
+        page.click("#calibrationFinish")
+        page.fill("#calibrationLesson", "Ask about the particular moment.")
+        with page.expect_response(lambda r: r.url.endswith("/approve")) as approved:
+            page.click("#calibrationApplyLesson")
+        result = approved.value.json()
+        assert result["approved"] and ":question:" in result["evidence_ref"]
+        browser.close()
