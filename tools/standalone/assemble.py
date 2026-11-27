@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import re
 import json
 import os
 import subprocess
@@ -102,6 +103,26 @@ def imports_of(source: str, path: str) -> set[str]:
     return names
 
 
+STATIC_REF = re.compile(r"""/static/([A-Za-z0-9_./-]+\.(?:html|js|css|json|svg|png|webp))""")
+JS_REL_IMPORT = re.compile(r"""(?:from|import)\s*\(?\s*["'](\.{1,2}/[^"']+\.js)["']""")
+STATIC_DIR_REF = re.compile(r"""STATIC_DIR\s*/\s*["']([A-Za-z0-9_./-]+)["']""")
+
+
+def static_refs(source: str, path: str) -> set[str]:
+    """Pages and scripts this file serves or loads from static/, as repo paths."""
+    found = set(STATIC_REF.findall(source))
+    if path.endswith(".py"):
+        found |= set(STATIC_DIR_REF.findall(source))
+    out = {"static/" + f.lstrip("./") for f in found if ".." not in f}
+    if path.endswith(".js"):
+        # ES module imports by relative path, as in the vendored three.js files.
+        for rel in JS_REL_IMPORT.findall(source):
+            joined = os.path.normpath(os.path.join(os.path.dirname(path), rel)).replace(os.sep, "/")
+            if joined.startswith("static/"):
+                out.add(joined)
+    return out
+
+
 def is_local(name: str) -> bool:
     top = name.split(".")[0]
     return top in LOCAL_PACKAGES or top in HOSTS
@@ -126,8 +147,25 @@ def discover(entries: list[str]) -> dict:
         if path in seen:
             continue
         seen.add(path)
+        if not path.endswith((".py", ".html", ".js", ".css")):
+            continue
         src = text_of(path)
         if src is None:
+            continue
+        # Static pages and scripts are found by their /static/ paths, not imports.
+        for ref in sorted(static_refs(src, path)):
+            if ref in own or ref in pins:
+                queue.append(ref)
+                continue
+            for br in (USE.get(x, x) for x in SOURCE_BRANCHES):
+                b = blob_at(br, ref)
+                if b:
+                    pins[ref] = {"path": ref, "branch": br, "blob": b}
+                    queue.append(ref)
+                    break
+            else:
+                unresolved.add(ref)
+        if not path.endswith(".py"):
             continue
         for name in sorted(imports_of(src, path)):
             if not is_local(name) or name.split(".")[0] in HOSTS:

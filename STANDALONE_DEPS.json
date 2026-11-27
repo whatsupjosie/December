@@ -65,7 +65,8 @@
     "tests/test_eq_engines_standalone.py",
     "tests/test_eq_observation.py",
     "tests/test_eq_reader_card_matching.py",
-    "tests/test_eq_transitions.py"
+    "tests/test_eq_transitions.py",
+    "tools/standalone/assemble.py"
   ],
   "source_order": [
     "pubpartner",
