@@ -1,0 +1,11 @@
+# Optional extras for the image-to-avatar builder (modules/avatar_likeness). The base app runs without them;
+# the Foundry "From a picture" page reports exactly what is missing instead of failing.
+# Install on purpose:  python -m pip install -r requirements-avatar.txt
+Pillow>=10.0
+scipy>=1.11
+opencv-python-headless>=4.8
+# Optional, better results. Each needs its model file placed by hand (nothing is downloaded at startup):
+#   onnxruntime            + isnetis.onnx               -> cut-outs on dark or busy backgrounds  (PUBCAST_AVATAR_MATTE_ONNX)
+#   mediapipe              + pose_landmarker_heavy.task -> joint detection on adult T-pose figures (PUBCAST_AVATAR_POSE_TASK)
+onnxruntime>=1.17
+mediapipe>=0.10
