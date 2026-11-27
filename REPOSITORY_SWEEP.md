@@ -1,6 +1,6 @@
 # December source sweep
 
-Baseline assembly 06c69eb, parts 94ef55b, main 38787ec. Current verified installation 670661daede3d4be89fd3811bef758480c41c86c. No repository has reached full accounting yet.
+Baseline assembly 06c69eb, parts 94ef55b, main 38787ec. Current verified installation 722b3e8be676c65c7924ff4d2d2bc882708d8721. No repository has reached full accounting yet.
 
 ## Repository queue
 
@@ -58,9 +58,15 @@ Older repository references come from December's AGENTS.md and docs/missions/pub
 | codex/main-debug-20261119, 0b70045 and 8a30942 | ce38f35 integrates final-pose hold in static/camera_try.html and ordered save/restart for static/world_walk.html and static/world_walk_live.js. Twelve checks passed, including real camera playback and a signed-in /walk user reopening a saved library avatar, hologram, position and scale after an actual host restart. |
 | codex/main-debug-20261119, b4a966b, cb21ec1 and d637bb3 | 670661d installs the omitted-identity fix in the optional 2i Node bridge, type imports in Switchblade and mocap, and the cold-route fixtures. Seven bridge tests passed, including signed-in HTTP against Reach's actual Pete offline reply. Forty-seven route, Evo and cast checks plus two mocap runtime checks passed. Kept December's stronger assertion for both canonical ID purfluous and display name Sir Purfluous. NUDGE_MINIMAL.py is a copy-into-main example, outside the runtime path; no second nudge orchestrator installed. |
 
+### Foresight and per-camera warnings
+
+At 722b3e8, Foresight Counter signals ready after the signed-in user's saved layout is restored and the desk is started. Boot failure now surfaces in the desk hint. The current offline 2i file desk already debounces native edits. Restored the donor burst regression and exercised 40 rapid changes through Foresight's mounted iframe: one IndexedDB revision, containing the final text. Four Chromium file-desk checks passed including native clipboard and desktop/phone export and reopen. Ten Counter layout checks passed, including host restart and a fresh signed-in browser. Owner-scoped recovery and Program dialogue start counters passed the Node checks.
+
+For 9e872cb and 310c858, static/control_room.html and static/director_switcher.html both parse December's array of source errors and capture-report warnings. Six director browser checks passed, including display of the failed camera at start and stop. The Control Room equivalent still needs its own UI exercise.
+
 ## Resume point
 
-Beyond-October, codex/main-debug-20261119 at d3b9db81fc4a35d05db82de1d0de24dacf17e973, commit 13ebae6: coalesced edits, clipboard and durable readback in 2i/2i-assets/file-workspace.js and tests/test_foresight_file_workspace.py. Compare and exercise through Foresight’s current file desk. Continue with the Control Room per-source warning changes at 9e872cb and 310c858. The branch inventory below pins sources only. Rows without a disposition above still require behavioral reconciliation.
+Beyond-October, codex/main-debug-20261119 at d3b9db81fc4a35d05db82de1d0de24dacf17e973. Next candidate: 9e872cb, named source failure through the actual Control Room page (director switcher already verified). Exercise a partial take and reload state through the Control Room, then reconcile any outstanding d3b9db8 speech/acceptance deltas, including the local dictation harness. Check per-branch inherited pieces before closing the repo. The branch inventory below pins sources only. Rows without a disposition above still require behavioral reconciliation.
 - `11-12-merge` — `d70952e52c81f89178f4ab557206fcde109bf970`
 - `2i-beta-polish` — `df737caaeff206e4128932532663776af74ec0e8`
 - `audit/standard-first-2026-11-19` — `6cccfd7a5b2b74f3c29829ed723c0e85128ee322`
