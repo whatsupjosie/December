@@ -17,7 +17,6 @@ import re
 from typing import Mapping, Sequence
 
 from . import offline_brain
-from .sir_purfluous_rehearsal import Director, read_person
 from .sir_purfluous_waiting_room import load_profile
 
 _OFFLINE_NOTE = ("My full powers wait on the speaking model, Sancho. Offline I keep to the door, "
@@ -55,6 +54,70 @@ def _borrowed(trigger: str, message: str) -> str:
         return ""
     b = hits[int(hashlib.sha256(message.encode()).digest()[0]) % len(hits)]
     return f"Borrowed from {b['source']}, and better than I could manage: “{b['line']}”"
+
+
+_INTENSIFIERS = re.compile(r"\b(very|really|so|absolutely|totally|completely|extremely)\b\s*", re.I)
+
+def _clauses(line: str) -> list[str]:
+    return [p.strip() for p in re.split(r"(?<=[,;:.!?])\s+|\s+[\u2014\u2013-]+\s+", line.strip()) if p.strip()]
+
+
+def slow(line: str) -> str:
+    """Insert beats between clauses (or mid-line if it is one run-on) so the pause is audible."""
+    parts = _clauses(line)
+    if len(parts) < 2:
+        words = line.split()
+        if len(words) < 3:
+            return line.strip()
+        best_i, best_n = 1, 0
+        for i, w in enumerate(words[1:], start=1):
+            n = len(re.sub(r"\W", "", w))
+            if n > best_n:
+                best_i, best_n = i, n
+        parts = [" ".join(words[:best_i]), " ".join(words[best_i:])]
+    return " [beat] ".join(parts)
+
+
+def underplay(line: str) -> str:
+    """Take the heat out: no exclamation marks, no intensifiers, no shouted words, then slow it."""
+    t = line.replace("!", ".")
+    t = _INTENSIFIERS.sub("", t)
+    t = re.sub(r"\b[A-Z]{2,}\b", lambda m: m.group(0).lower(), t)
+    return slow(re.sub(r"\s{2,}", " ", t).strip())
+
+
+def stress(line: str) -> str:
+    """Land one word: the longest content word is capitalised, with a beat in front of it."""
+    words = line.split()
+    best_i, best_n = -1, 0
+    for i, w in enumerate(words):
+        n = len(re.sub(r"\W", "", w))
+        if n > best_n:
+            best_i, best_n = i, n
+    if best_n < 4:
+        return line.strip()
+    core = re.sub(r"^\W+|\W+$", "", words[best_i])
+    words[best_i] = words[best_i].replace(core, core.upper(), 1)
+    if best_i > 0:
+        words[best_i - 1] += " [beat]"
+    return " ".join(words)
+
+
+def _quoted_delivery(message: str) -> str:
+    quote = re.search(r'["“]([^"”]{4,300})["”]', message)
+    if not quote:
+        return ""
+    instruction = message[:quote.start()] + " " + message[quote.end():]
+    if not re.search(r"\b(show me|demonstrate|how would you (say|play))\b", instruction, re.I):
+        return ""
+    line = quote.group(1).strip()
+    if re.search(r"\b(underplay|shouting|angry|too loud)\b", instruction, re.I):
+        shown = underplay(line)
+    elif re.search(r"\b(stress|emphasis|flat|monotone)\b", instruction, re.I):
+        shown = stress(line)
+    else:
+        shown = slow(line)
+    return f'Do not be insulted; watch. Yours, as written: "{line}" Mine: "{shown}" Hear the difference? Now you, same line, my way.'
 
 
 def respond(message: str, history: Sequence[Mapping[str, str]] = ()) -> str:
@@ -113,8 +176,8 @@ def respond(message: str, history: Sequence[Mapping[str, str]] = ()) -> str:
         return _state(profile, "arrival", message)
 
     # Honest limit: no invented sources, no pretending to understand.
-    direction = read_person(message)
-    if direction.attempt and "show_me" in read_person(message.replace(direction.attempt, "", 1)).signals:
-        return Director(seed=message).respond(message)["text"]
+    delivery = _quoted_delivery(message)
+    if delivery:
+        return delivery
     return ("That, Sancho, is a larger question than I can answer without the speaking model, and I will not "
             "invent an answer to flatter the lighting. " + _idle(profile, message))
