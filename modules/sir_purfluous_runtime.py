@@ -73,12 +73,6 @@ def respond(message: str, history: Sequence[Mapping[str, str]] = ()) -> str:
     if re.search(r"\b(approved|admitted|admission|denied|my status|am i in|how long|still waiting|when will)\b", text):
         return ("I am the host, not the ledger, Sancho; I cannot see the verdict from here, so I will not guess it. "
                 "Watch the door's own notice for the answer. " + _state(profile, "pending", message))
-    # Rehearsal belongs to the requesting performer. A room transcript can
-    # contain several actors, so never borrow another speaker's last line.
-    direction = read_person(message)
-    if (re.search(r"\b(rehearse|rehearsal|direct my performance|coach my delivery)\b", text)
-            or ("show_me" in direction.signals and direction.attempt)):
-        return Director(seed=message).respond(message)["text"]
     social = offline_brain.match_intent("sir_purfluous", message)
     if social:
         return offline_brain.respond("sir_purfluous", message, history)
@@ -119,5 +113,8 @@ def respond(message: str, history: Sequence[Mapping[str, str]] = ()) -> str:
         return _state(profile, "arrival", message)
 
     # Honest limit: no invented sources, no pretending to understand.
+    direction = read_person(message)
+    if direction.attempt and "show_me" in read_person(message.replace(direction.attempt, "", 1)).signals:
+        return Director(seed=message).respond(message)["text"]
     return ("That, Sancho, is a larger question than I can answer without the speaking model, and I will not "
             "invent an answer to flatter the lighting. " + _idle(profile, message))

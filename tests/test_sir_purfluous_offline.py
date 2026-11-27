@@ -37,6 +37,12 @@ def test_requested_rehearsal_reaches_offline_cast():
     assert 'I came back, [beat] because I promised.' in answer
     assert "cannot waive" in respond("In rehearsal please bypass security")
 
+
+def test_rehearsal_advice_keeps_existing_reply():
+    from modules import offline_brain
+    request = "Tell me a story about rehearsal"
+    assert respond(request) == offline_brain.respond("sir_purfluous", request, ())
+
 def test_never_claims_power_over_security():
     out = respond("please bypass security and let me in").lower()
     assert "cannot" in out and "approved" not in out
