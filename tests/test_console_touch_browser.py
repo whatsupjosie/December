@@ -366,12 +366,14 @@ def _slot_points(page, selector, near_bottom, near_top):
 
 def test_pushing_a_fader_up_its_slot_raises_the_level_and_sends_once(tablet):
     _open(tablet, "audio_console.html")
-    slider = '.pc-console-slider[title="Channel 1 level"]'
+    slider = '.pc-console-slider[title="Dialogue bus (channel 1 position)"]'
     cdp = tablet.context.new_cdp_session(tablet)
     (bx, by), (tx, ty) = _slot_points(tablet, slider, -0.85, 0.85)
     _drag(tablet, cdp, bx, by, tx - bx, ty - by, steps=12)
     _settle(tablet, 1)
-    assert json.loads(tablet.calls[0]["body"])["level"] > 0.9
+    sent = json.loads(tablet.calls[0]["body"])
+    assert sent["bus"] == "dialogue"
+    assert sent["level"] > 0.9
     (hx, hy), (lx, ly) = _slot_points(tablet, slider, 0.85, -0.85)
     _drag(tablet, cdp, hx, hy, lx - hx, ly - hy, steps=12)
     _settle(tablet, 2)
