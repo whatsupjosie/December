@@ -490,6 +490,16 @@
       "blob": "114b9615475464608da8412eec64bfeedb7d15e9"
     },
     {
+      "path": "requirements.txt",
+      "branch": "main-assembly",
+      "blob": "4cb0531f33769eed4eacf8ac9eeda565e60da375"
+    },
+    {
+      "path": "scripts/bootstrap_dependencies.py",
+      "branch": "main-assembly",
+      "blob": "2fc7e5d9a1efa2bd8ffbc34435b7069515776b35"
+    },
+    {
       "path": "static/avatar_import.html",
       "branch": "main-assembly",
       "blob": "c08db22ef40bdb05a44429af225913ffe277baa7"

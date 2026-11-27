@@ -116,7 +116,13 @@ def run_preflight(*, data_dir: Path | str, app_root: Optional[Path | str] = None
         "modules/auth.py": app / "modules" / "auth.py",
         "modules/auth_routes.py": app / "modules" / "auth_routes.py",
     }
+    # main.py is the full PubCast host. A PubPartner-only run (the launcher sets PUBPARTNER_ONLY=1)
+    # starts from pubpartner_app.py and does not ship it, so it is not required there.
+    pubpartner_only = str(os.environ.get("PUBPARTNER_ONLY", "")).strip().lower() in {"1", "true", "yes", "on"}
     for name, path in files.items():
+        if name == "main.py" and pubpartner_only:
+            _check(checks, f"file:{name}", True, "not needed: PubPartner-only run starts from pubpartner_app.py", severity="warning")
+            continue
         _check(checks, f"file:{name}", path.exists(), str(path), fix="Re-extract the latest PubPartner build zip.")
 
     _check(checks, "port_available", _port_free(host, port), f"{host}:{port}", severity="warning", fix=f"Use another port: python run_pubpartner.py --port {port + 1}")

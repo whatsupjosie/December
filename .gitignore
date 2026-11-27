@@ -1,2 +1,7 @@
 __pycache__/
 *.pyc
+
+# PubPartner memory tune-up 2026-11-27: automatic private copies of the live vessel and the memory map.
+# Never commit these (see docs/PUBPARTNER_MEMORY_TUNEUP_2026-11-27.md).
+data/pubpartner/backups/vessel/
+data/pubpartner/memory_status.json

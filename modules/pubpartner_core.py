@@ -106,6 +106,17 @@ def _sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def _record_save_error(errors: List[Dict[str, str]], stage: str, exc: BaseException) -> None:
+    """Note a failed save without losing the reply that was already paid for.
+
+    The reply, the exact source (VerbatimVault) and the Jeremy event are stored
+    before and apart from these writes. A failure in one of the later writes is
+    logged with its traceback and returned in ``save_errors`` so it is never silent.
+    """
+    logging.getLogger(__name__).exception("PubPartner could not save %s; the reply is still returned", stage)
+    errors.append({"stage": stage, "error": f"{type(exc).__name__}: {exc}"[:300]})
+
+
 def _clip(text: str, limit: int) -> str:
     text = str(text or "")
     if len(text) <= limit:
@@ -1295,7 +1306,15 @@ class PubPartnerSpine:
                 live_result["eq_perception"] = {"status": "unavailable", "influence": "none",
                                                 "error": f"{type(exc).__name__}: {exc}"[:240]}
         receipt["identity_checkpoint"] = turn["identity_checkpoint"]
-        receipt_chain_row = self.receipts.append(user_id=user_id or "anon", session_id=session_id or "default", receipt=receipt)
+        # From here the provider reply exists and has been paid for. A failed write below
+        # is reported in save_errors; it must never throw the reply away.
+        save_errors: List[Dict[str, str]] = []
+        try:
+            receipt_chain_row = self.receipts.append(user_id=user_id or "anon", session_id=session_id or "default", receipt=receipt)
+            receipt_chain = {"ok": True, "receipt_chain_hash": receipt_chain_row.get("receipt_chain_hash"), "prev_receipt_hash": receipt_chain_row.get("prev_receipt_hash")}
+        except Exception as exc:
+            _record_save_error(save_errors, "receipt", exc)
+            receipt_chain = {"ok": False, "error": f"{type(exc).__name__}: {exc}"[:300]}
         live_result.update({
             "live_loop": True,
             "provider_result": provider_result.as_dict(),
@@ -1305,7 +1324,7 @@ class PubPartnerSpine:
             "friend_response": voice.friend_response,
             "voice_restoration": voice.as_dict(),
             "receipt": receipt,
-            "receipt_chain": {"ok": True, "receipt_chain_hash": receipt_chain_row.get("receipt_chain_hash"), "prev_receipt_hash": receipt_chain_row.get("prev_receipt_hash")},
+            "receipt_chain": receipt_chain,
             "provenance": {
                 "source_ref": turn["source"],
                 "memory_count": turn.get("memory_count", 0),
@@ -1324,33 +1343,37 @@ class PubPartnerSpine:
             },
         })
         friend_id = str(friend_block.get("id") or friend_block.get("friend_id") or "friend")
-        encounter = self.relationship.record_encounter(
-            user_id=user_id or "anon",
-            friend_id=friend_id,
-            session_id=session_id or "default",
-            project_id=project_id or "default",
-            source_id=str((turn.get("source") or {}).get("id") or ""),
-            source_sha256=str((turn.get("source") or {}).get("sha256") or ""),
-            user_excerpt=message,
-            raw_response=provider_result.raw_response,
-            friend_response=voice.friend_response,
-            provider=provider_result.provider,
-            model=provider_result.model,
-            receipt_id=str(receipt.get("receipt_id") or ""),
-            guidance_count=int(turn.get("guidance_count") or 0),
-            relationship_lesson_ids=[
-                str(row.get("id"))
-                for row in ((turn.get("fcp1") or {}).get("guide") or [])
-                if isinstance(row, dict) and row.get("source") == "relationship" and row.get("id")
-            ],
-            metadata={
-                "fallback_used": provider_fallback is not None,
-                "content_kind": content_kind,
-                "knowledge_provider": knowledge_result.provider if knowledge_result.requested else None,
-                "knowledge_mode": knowledge_result.mode,
-                "knowledge_used": knowledge_result.used_in_prompt,
-            },
-        )
+        try:
+            encounter = self.relationship.record_encounter(
+                user_id=user_id or "anon",
+                friend_id=friend_id,
+                session_id=session_id or "default",
+                project_id=project_id or "default",
+                source_id=str((turn.get("source") or {}).get("id") or ""),
+                source_sha256=str((turn.get("source") or {}).get("sha256") or ""),
+                user_excerpt=message,
+                raw_response=provider_result.raw_response,
+                friend_response=voice.friend_response,
+                provider=provider_result.provider,
+                model=provider_result.model,
+                receipt_id=str(receipt.get("receipt_id") or ""),
+                guidance_count=int(turn.get("guidance_count") or 0),
+                relationship_lesson_ids=[
+                    str(row.get("id"))
+                    for row in ((turn.get("fcp1") or {}).get("guide") or [])
+                    if isinstance(row, dict) and row.get("source") == "relationship" and row.get("id")
+                ],
+                metadata={
+                    "fallback_used": provider_fallback is not None,
+                    "content_kind": content_kind,
+                    "knowledge_provider": knowledge_result.provider if knowledge_result.requested else None,
+                    "knowledge_mode": knowledge_result.mode,
+                    "knowledge_used": knowledge_result.used_in_prompt,
+                },
+            )
+        except Exception as exc:
+            _record_save_error(save_errors, "relationship_encounter", exc)
+            encounter = {}
         lesson_extraction_errors: List[Dict[str, str]] = []
         try:
             learned = self.relationship.extract_explicit_lessons(
@@ -1445,7 +1468,12 @@ class PubPartnerSpine:
             except Exception as exc:
                 archive_result = {"status": "failed", "error": f"{type(exc).__name__}: {exc}"[:240]}
         live_result["blackbox_light"] = archive_result
-        self._append_turn(user_id or "anon", session_id or "default", live_result)
+        # Same list object: a failure of the turn-log write below shows up in the returned result too.
+        live_result["save_errors"] = save_errors
+        try:
+            self._append_turn(user_id or "anon", session_id or "default", live_result)
+        except Exception as exc:
+            _record_save_error(save_errors, "turn_log", exc)
         live_result["work_notes"] = self._record_work_notes(
             user_id=user_id or "anon", session_id=session_id or "default",
             # The packet's project is authoritative: a saved session may have
@@ -2019,7 +2047,9 @@ class PubPartnerSpine:
             light["llm_prompt_text"] = _clip(light["llm_prompt_text"], 4000)
         if "llm_prompt_json" in light:
             light["llm_prompt_json"] = _clip(light["llm_prompt_json"], 4000)
+        # default=str: one value that JSON cannot encode (a Path, a dataclass) must not cost the whole turn row.
+        row = json.dumps(light, ensure_ascii=False, default=str) + "\n"
         with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(light, ensure_ascii=False) + "\n")
+            handle.write(row)
             handle.flush()
             os.fsync(handle.fileno())

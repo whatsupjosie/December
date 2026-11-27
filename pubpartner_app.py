@@ -14,7 +14,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -40,6 +40,8 @@ from modules.manuscript_intelligence import make_router as create_manuscript_int
 from modules.pubpartner_cartridges import create_pubpartner_cartridge_router
 from modules.avatar_imports import create_avatar_import_router
 from modules.pubpartner_vessel import PubPartnerVesselRuntime
+from modules.pubpartner_vessel_backup import backup_dir_for, backup_vessel_if_changed
+from modules.pubpartner_memory_map import build_memory_map, human_summary, write_status
 
 try:
     from modules.byok_manager import BYOKManager
@@ -54,11 +56,36 @@ except ImportError:  # pragma: no cover - optional partial build
 logger = logging.getLogger("pubpartner.app")
 ROOT = Path(__file__).resolve().parent
 STATIC_DIR = ROOT / "static"
+# 2i (the Writer's Room) is a separate program. A PubPartner-only build may not include it.
+TWOI_DIR = ROOT / "2i"
 DATA_DIR = Path(
     os.environ.get("PUBPARTNER_DATA_DIR")
     or os.environ.get("PUBCAST_DATA_DIR")
     or ROOT / "data"
 ).expanduser().resolve()
+
+
+def _publish_memory_status(app: FastAPI, *, vessel_backup: dict[str, Any]) -> dict[str, Any]:
+    """Write ``pubpartner/memory_status.json`` and log where each memory lives. Never raises."""
+    try:
+        report = build_memory_map(
+            DATA_DIR,
+            runtime={**app.state.memory_runtime, "vessel_backup_at_start": vessel_backup},
+            verify=("vessel",),
+        )
+        path = write_status(DATA_DIR, report)
+        if report["ok"]:
+            logger.info("PubPartner memory: all stores readable, vessel verified. Map: %s", path)
+        else:
+            logger.error("PubPartner memory: %d problem(s). Map: %s", len(report["warnings"]), path)
+            for warning in report["warnings"]:
+                logger.error("PubPartner memory problem: %s", warning)
+        if not vessel_backup.get("ok"):
+            logger.error("PubPartner vessel backup at startup failed: %s", vessel_backup.get("error"))
+        return report
+    except Exception as exc:
+        logger.exception("PubPartner memory map could not be built: %s", exc)
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
 
 @asynccontextmanager
@@ -141,6 +168,14 @@ async def lifespan(app: FastAPI):
         vessel_runtime=vessel,
     )
     spine_holder["spine"] = spine
+    # Memory self-check, before the first request: save the vessel if its state is not
+    # already saved (this also catches a crash, which skips the shutdown copy), then
+    # write where every memory lives and whether it is healthy. Neither can stop startup.
+    app.state.memory_runtime = {"jeremy_open": cricket is not None, "vessel_mounted": True}
+    app.state.memory_status = _publish_memory_status(
+        app,
+        vessel_backup=backup_vessel_if_changed(vessel.store, backup_dir_for(DATA_DIR), reason="startup"),
+    )
     # Reuse PubCast's chat Hub in a minimal local host; no cameras or stage.
     chat_hub = Hub(DATA_DIR)
     app.state.hub = chat_hub
@@ -187,6 +222,8 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        # Save the vessel's last state before anything is closed. Never raises.
+        backup_vessel_if_changed(vessel.store, backup_dir_for(DATA_DIR), reason="shutdown")
         alex_bridge.shutdown()
         if cricket is not None:
             try:
@@ -228,7 +265,18 @@ app.include_router(create_pubpartner_cartridge_router(DATA_DIR))
 # Existing cartridge editor asks the same avatar import library as PubCast.
 app.include_router(create_avatar_import_router(DATA_DIR))
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-app.mount("/2i-assets", StaticFiles(directory=str(ROOT / "2i" / "2i-assets")), name="twoi-assets")
+if (TWOI_DIR / "2i-assets").is_dir():
+    app.mount("/2i-assets", StaticFiles(directory=str(TWOI_DIR / "2i-assets")), name="twoi-assets")
+else:
+    # Without this guard the whole app fails to import when 2i is not part of the build.
+    logger.info("2i is not included in this build; /2i pages are off")
+
+
+def _twoi_page(name: str) -> FileResponse:
+    path = TWOI_DIR / name
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="2i is not included in this PubPartner build")
+    return FileResponse(path)
 
 
 @app.get("/", include_in_schema=False)
@@ -246,7 +294,7 @@ async def pubpartner_page() -> FileResponse:
 @app.get("/2i-v22", include_in_schema=False)
 async def portable_writers_room() -> FileResponse:
     """Run the same full 2i editor from the Portable host."""
-    return FileResponse(ROOT / "2i" / "writers-room-v22.html")
+    return _twoi_page("writers-room-v22.html")
 
 
 @app.get("/2i/chat", include_in_schema=False)

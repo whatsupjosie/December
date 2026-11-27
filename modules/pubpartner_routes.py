@@ -16,6 +16,7 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from .pubpartner_core import PubPartnerSpine
 from .pubpartner_work_notes import WorkNoteNotFound, WorkNotesError
 from .pubpartner_vessel import VesselConflictError
+from .pubpartner_memory_map import build_memory_map
 from .pubpartner_preflight import run_preflight
 from .pubpartner_backup import create_friend_backup, verify_friend_backup
 from .route_security import auth_enforced, current_identity, require_role
@@ -181,6 +182,30 @@ async def vessel_status() -> Dict[str, Any]:
     if vessel is None:
         raise HTTPException(status_code=503, detail="PubPartner vessel is not mounted")
     return {"ok": True, "vessel": vessel.status(), "friend": vessel.friend_profile()}
+
+
+@router.get("/memory")
+async def memory_map(
+    request: Request,
+    verify: str = "",
+    identity: Dict[str, Any] = Depends(require_role("owner")),
+) -> Dict[str, Any]:
+    """Where every memory lives and whether it is healthy. Read-only; owner only because it shows server paths and counts for all users.
+
+    ``verify`` is optional and comma separated: vessel, receipts, verbatim, or all.
+    """
+    from starlette.concurrency import run_in_threadpool
+
+    targets = [item.strip() for item in verify.split(",") if item.strip()]
+    try:
+        return await run_in_threadpool(
+            build_memory_map,
+            get_spine().data_dir,
+            runtime=getattr(request.app.state, "memory_runtime", None),
+            verify=targets,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
 
 
 @router.get("/vessel/memory/claims")

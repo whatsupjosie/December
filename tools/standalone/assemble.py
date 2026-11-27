@@ -37,6 +37,10 @@ LOCAL_PACKAGES = ("modules", "companion_support", "pubpartner", "blackbox_event_
                   "blackbox_recorder", "iteration_wallet")
 # Hosts, not dependencies: a standalone program is run without them.
 HOSTS = {"main", "pubpartner_app", "run_reach", "start_reach"}
+# Files the launchers (RUN_PUBPARTNER_WINDOWS.bat, run_pubpartner_windows.ps1,
+# run_pubpartner_mac_linux.sh) run before Python imports anything. No import
+# points at them, so discover cannot find them by following imports.
+LAUNCH_SUPPORT = ("scripts/bootstrap_dependencies.py", "requirements.txt")
 
 
 def git(*args: str, binary: bool = False):
@@ -195,6 +199,16 @@ def discover(entries: list[str]) -> dict:
                 if not found and i == len(parts):
                     # "from modules import auth_routes" may name an attribute, not a module.
                     unresolved.add(sub)
+    for path in LAUNCH_SUPPORT:
+        if path in own or path in pins:
+            continue
+        for br in (USE.get(x, x) for x in SOURCE_BRANCHES):
+            b = blob_at(br, path)
+            if b:
+                pins[path] = {"path": path, "branch": br, "blob": b}
+                break
+        else:
+            unresolved.add(path)
     return {"pins": sorted(pins.values(), key=lambda d: d["path"]),
             "unresolved": sorted(u for u in unresolved
                                  if not any(c in own or c in pins for c in module_to_candidates(u.rpartition('.')[0])) or u.count('.') == 0)}
