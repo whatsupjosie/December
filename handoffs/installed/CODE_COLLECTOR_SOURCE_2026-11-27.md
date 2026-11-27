@@ -1,0 +1,3 @@
+# Code Collector source integration — 2026-11-27
+
+Imported 30 active source, extension, tests and docs files from pre-dec ec7895a3c08cde769d2d3997c8bc8fe3d042e637. Standalone product: no PubCast host route, automatic capture, installer or browser extension enabled by this transfer. Whole-conversation collection is opt-in per donor handoff. Excluded broken node_modules scratch symlink and superseded _moved_out archive (unchanged in source). Donor reports 179/180 JS and 137/137 Python extractor tests; not rerun in December. Known blockers: manifest references absent icons; packaging icons absent; live-site selectors unverified; P3 exact-code vs sanitization test unresolved; no installer build. Do not claim release-ready.
