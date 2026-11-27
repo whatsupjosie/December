@@ -487,18 +487,18 @@ def plan_program(intervals: List[Interval], segments: Dict[int, Segment], *, fra
         if seg is None or offset is None or not seg.duration:
             black(end - start)
         else:
-            media_in = start - offset
-            media_out = end - offset
-            if media_in < 0:
-                black(-media_in)
-                media_in = 0.0
-            tail = 0.0
-            if media_out > seg.duration:
-                tail = media_out - seg.duration
-                media_out = seg.duration
-            if media_out - media_in >= frame:
-                pieces.append({"kind": "segment", "segment": seg.index, "in": round(media_in, 6), "out": round(media_out, 6)})
-            black(tail)
+            # Intersect the requested interval with the available media.
+            # A wholly missing interval must not create black beyond its own bounds.
+            overlap_start = max(start, offset)
+            overlap_end = min(end, offset + seg.duration)
+            if overlap_end <= overlap_start:
+                black(end - start)
+            else:
+                black(overlap_start - start)
+                if overlap_end - overlap_start >= frame:
+                    pieces.append({"kind": "segment", "segment": seg.index,
+                                   "in": round(overlap_start - offset, 6), "out": round(overlap_end - offset, 6)})
+                black(end - overlap_end)
         cursor = end
     return origin, pieces
 
@@ -745,6 +745,13 @@ class ModeTake:
                                  source_id=source_id, segment=index, role=role)
         return seg
 
+    def _has_video_frame(self, seg: Segment) -> bool:
+        engine = self.controller.capture_engine
+        if not engine.running(seg.key):
+            return False
+        report = engine.live_report(seg.key)
+        return bool(report and (report[0].get("encoded_video_frames") or 0) > 0)
+
     async def _first_frame(self, seg: Segment) -> bool:
         """Wait until the segment's encoder reports picture, so the camera before it can stop without a gap."""
         engine = self.controller.capture_engine
@@ -752,8 +759,7 @@ class ModeTake:
         while time.monotonic() < deadline:
             if not engine.running(seg.key):
                 return False
-            report = engine.live_report(seg.key)
-            if report and (report[0].get("encoded_video_frames") or 0) > 0:
+            if ModeTake._has_video_frame(self, seg):
                 return True
             await asyncio.sleep(0.05)
         # A live process, or advancing audio clock, does not establish picture.
@@ -869,9 +875,11 @@ class ModeTake:
                 await self._set_preview(previous)
             self.controller._witness(self.session, "program_gap", source_id=target, reason=reason)
             return
-        if self._preview is not None and self.segments[self._preview].source_id == target \
-                and self.segments[self._preview].state == "running":
-            # Armed on preview and already recording: the cut is exact.
+        armed = self.segments.get(self._preview) if self._preview is not None else None
+        if armed is not None and (armed.source_id != target or armed.state != "running"):
+            armed = None
+        if armed is not None and self._has_video_frame(armed):
+            # Only a preview with encoded picture can support an exact cut.
             index = self._preview
             self._preview = None
             self.segments[index].roles.append(("program", requested))
@@ -880,7 +888,14 @@ class ModeTake:
             self._program = index
             cut.update(handled="armed", segment=index, effective_at=requested)
         else:
-            seg = await self._open_segment(target, role="program")
+            # Reuse an unready armed encoder instead of opening a second encoder
+            # for the same device or listener. A dead encoder fails normally.
+            if armed is not None:
+                self._preview = None
+                seg = armed
+                seg.roles.append(("program", requested))
+            else:
+                seg = await self._open_segment(target, role="program")
             if seg is None or seg.state == "failed" or not await self._first_frame(seg):
                 if seg is not None and seg.state == "running":
                     await self._close_segment(seg.index)
@@ -892,10 +907,17 @@ class ModeTake:
                 self._program = None
             else:
                 # The camera before keeps going until this one has picture: the join happens at its first frame.
-                self._end_current(at_ref=seg.index)
-                self.intervals.append(Interval(target, seg.index, "program", start_ref=seg.index))
+                if armed is not None:
+                    # A preview may contain pre-cut frames. Preserve the requested
+                    # cut time, with any missing picture represented as a gap.
+                    self._end_current(at=requested)
+                    self.intervals.append(Interval(target, seg.index, "program", start=requested))
+                    cut.update(handled="armed_late", segment=seg.index, effective_at=requested)
+                else:
+                    self._end_current(at_ref=seg.index)
+                    self.intervals.append(Interval(target, seg.index, "program", start_ref=seg.index))
+                    cut.update(handled="started", segment=seg.index)
                 self._program = seg.index
-                cut.update(handled="started", segment=seg.index)
         if keep_previous:
             await self._set_preview(previous)
             self.segments[previous].roles.append(("preview", requested))
@@ -1204,6 +1226,9 @@ class ModeTake:
             return {"state": "failed", "error": f"FFmpeg exited with status {done.returncode}: {tail}"[:600],
                     "log": log_path.name, "filter": script.name}
         info = probe_media(tmp)
+        if not info.get("video") or not info.get("audio") or not info.get("duration") or not math.isfinite(info["duration"]):
+            return {"state": "failed", "error": "Joined file could not be verified as audio and video",
+                    "candidate": tmp.name, "log": log_path.name, "filter": script.name}
         tolerance = max(0.25, 2 * frame)
         warnings: List[str] = []
         if not info.get("duration") or abs(info["duration"] - total) > tolerance:

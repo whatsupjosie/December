@@ -1,0 +1,3 @@
+# Second engine debugging pass
+
+Candidate parent 6f46d4c02936353dfa512cbb276c4396998e5fea. Fix program timeline overrun for missing files; require encoded picture before promoting armed preview, reuse its encoder if late; require final joined file audio/video and finite duration evidence before registering; align existing fake encoder with the new video-frame counter; replace quadratic budget eviction rescans with a coldest-leaf heap retaining dynamic parent eligibility and traversal tie ordering. No whole-application test run claimed. Real scene integration, decoded program continuity, independent audio and load rehearsal remain outstanding.

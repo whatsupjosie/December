@@ -75,3 +75,16 @@ def test_bad_skeleton_preserves_previous_occupancy():
     with pytest.raises(ValueError):
         s.ingest_skeleton_frame("a", [BonePresence("b", "head", (3,0,0))])
     assert {b.center for b in s.bubbles.values() if b.bones} == {(0,0,0)}
+
+
+def test_budget_pruning_preserves_dynamic_coldest_leaf_order():
+    engine = BubbleStackEngine(BubbleConfig(max_active_bubbles=2))
+    root = engine.stack.get_or_create_root((0,0,0))
+    parent = root.get_or_create_child((0,0,0), 3)
+    child = parent.get_or_create_child((0,0,0), 3)
+    sibling = root.get_or_create_child((1,0,0), 3)
+    parent.joule_load, child.joule_load, sibling.joule_load = .1, .2, .3
+    collapsed = []
+    engine._enforce_budget(collapsed)
+    assert collapsed == [str(child.address), str(parent.address)]
+    assert engine.stack.active_count() == 2 and list(root.children.values()) == [sibling]

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from itertools import product
+from heapq import heappop, heappush
 from math import isfinite
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 
@@ -511,28 +512,40 @@ class BubbleStackEngine:
                 child.state = BubbleState.COOLING
 
     def _enforce_budget(self, collapsed: List[str]) -> None:
-        while self.stack.active_count() > self.config.max_active_bubbles:
-            leaves: List[Tuple[float, Bubble, Tuple[int, int, int]]] = []
-            for parent in self.stack.all_bubbles():
-                for idx, child in parent.children.items():
-                    if not child.children:
-                        leaves.append((child.joule_load, parent, idx))
-            if leaves:
-                _, parent, idx = min(leaves, key=lambda x: x[0])
-                collapsed.append(str(parent.children[idx].address)); del parent.children[idx]
-                continue
+        # Each prune used to scan the entire hierarchy twice. Maintain a leaf
+        # heap instead, preserving the original traversal-order tie breaker.
+        nodes = list(self.stack.all_bubbles())
+        count = len(nodes)
+        budget = self.config.max_active_bubbles
+        if count <= budget:
+            return
+        heap = []
+        parents = {}
+        for rank, parent in enumerate(nodes):
+            for child_rank, (idx, child) in enumerate(parent.children.items()):
+                entry = (child.joule_load, rank, child_rank, parent, idx)
+                parents[id(child)] = entry
+                if not child.children:
+                    heappush(heap, entry)
+        while count > budget and heap:
+            _, _, _, parent, idx = heappop(heap)
+            child = parent.children.pop(idx)
+            collapsed.append(str(child.address))
+            count -= 1
+            if not parent.children and id(parent) in parents:
+                heappush(heap, parents[id(parent)])
 
-            # Last-resort root pruning. The persistent coarse layer means roots
-            # are not removed during ordinary refinement/collapse, but a hard
-            # budget is still a hard budget. Only empty, childless, cold roots
-            # can be discarded, preserving any root that currently contains
-            # tracked matter or active detail.
-            root_candidates = [
-                (root.joule_load, idx) for idx, root in self.stack.roots.items()
+        # As before, preserve occupied roots and prune unoccupied roots only
+        # after all fine detail is exhausted. Sort once, rather than rescanning.
+        if count > budget:
+            candidates = sorted(
+                (root.joule_load, rank, idx)
+                for rank, (idx, root) in enumerate(self.stack.roots.items())
                 if not root.children and not root.occupancy
-            ]
-            if not root_candidates:
-                break
-            _, idx = min(root_candidates, key=lambda x: x[0])
-            collapsed.append(str(self.stack.roots[idx].address)); del self.stack.roots[idx]
-
+            )
+            for _, _, idx in candidates:
+                if count <= budget:
+                    break
+                collapsed.append(str(self.stack.roots[idx].address))
+                del self.stack.roots[idx]
+                count -= 1

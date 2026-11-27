@@ -381,7 +381,7 @@ class _FakeEngine:
         return key in self.running_keys
 
     def live_report(self, key):
-        return [{"encoded_seconds": 0.5}] if key in self.running_keys else []
+        return [{"encoded_seconds": 0.5, "encoded_video_frames": 15}] if key in self.running_keys else []
 
     async def stop(self, key):
         started, path = self.running_keys.pop(key, (time.time(), None))
@@ -452,3 +452,11 @@ def test_cut_following_never_leaves_a_camera_recording_it_should_not(tmp_path, m
 
     for run in range(60):
         asyncio.run(scenario(run, armed=bool(run % 2)))
+
+
+def test_program_missing_entire_interval_never_extends_timeline():
+    for offset in (90.0, 120.0):
+        segments = {1: seg(1, offset, 2.0)}
+        origin, pieces = plan_program([Interval("a", 1, "program", start=100.0, end=105.0)], segments, frame=1/30)
+        assert origin == 100.0
+        assert pieces == [{"kind": "black", "duration": 5.0}]
