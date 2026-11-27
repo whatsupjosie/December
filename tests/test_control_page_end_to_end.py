@@ -89,11 +89,6 @@ def page(host):
 def settle(page, ms=700): page.wait_for_timeout(ms)
 
 
-def known_only(problems):
-    """The page already threw 'Identifier WSHub has already been declared' before this work (base.html and control.html both load ws.js); that one is ignored, any other is a failure."""
-    return [p for p in problems if 'WSHub' not in p]
-
-
 def test_the_vision_mixer_works_by_mouse_and_by_key(page):
     base = page.base; srcs = state(base)["sources"]; assert len(srcs) >= 2, srcs
     a, b = srcs[0]["id"], srcs[1]["id"]
@@ -107,7 +102,7 @@ def test_the_vision_mixer_works_by_mouse_and_by_key(page):
     page.keyboard.press("KeyF"); settle(page, 900)                                                  # F: fade to the preview
     s = state(base); assert s["program"] == b and s["transition"]["type"] == "dissolve" and s["transition"]["duration_ms"] == 400
     assert "Space Cut" in page.inner_text(".muted.small[data-key-hint]")
-    assert known_only(page.problems) == []
+    assert page.problems == []
 
 
 def test_assigning_a_key_asks_the_question_takes_the_answer_and_keeps_it(page):
@@ -136,7 +131,7 @@ def test_assigning_a_key_asks_the_question_takes_the_answer_and_keeps_it(page):
     assert got["keymap"] and got["keymap"]["switcher"]["cut"] == "KeyX", got
     page.reload(); page.wait_for_function("!!window.PubCastControlKeys", timeout=30000); page.wait_for_timeout(800)
     assert page.evaluate("PubCastControlKeys.km.bindings('switcher').cut") == "KeyX"
-    assert known_only(page.problems) == []
+    assert page.problems == []
 
 
 def test_the_camera_station_moves_a_real_camera_records_saves_and_plays_back_exactly(page):
@@ -179,7 +174,7 @@ def test_the_camera_station_moves_a_real_camera_records_saves_and_plays_back_exa
     page.click('[data-station="director"]'); assert page.evaluate("PubCastControlKeys.km.activeStation()") == "switcher"
     p1 = pose(base, cam); page.keyboard.down("KeyW"); settle(page, 500); page.keyboard.up("KeyW"); settle(page, 500); assert pose(base, cam) == p1
     assert httpx.delete(base + "/api/camera-moves/slide and zoom", headers=auth, timeout=10).status_code == 200
-    assert known_only(page.problems) == []
+    assert page.problems == []
 
 
 
@@ -226,7 +221,7 @@ def test_vtr_upload_graphics_and_monitor_wiring(page, tmp_path):
     assert httpx.get(page.base + "/api/state/production", timeout=10).json()["on_air"] is False
     page.click("#vtr-play")
     page.wait_for_function(
-        "() => document.querySelector('#station-vtr output')?.textContent.includes('on air')",
+        "() => document.querySelector('#station-vtr output')?.textContent.includes('Replay cue acknowledged')",
         timeout=12000,
     )
     # HEAD is insufficient: make Chromium actually decode and display the
@@ -246,7 +241,7 @@ def test_vtr_upload_graphics_and_monitor_wiring(page, tmp_path):
     assert active["replay_asset"] == asset
     page.click("#vtr-stop")
     page.wait_for_function(
-        "() => document.querySelector('#station-vtr output')?.textContent.includes('off air')",
+        "() => document.querySelector('#station-vtr output')?.textContent.includes('Replay stop cue acknowledged')",
         timeout=12000,
     )
     assert httpx.get(page.base + "/api/state/production", timeout=10).json()["on_air"] is False
@@ -280,7 +275,7 @@ def test_vtr_upload_graphics_and_monitor_wiring(page, tmp_path):
     )
     assert page.locator("#pgm-monitor").evaluate("(node) => node.volume") == pytest.approx(0.25)
     assert page.locator("#mixer-afv").is_disabled()  # Unsupported effect must not be accepted as active.
-    assert known_only(page.problems) == []
+    assert page.problems == []
 
 
 def test_replay_upload_rejects_bad_content_and_oversize(host):
