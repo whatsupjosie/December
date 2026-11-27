@@ -183,8 +183,6 @@ def test_text_zoom_works_and_line_numbers_stay_on_their_lines(served, width, hei
     page.context.close()
 
 
-@pytest.mark.xfail(strict=True, reason="Real, small: the Chat text-size buttons enlarge the conversation but not the box "
-                   "you type in (its size is held at 16 px on phones and 14 px on the desk). Not fixed yet.")
 @pytest.mark.parametrize("width,height", [(1366, 768), (390, 844)])
 def test_chat_text_zoom_reaches_the_box_you_type_in(served, width, height):
     page = served(width, height)

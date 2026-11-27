@@ -27,7 +27,7 @@ html,body { background:#120f0b; }
 .chat-msg .who { font:10px ui-monospace,monospace; color:#cbb88b; letter-spacing:.1em; padding-bottom:7px; }
 .chat-msg.notice { font:12px/1.65 ui-sans-serif,system-ui,sans-serif; border-style:dashed; color:#dccba7; }
 .chat-input-row { flex-wrap:wrap; }
-#chatInput { flex:1 1 100%; width:100%; font:14px Georgia,serif; padding:12px; color:#eee1c6; }
+#chatInput { flex:1 1 100%; width:100%; font:calc(14px * var(--zoom-chat, 1)) Georgia,serif; padding:12px; color:#eee1c6; }
 #chatSendBtn { margin-left:auto; }
 .partner-label { font:10px ui-monospace,monospace; letter-spacing:.14em; text-transform:uppercase; color:#ccba90; }
 #partnerSelect { font:23px Georgia,serif; color:#f2dfb3; padding:7px 10px; border:1px solid #77613a; border-radius:4px; background:#19170f; width:100%; }
