@@ -59,3 +59,7 @@ Inspect one branch at a time at its pinned SHA, identify unique useful changes, 
 5. Continue remaining rows, recording file-by-file outcome, tests and commit for each. No completion claim until all rows are individually reconciled.
 
 Local environment cannot resolve github.com; fresh runtime/browser tests were not run in this pass. Source/API reads and Git object writes used the connected GitHub service.
+
+## Repository sweep, November 27
+
+[Live repository queue, Beyond-October branch inventory and resume point](REPOSITORY_SWEEP.md).
