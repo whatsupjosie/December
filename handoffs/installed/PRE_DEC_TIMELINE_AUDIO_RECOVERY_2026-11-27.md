@@ -1,0 +1,3 @@
+# Installed source: timeline/show clocks and participant audio resilience
+
+Destination: December/main-assembly; parent 4897d7a9dda358c1f381add8905be5238ab39748. Donors: pre-dec b4ac093a003e267f49ab30451944279bddc6cd4e (timeline, clocks, tests), 6c68e3dd8fd423befe83e66ebb225f8bd9772a87 (participant audio and resilience tests). Exact donor blobs verified on transfer. Existing six HTML pages retained, only show-clocks script mount added. No unrelated donor code copied. Engine handoff reports participant resilience 5 passed plus 7 original; timeline/clock donor evidence exists. Fresh full-assembly test not run; not release certification. Run timeline playback, clock, participant audio and resilience tests and real-browser clock tests.

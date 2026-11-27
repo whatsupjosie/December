@@ -3,7 +3,7 @@ modules/timeline_routes.py — Timeline Automation System Routes
 Rear View Foresight LLC — Feic Mo Chroí — 2026-04-18
 """
 from __future__ import annotations
-import asyncio, logging
+import asyncio, inspect, logging, math
 from pathlib import Path
 from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
@@ -27,6 +27,12 @@ class TimelineStatus(BaseModel):
     progress: float
     timeline_name: Optional[str] = None
     duration: Optional[float] = None
+    # The show clocks: how far in and, for a show with a set length, how much is left. See TimelinePlayer.clocks.
+    frame_rate: Optional[int] = None
+    set_length: Optional[float] = None
+    elapsed_time_code: Optional[str] = None
+    remaining: Optional[float] = None
+    remaining_time_code: Optional[str] = None
 
 # ═══════════════════════════════════════════════════════════════════════════
 # ROUTER & PLAYER SINGLETON
@@ -67,28 +73,17 @@ def register_timeline_handler(event_type: EventType, handler):
     _event_handlers[event_type].append(handler)
     logger.info(f"Registered handler for {event_type.value}")
 
-async def _dispatch_event(event_type: EventType, params: dict):
-    """Internal: dispatch event to registered handlers."""
-    handlers = _event_handlers.get(event_type, [])
-    for handler in handlers:
-        try:
-            if asyncio.iscoroutinefunction(handler):
-                await handler(params)
-            else:
-                handler(params)
-        except Exception as e:
-            logger.error(f"Handler error for {event_type.value}: {e}")
+async def _dispatch_event(event):
+    for handler in _event_handlers.get(event.event_type, []):
+        result = handler(event.params)
+        if inspect.isawaitable(result):
+            result = await result
+        if result is False:
+            raise RuntimeError(f"Handler rejected {event.event_type.value} cue")
 
-# Wire player to dispatcher
-player.register_handler(EventType.CAMERA, lambda p: _dispatch_event(EventType.CAMERA, p))
-player.register_handler(EventType.LIGHTING, lambda p: _dispatch_event(EventType.LIGHTING, p))
-player.register_handler(EventType.CHAT, lambda p: _dispatch_event(EventType.CHAT, p))
-player.register_handler(EventType.RECORD, lambda p: _dispatch_event(EventType.RECORD, p))
-player.register_handler(EventType.ENTRANCE, lambda p: _dispatch_event(EventType.ENTRANCE, p))
-player.register_handler(EventType.ENVIRONMENT, lambda p: _dispatch_event(EventType.ENVIRONMENT, p))
-player.register_handler(EventType.WALK, lambda p: _dispatch_event(EventType.WALK, p))
-player.register_handler(EventType.AUDIO, lambda p: _dispatch_event(EventType.AUDIO, p))
-player.register_handler(EventType.CUSTOM, lambda p: _dispatch_event(EventType.CUSTOM, p))
+
+# The player's CUSTOM slot receives each cue once, including custom cues.
+player.register_handler(EventType.CUSTOM, _dispatch_event)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # API ROUTES
@@ -100,12 +95,18 @@ async def get_status():
     timeline_name = player._timeline.name if player._timeline else None
     duration = player._timeline.duration if player._timeline else None
     
+    clocks = player.clocks() or {}
     return TimelineStatus(
         state=player.state.value,
         elapsed=player.elapsed,
         progress=player.progress,
         timeline_name=timeline_name,
         duration=duration,
+        frame_rate=clocks.get("frame_rate"),
+        set_length=clocks.get("set_length"),
+        elapsed_time_code=clocks.get("elapsed_time_code"),
+        remaining=clocks.get("remaining"),
+        remaining_time_code=clocks.get("remaining_time_code"),
     )
 
 @router.get("/list")
@@ -123,6 +124,8 @@ async def list_timelines():
                 "filename": path.stem,
                 "description": tl.description,
                 "duration": tl.duration,
+                "frame_rate": tl.frame_rate,
+                "set_length": tl.set_length,
                 "event_count": len(tl.events),
                 "loop": tl.loop,
             })
@@ -143,16 +146,17 @@ async def load_timeline(req: TimelineLoadRequest, identity: Dict[str, Any] = Dep
     
     try:
         timeline = TimelineDefinition.load(path)
-        issues = timeline.validate()
+        issues = player.load_timeline(timeline)
         if issues:
             raise HTTPException(400, f"Timeline validation failed: {issues}")
         
-        player.load_timeline(timeline)
         logger.info(f"Loaded timeline: {timeline.name}")
         
         return {
             "loaded": timeline.name,
             "duration": timeline.duration,
+            "frame_rate": timeline.frame_rate,
+            "set_length": timeline.set_length,
             "events": len(timeline.events),
         }
     except HTTPException:
@@ -164,10 +168,11 @@ async def load_timeline(req: TimelineLoadRequest, identity: Dict[str, Any] = Dep
 @router.post("/play")
 async def play(identity: Dict[str, Any] = Depends(require_role("mod"))):
     """Start timeline playback."""
-    if player.state == TimelineState.IDLE:
+    if player._timeline is None:
         raise HTTPException(400, "No timeline loaded")
     
-    player.play()
+    if not await player.start():
+        raise HTTPException(400, "Timeline already active")
     logger.info("Timeline playback started")
     return {"action": "playing", "state": player.state.value}
 
@@ -177,7 +182,7 @@ async def pause(identity: Dict[str, Any] = Depends(require_role("mod"))):
     if player.state != TimelineState.RUNNING:
         raise HTTPException(400, "Timeline not running")
     
-    player.pause()
+    await player.pause()
     logger.info("Timeline playback paused")
     return {"action": "paused", "elapsed": player.elapsed}
 
@@ -187,14 +192,14 @@ async def resume(identity: Dict[str, Any] = Depends(require_role("mod"))):
     if player.state != TimelineState.PAUSED:
         raise HTTPException(400, "Timeline not paused")
     
-    player.resume()
+    await player.resume()
     logger.info("Timeline playback resumed")
     return {"action": "resumed", "state": player.state.value}
 
 @router.post("/stop")
 async def stop(identity: Dict[str, Any] = Depends(require_role("mod"))):
     """Stop timeline playback."""
-    player.stop()
+    await player.stop()
     logger.info("Timeline playback stopped")
     return {"action": "stopped"}
 
@@ -204,7 +209,7 @@ async def seek(time: float, identity: Dict[str, Any] = Depends(require_role("mod
     if not player._timeline:
         raise HTTPException(400, "No timeline loaded")
     
-    if time < 0 or time > player._timeline.duration:
+    if not math.isfinite(time) or time < 0 or time > player._timeline.duration:
         raise HTTPException(400, f"Time must be 0-{player._timeline.duration}")
     
     player.seek(time)
@@ -234,6 +239,7 @@ async def timeline_websocket(websocket: WebSocket):
             if player._timeline:
                 status["timeline"] = player._timeline.name
                 status["duration"] = player._timeline.duration
+                status["clocks"] = player.clocks()
             
             await websocket.send_json(status)
             await asyncio.sleep(0.1)  # 10Hz updates
