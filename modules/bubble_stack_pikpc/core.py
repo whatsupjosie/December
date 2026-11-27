@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from math import floor, sqrt
+from math import floor, sqrt, isfinite
 from typing import Dict, Iterable, List, Optional, Tuple
 
 
@@ -182,7 +182,9 @@ class BubbleConfig:
     target_frame_seconds: float = 1.0 / 30.0
 
     def __post_init__(self) -> None:
-        if self.root_bubble_size <= 0: raise ValueError('root_bubble_size must be positive')
+        if not isfinite(self.root_bubble_size) or self.root_bubble_size <= 0: raise ValueError('root_bubble_size must be positive and finite')
+        if not isfinite(self.target_frame_seconds) or self.target_frame_seconds <= 0: raise ValueError('target_frame_seconds must be positive and finite')
+        if self.occupancy_scan_limit < 1 or self.max_active_bubbles < 1: raise ValueError('bubble budgets must be positive')
         if self.subdivision_factor < 2: raise ValueError('subdivision_factor must be >= 2')
         if self.max_depth < 1: raise ValueError('max_depth must be >= 1')
 
@@ -277,6 +279,11 @@ class BubbleStack:
         eps = 1e-12
         mn = self.root_index_for(bounds.min)
         mx = self.root_index_for(Vec3(bounds.max.x - eps, bounds.max.y - eps, bounds.max.z - eps))
+        count = 1
+        for lo, hi in zip(mn, mx):
+            count *= max(0, hi - lo + 1)
+        if count > self.config.occupancy_scan_limit:
+            raise RuntimeError('occupancy spans too many roots')
         out: List[Tuple[int, int, int]] = []
         for x in range(mn[0], mx[0] + 1):
             for y in range(mn[1], mx[1] + 1):

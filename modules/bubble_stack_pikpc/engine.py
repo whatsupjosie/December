@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from itertools import product
+from math import isfinite
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from .core import (
@@ -130,7 +131,22 @@ class BubbleStackEngine:
         self.semantic_graph.connect(a, b, weight, bidirectional)
 
     def step(self, frame_objects: Iterable[FrameObject], dt: Optional[float] = None) -> StepResult:
-        dt = self.config.target_frame_seconds if dt is None else max(1e-9, dt)
+        dt = self.config.target_frame_seconds if dt is None else dt
+        if not isfinite(dt) or dt <= 0:
+            raise ValueError("frame dt must be positive and finite")
+        dt = max(1e-9, dt)
+        incoming = {}
+        roots = set()
+        for fo in frame_objects:
+            if fo.object_id in incoming:
+                raise ValueError("duplicate frame object id")
+            if not all(isfinite(v) for v in (*fo.bounds.min.as_tuple(), *fo.bounds.max.as_tuple())):
+                raise ValueError("frame object bounds must be finite")
+            roots.update(self.stack.root_indices_for_bounds(fo.bounds))
+            if len(roots) > self.config.max_active_bubbles:
+                raise RuntimeError("frame occupancy exceeds active bubble budget")
+            incoming[fo.object_id] = fo
+        # Validate the whole frame before changing clock, occupancy or history.
         self.time_seconds += dt
         events: List[OrderEvent] = []
         transfers: List[TransferPulse] = []
@@ -138,19 +154,18 @@ class BubbleStackEngine:
         refined: List[str] = []
         collapsed: List[str] = []
 
-        incoming = {fo.object_id: fo for fo in frame_objects}
         previous_ids = set(self.objects.keys())
         current_ids = set(incoming.keys())
 
         # Remove vanished objects first. Coarse roots remain observed; occupancy changes become order events.
         for oid in sorted(previous_ids - current_ids):
             obj = self.objects.pop(oid)
-            self._clear_occupancy(oid)
             events.append(OrderEvent(OrderEventType.OBJECT_EXIT, obj.center, 0.8, source_id=oid))
 
-        # Clear current occupants before rebuilding the frame's order state.
-        for oid in current_ids:
-            self._clear_occupancy(oid)
+        # The frame is a complete snapshot: one pass clears occupancy while
+        # preserving the prior order signatures for event comparison.
+        for bubble in self.stack.all_bubbles():
+            bubble.occupancy.clear()
 
         reports: Dict[str, ObjectReport] = {}
         for oid, fo in incoming.items():

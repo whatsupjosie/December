@@ -6,6 +6,7 @@ Import and include with:
 from __future__ import annotations
 
 from typing import Any, Dict, List, Tuple
+from math import isfinite
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -98,10 +99,17 @@ def ingest_skeleton_frame(
     stack = get_stack(room_id)
     if stack is None:
         return {"ok": True, "room_id": room_id, "state": "AI_BLIND", "actor_id": payload.actor_id}
+    if len(payload.bones) > 256 or not all(isfinite(v) for p in payload.bones.values() for v in p):
+        raise HTTPException(status_code=422, detail="skeleton must contain at most 256 finite bone positions")
     frame = SkeletonFrame(actor_id=payload.actor_id, bones=payload.bones)
-    posture = _tracker.classify_posture(frame)
-    bones = _tracker.to_bone_presence(frame, confidence=payload.confidence)
-    stack.ingest_skeleton_frame(payload.actor_id, bones, posture=posture.label)
+    # Tracker history is room-local and shares the stack's serialization boundary.
+    with stack._lock:
+        tracker = getattr(stack, "_route_tracker", None)
+        if tracker is None:
+            tracker = stack._route_tracker = SkeletonTracker()
+        posture = tracker.classify_posture(frame)
+        bones = tracker.to_bone_presence(frame, confidence=payload.confidence)
+        stack.ingest_skeleton_frame(payload.actor_id, bones, posture=posture.label)
     return {"ok": True, "room_id": room_id, "actor_id": payload.actor_id, "posture": posture.__dict__}
 
 
