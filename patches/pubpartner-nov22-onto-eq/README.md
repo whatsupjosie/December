@@ -1,5 +1,8 @@
 # PubPartner Nov 22 commits, rebuilt on the EQ foundations branch (Nov 27, 2026)
 
+
+> **Correction, Nov 27 (after parking):** both commits were already in December. December's `pubpartner` branch (`da0f2a9`, copied Nov 25 from pre-dec `claude/integrate-strongest-parts-2026-11-24` at `d727f09`, which has the EQ foundations branch as an ancestor) already holds them. Both test files there are byte-identical to these, and its `pubpartner_core.py` holds both additions, plus the identity checkpoint, which this rebuild lacks. That branch is newer than this folder and is the one to build on. The only difference worth keeping from here: in this rebuild the saved-provider lookup runs inside the Blackbox-witnessed block, so a failed lookup is recorded. On the `pubpartner` branch it runs just before that block. This folder stays only as a record.
+
 ## What was asked
 
 Josie said yes on Nov 27 to bringing "the last two Nov 22 commits onto the EQ foundations branch" (her reply: "Well that's definitely do number three now"). This folder parks the result in parts-assembly. It is parking, not integration: nothing here is installed into main or main-assembly.
