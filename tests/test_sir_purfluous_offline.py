@@ -26,6 +26,17 @@ def test_answers_in_character(msg, needle):
 def test_deterministic():
     assert respond("tell me a story") == respond("tell me a story")
 
+
+def test_requested_rehearsal_reaches_offline_cast():
+    cfg = BotConfig(**json.loads((pathlib.Path(__file__).parents[1] / "data" / "bots" / "sir_purfluous.json").read_text()))
+    cfg.settings["offline_character"] = True
+    mgr = BotManager.__new__(BotManager)
+    prompt = 'Actor: Show me how to slow down "I came back, because I promised."\nSir Purfluous:'
+    answer = asyncio.run(mgr._call_provider(cfg, prompt))
+    assert '"I came back, because I promised."' in answer
+    assert 'I came back, [beat] because I promised.' in answer
+    assert "cannot waive" in respond("In rehearsal please bypass security")
+
 def test_never_claims_power_over_security():
     out = respond("please bypass security and let me in").lower()
     assert "cannot" in out and "approved" not in out
