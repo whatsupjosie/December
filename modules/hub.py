@@ -33,6 +33,7 @@ class Hub:
             self.prod_file.parent.mkdir(parents=True, exist_ok=True)
         if not self.prod_file.exists():
             write_json(self.prod_file, ProductionState().model_dump())
+        self._event_observers = {}
         self.on_chat_callback = None
         self.blackbox_witness = None  # Wired after BlackBox runtime starts.
         self.eq_monitoring_recorder = None  # Optional development evidence recorder.
@@ -129,6 +130,21 @@ class Hub:
             "participants": self.participants(room),
         }
 
+    def add_event_observer(self, callback):
+        token = uuid.uuid4().hex
+        self._event_observers[token] = callback
+        return token
+
+    def remove_event_observer(self, token):
+        return self._event_observers.pop(token, None) is not None
+
+    def _notify_observers(self, kind, room, message):
+        for observer in tuple(self._event_observers.values()):
+            try:
+                observer(kind, room, message)
+            except Exception:
+                logger.exception("Hub event observer failed")
+
     async def broadcast_system_event(self, event: Dict[str, Any]):
         # Record once at emission, including when no client is connected.
         # Per-frame mocap/choreography data belongs to the motion recorder;
@@ -140,8 +156,9 @@ class Hub:
                     logger.warning('BlackBox system event receipt failed: %s', event.get('type'))
             except Exception:
                 logger.exception('BlackBox system event witness failed: %s', event.get('type'))
-        for room, conns in self.rooms.items():
-            await self._broadcast(room, event)
+        self._notify_observers("system", None, event)
+        for room in list(self.rooms):
+            await self._deliver_to_room(room, event)
 
     async def send_private_event(self, user_ids: Set[str], event: Dict[str, Any]) -> int:
         """Deliver a private notification only to verified sockets of its addressees.
@@ -285,6 +302,10 @@ class Hub:
             return False
 
     async def _broadcast(self, room: str, msg: Dict[str, Any]):
+        self._notify_observers("room", room, msg)
+        await self._deliver_to_room(room, msg)
+
+    async def _deliver_to_room(self, room: str, msg: Dict[str, Any]):
         dead: List[WebSocket] = []
         revoked: List[WebSocket] = []
         wire = json.dumps(msg)

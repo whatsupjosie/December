@@ -103,8 +103,10 @@ def test_calibration_answer_and_explicit_approval(reach):
         page.click("#calibrationStart")
         page.fill("#calibrationAnswer", "Please ask about the particular moment.")
         page.click("#calibrationSubmit")
-        page.wait_for_selector("#calibrationOfferFollowup")
-        page.click("#calibrationFinish")
+        page.get_by_text("What would doing that well look like in the moment?", exact=True).wait_for()
+        page.fill("#calibrationAnswer", "That’s all.")
+        page.click("#calibrationSubmit")
+        page.wait_for_selector("#calibrationContinuation")
         page.fill("#calibrationLesson", "Ask about the particular moment.")
         with page.expect_response(lambda r: r.url.endswith("/approve")) as approved:
             page.click("#calibrationApplyLesson")
