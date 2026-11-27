@@ -2810,6 +2810,22 @@ def _page(name: str, request: Request):
     return FileResponse(p)
 
 
+@app.get("/api/studio/foley-manifest")
+async def installed_foley_manifest():
+    manifest = json.loads((STATIC_DIR / "foley_manifest.json").read_text(encoding="utf-8"))
+    missing = []
+    for group in ("one_shots", "loops"):
+        installed = {}
+        for name, entry in manifest[group].items():
+            url = entry["url"]
+            if url.startswith("/assets/") and not (ASSETS_DIR / url.removeprefix("/assets/")).is_file():
+                missing.append(name)
+            else:
+                installed[name] = entry
+        manifest[group] = installed
+    return {**manifest, "missing": missing}
+
+
 @app.get("/foresight", include_in_schema=False)
 @app.get("/counter", include_in_schema=False)
 async def page_foresight(request: Request):

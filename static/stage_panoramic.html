@@ -1536,12 +1536,16 @@ function maybeTriggerDoorTransition(nextCamName) {
 async function initFoleySystem() {
   if (!window.PubcastFoleyEngine) return;
   if (!foley) {
-    foley = new window.PubcastFoleyEngine('/static/foley_manifest.json');
+    foley = new window.PubcastFoleyEngine('/api/studio/foley-manifest');
   }
   try {
     await foley.init();
     foleyReady = true;
     const status = foley.getStatus();
+    if (status.missing.length) {
+      document.getElementById('audioHint').textContent =
+        status.missing.length + ' stage sound assets unavailable. You can load a custom track.';
+    }
     foleyState.surface = status.surface || foleyState.surface;
     foleyState.footwear = status.footwear_mode || foleyState.footwear;
     const surfaceEl = document.getElementById('foleySurface');

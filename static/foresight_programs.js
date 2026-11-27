@@ -32,7 +32,7 @@
     twoIBase: '/api/foresight/bridge',
     twoIUi: '/writers-room',
     // Iteration Wallet is a separate local program with its own server (START_ITERATION_WALLET.ps1, port 7432).
-    iterationWalletUrl: 'http://127.0.0.1:7432/',
+    iterationWalletUrl: 'http://localhost:7432/',
   };
 
   // The general shape each kind of content reads best in (the tray makes its own exact shape from it). Josie: no
@@ -75,7 +75,7 @@
     {id: 'primp', title: 'Primp', group: 'Programs', kind: 'page', url: '/static/primp.html', w: 1040, h: 700, minW: 360, minH: 480, shape: 'tool', singleton: true},
     {id: 'dressing', title: 'Dressing Room', group: 'Studio Rooms', kind: 'page', url: '/static/dressing.html', w: 780, h: 540, minW: 480, minH: 340, shape: 'room', singleton: true},
     {id: 'waiting_room', title: 'Waiting Room', group: 'Studio Rooms', kind: 'page', url: '/static/waiting_room.html', w: 720, h: 500, minW: 440, minH: 320, shape: 'room', singleton: true},
-    {id: 'map', title: 'Map / Walk', group: 'Studio Rooms', kind: 'page', url: '/static/map.html', w: 780, h: 540, minW: 480, minH: 340, shape: 'room', singleton: true},
+    {id: 'map', title: 'Architecture Map', group: 'Studio Rooms', kind: 'page', url: '/static/map.html', w: 780, h: 540, minW: 480, minH: 340, shape: 'room', singleton: true},
     {id:'saved_files',title:'Saved files',group:'Programs',kind:'page',url:'/static/foresight_file_shelf.html',w:680,h:500,minW:400,minH:300,shape:'wide'},
     {id:'shell',title:'Host shell',group:'Development',kind:'page',url:'/static/foresight_shell.html',w:820,h:540,minW:480,minH:320,shape:'wide'},
     // production tools
@@ -238,13 +238,16 @@
         const code1 = el('code', {}, '.\\START_ITERATION_WALLET.ps1'), code2 = el('code', {}, url);
         panel(body, p.title + ' is not running', [
           'It is a separate program with its own server. Start it on this computer, then press Retry.',
-          el('p', {}, 'In PowerShell, from the Iteration Wallet folder: ', code1),
+          el('p', {}, 'From the standalone Wallet UI folder (source_2.5.0a11_merged), run in PowerShell: ', code1),
           el('p', {}, 'Expected address: ', code2)],
           [['Retry', () => mountExternal(c, body, p)], ['Open in a new window', () => window.open(url, '_blank', 'noopener')]]);
         return;
       }
       body.innerHTML = '';
       frameFor(c, body, url, {allow: 'clipboard-read; clipboard-write'});
+      const launch = el('a', {href: url, target: '_blank', rel: 'noopener'}, 'Open Wallet for passkeys ↗');
+      Object.assign(launch.style, {position:'absolute',right:'8px',top:'8px',padding:'6px 10px',background:'#241d17',color:'#fff',zIndex:'2'});
+      body.appendChild(launch);
     }
 
     function mountStatus(c, body, p){

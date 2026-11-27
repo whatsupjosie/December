@@ -115,12 +115,7 @@
   <!-- Mod log -->
   <div class="card">
     <div class="row-between">
-      <h2 style="margin-bottom:0">Moderation Log</h2>
-      <select id="modRoomSelect" onchange="loadModLog()" style="background:var(--s2);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:0.7rem;padding:0.2rem 0.5rem;border-radius:var(--r)">
-        <option value="main">main</option>
-        <option value="control">control</option>
-        <option value="green">green</option>
-      </select>
+      <h2 style="margin-bottom:0">Governance activity</h2>
     </div>
     <div class="modlog" id="modlog"><div class="empty">Loading…</div></div>
   </div>
@@ -188,22 +183,29 @@ async function loadSessions() {
 }
 
 async function loadModLog() {
-  const room = document.getElementById('modRoomSelect').value || 'main';
+  const el = document.getElementById('modlog');
   try {
-    const r = await fetch(`/api/rooms/${room}/modlog?limit=50`);
-    if (!r.ok) { document.getElementById('modlog').innerHTML = '<div class="empty">No mod log available</div>'; return; }
+    const r = await fetch('/api/governance/audit?limit=50');
+    if (r.status === 401 || r.status === 403) {
+      el.textContent = 'Sign in with moderation access to view governance activity.';
+      return;
+    }
+    if (!r.ok) throw Error('Audit unavailable');
     const rows = await r.json();
-    const list = Array.isArray(rows) ? rows : (rows.actions || rows.rows || []);
-    const el = document.getElementById('modlog');
-    if (!list.length) { el.innerHTML = '<div class="empty">No moderation actions logged</div>'; return; }
-    el.innerHTML = list.map(r => `
-      <div class="modlog-row">
-        <span class="modlog-ts">${fmt(r.ts)}</span>
-        <span class="modlog-op">${r.operator||'—'}</span>
-        <span class="modlog-action">${r.action||'—'}</span>
-        <span class="modlog-detail">${r.detail||''}</span>
-      </div>`).join('');
-  } catch(e) { document.getElementById('modlog').innerHTML = '<div class="empty">Mod log unavailable</div>'; }
+    el.replaceChildren();
+    if (!rows.length) el.textContent = 'No governance activity logged.';
+    for (const entry of rows) {
+      const row = document.createElement('div');
+      row.className = 'modlog-row';
+      for (const [name, value] of [['ts', fmt(entry.timestamp)], ['op', entry.actor_id], ['action', entry.action], ['detail', entry.details]]) {
+        const field = document.createElement('span');
+        field.className = 'modlog-' + name;
+        field.textContent = value || '—';
+        row.appendChild(field);
+      }
+      el.appendChild(row);
+    }
+  } catch { el.textContent = 'Governance activity unavailable.'; }
 }
 
 async function loadAll() {

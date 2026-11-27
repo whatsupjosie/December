@@ -45,6 +45,7 @@ function stored(key, fallback) { try { return JSON.parse(localStorage.getItem(ke
 let workspace = stored(WORKSPACE_KEY, { clientId:'writer_' + uuid(), documentId:uuid() });
 let documentId = priorOfflineDocumentId || workspace.documentId || uuid();
 let revision = 0, mutation = 0, savedMutation = 0, savePromise = null;
+let freshOwnerDocumentId = null;
 let fileSavingId = null;
 let serverReady = false, initializing = true, saveConflict = false, recoverySafe = false, unsavedNoticeShown = false;
 let partnerId = 'alex', conversations = {}, conversationIds = {};
@@ -608,7 +609,9 @@ async function connectReach() {
   if (WORKSPACE_KEY !== 'reach2i_workspace_v1_' + ownerKey) {
     WORKSPACE_KEY = 'reach2i_workspace_v1_' + ownerKey;
     RECOVERY_KEY = 'reach2i_recovery_v1_' + ownerKey;
-    const next = stored(WORKSPACE_KEY, {clientId:workspace.clientId,documentId:uuid()});
+    const existing = stored(WORKSPACE_KEY, null);
+    const next = existing || {clientId:workspace.clientId,documentId:uuid()};
+    freshOwnerDocumentId = existing ? null : next.documentId;
     workspace = next; documentId=reachFileMode ? 'file_'+reachFileMode : (requestedDocumentId||workspace.documentId||uuid()); revision=0;
   }
   // Read only this authenticated owner's per-tab handoff. Explicit version URLs win.
@@ -919,7 +922,9 @@ async function startReach() {
   if(recovery?.id===documentId) {
     try {validateDocumentState(recovery.state);documentTitle=recovery.title;revision=recovery.revision||0;loadDocState(recovery.state);documentDirty=!!recovery.dirty;recoverySafe=true;} catch {addChat('notice','A recovery copy could not be loaded. Use Restore autosave or import your .2i file.');}
   }
-  if(networked) {
+  if(networked && documentId === freshOwnerDocumentId && !recovery && !requestedDocumentId && !studioResume) {
+    setSaveStatus('New manuscript · not yet saved');
+  } else if(networked) {
     try {
       const saved=await api('/api/writers-room/documents/'+encodeURIComponent(documentId));
       if(!documentDirty) {validateDocumentState(saved.state);documentTitle=saved.title;revision=saved.revision;loadDocState(saved.state);writeRecovery();setSaveStatus('Saved to Reach · revision '+revision);}

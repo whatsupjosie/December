@@ -331,6 +331,7 @@
     getStatus() {
       return {
         ready: this.ready,
+        missing: this.manifest?.missing || [],
         enabled: this.enabled,
         surface: this.surface,
         footwear_mode: this.footwearMode,

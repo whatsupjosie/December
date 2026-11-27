@@ -37,7 +37,7 @@ if(typeof document!=="undefined")(function installVersionIdentity(){
   }
   let timer=null;
   async function refresh(){
-    if(initializing||!networked||!serverReady){paint();return;}
+    if(initializing||!networked||!serverReady||(!revision && documentId===freshOwnerDocumentId)){paint();return;}
     const wanted=documentId, token=++state.request;
     if(state.id!==wanted){state.id=wanted;state.version=null;state.rows=[];state.stale=true;paint();}
     try{
