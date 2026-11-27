@@ -47,7 +47,7 @@ def test_rest_pose_is_a_world_aligned_t_pose(pete):
         d = r[b] - r[a]
         d = d / np.linalg.norm(d)
         assert d[axis] == pytest.approx(sign, abs=1e-6), (a, b, d)
-    assert r["UpperArm_L"][1] == pytest.approx(r["UpperArm_R"][1])                      # shoulders level
+    assert r["UpperArm_L"][1] == pytest.approx(r["UpperArm_R"][1], abs=2e-3)   # shoulders level to 2 mm (measured arms can differ by a pixel)
 
 
 def test_bone_names_are_the_ones_the_motion_consumer_resolves():
@@ -95,8 +95,9 @@ def test_the_front_of_the_avatar_is_the_supplied_artwork(pete):
 
 def test_the_template_fallback_is_reported_when_no_pose_model_is_present(pete):
     assert pete.landmarks.detector_used is False
-    assert set(pete.landmarks.source.values()) == {"template"}
-    assert any("template" in w for w in pete.report["warnings"])
+    assert set(pete.landmarks.source.values()) == {"template", "silhouette"}               # legs and spine from the template, arms measured from the cut-out
+    assert {k for k, v in pete.landmarks.source.items() if v == "silhouette"} == {f"{j}_{s}" for j in ("shoulder", "elbow", "wrist", "hand_tip") for s in "LR"}
+    assert any("template" in w for w in pete.report["warnings"]) and any("measured from the cut-out" in w for w in pete.report["warnings"])
     assert pete.report["not_in_the_picture"]                                             # the report states what the picture cannot show
 
 
@@ -300,3 +301,32 @@ def test_recorded_clips_survive_a_rebuild_and_a_change_of_height_warns(pete):
     assert any("Recorded clips" in w for w in taller.report["warnings"])
     swapped = pipeline.rebuild(glb, {"back_mode": "mirror"})                             # the branch that rewrites the file
     assert "Mocap_run" in gltf_io.read_skeleton(swapped.glb)["clips"]
+
+
+@pytest.mark.parametrize("path", [PETE, REPEAT], ids=["pete", "repeat"])
+def test_arm_joints_of_a_t_pose_lie_inside_the_drawn_arms_without_any_model(path):
+    b = pipeline.build(path.read_bytes(), pipeline.Settings(height_m=PETE_M))
+    mask = b.cutout.alpha > 0.5
+    pts = b.landmarks.points
+    for side in "LR":
+        for a, c in (("shoulder", "elbow"), ("elbow", "wrist"), ("wrist", "hand_tip")):
+            p, q = np.array(pts[f"{a}_{side}"]), np.array(pts[f"{c}_{side}"])
+            line = p[None] + np.linspace(0.05, 0.95, 25)[:, None] * (q - p)[None]
+            inside = mask[np.clip(line[:, 1].round().astype(int), 0, mask.shape[0] - 1), np.clip(line[:, 0].round().astype(int), 0, mask.shape[1] - 1)]
+            assert inside.mean() > 0.9, (side, a, c, inside.mean())                          # the bone runs through the arm, not through the air
+        x0, _, x1, _ = b.cutout.report.bbox
+        tip = pts[f"hand_tip_{side}"][0]
+        assert abs(tip - (x1 if side == "L" else x0)) < 0.02 * (x1 - x0)                      # the fingertip is the end of the figure
+    assert b.landmarks.pose_kind == "tpose"
+
+
+@pytest.mark.parametrize("path", [PETE, REPEAT], ids=["pete", "repeat"])
+def test_every_bone_that_can_visibly_move_has_skin_on_it(path):
+    from modules.avatar_likeness import analysis
+    b = pipeline.build(path.read_bytes(), pipeline.Settings(height_m=PETE_M))
+    P = analysis.Posed(b.glb)
+    w = np.zeros(len(P.names))
+    for k in range(4):
+        np.add.at(w, P.joints[:, k], P.weights[:, k])
+    for bone in ("Pelvis", "Spine_02", "Head", "UpperArm_L", "LowerArm_L", "Hand_L", "UpperArm_R", "LowerArm_R", "Hand_R", "Thigh_L", "Calf_L", "Foot_L", "Thigh_R", "Calf_R", "Foot_R"):
+        assert w[P.names.index(bone)] > 20, f"{bone} controls no part of the mesh, so capturing it would move nothing"

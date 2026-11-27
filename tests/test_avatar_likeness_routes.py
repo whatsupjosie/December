@@ -81,7 +81,7 @@ def test_a_picture_becomes_a_draft_at_the_stated_height(pete_draft):
     assert d["report"]["height_pub_blocks"] == pytest.approx(6.7, rel=0.03)
     assert set(d["clips"]) == {"Idle", "Walk"}
     assert set(d["landmarks"]["points"]) == set(d["joints"])
-    assert d["landmarks"]["source"]["knee_L"] == "template"                              # the page is told where each joint came from
+    assert d["landmarks"]["source"]["knee_L"] == "template" and d["landmarks"]["source"]["wrist_L"] == "silhouette"                              # the page is told where each joint came from
     assert d["working_size"][0] > 100 and d["crop"][2] > 100
 
 
@@ -110,7 +110,7 @@ def test_an_edit_makes_a_new_version_and_an_earlier_one_can_be_brought_back(host
     glb2 = host.get(d["urls"]["glb"], headers=_auth()).content
     assert gltf_io.read_recipe(glb2)["settings"]["joints"]["elbow_L"] == new                    # the edit is in the file itself
     back = host.post(f"/api/avatars/likeness/drafts/{first['id']}/select", params={"version": 1}, headers=_auth()).json()
-    assert back["version"] == 1 and back["landmarks"]["source"]["elbow_L"] == "template" and len(back["versions"]) == 2   # nothing was deleted
+    assert back["version"] == 1 and back["landmarks"]["source"]["elbow_L"] == "silhouette" and len(back["versions"]) == 2   # nothing was deleted
     assert host.get(f"/api/avatars/likeness/drafts/{first['id']}/model.glb", params={"version": 2}, headers=_auth()).content == glb2
     assert host.post(f"/api/avatars/likeness/drafts/{first['id']}/select", params={"version": 9}, headers=_auth()).status_code == 404
 

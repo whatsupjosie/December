@@ -233,6 +233,86 @@ def _from_template(mask: np.ndarray, bbox: Tuple[int, int, int, int], build: str
     return P, {k: 0.35 for k in P}
 
 
+# fraction of figure height: how long a hand is from the wrist to the fingertip, and the column height above which a column is body, not arm
+HAND_LEN = {"adult": 0.10, "child": 0.115, "toddler": 0.12}
+ARM_COLUMN_MAX = {"adult": 0.12, "child": 0.14, "toddler": 0.16}
+
+
+def _runs(col: np.ndarray) -> List[Tuple[int, int]]:
+    """(start, end exclusive) of each vertical run of True in one image column."""
+    d = np.diff(np.concatenate([[0], col.astype(np.int8), [0]]))
+    return list(zip(np.nonzero(d == 1)[0].tolist(), np.nonzero(d == -1)[0].tolist()))
+
+
+def _tpose_arms(mask: np.ndarray, P: Dict[str, Tuple[float, float]], bbox: Tuple[int, int, int, int], build: str) -> Optional[Dict[str, Tuple[float, float]]]:
+    """Arm joints measured from the cut-out for a figure drawn with its arms out sideways.
+
+    Start at the outermost column of the arm (the fingertips) and follow the arm inward column by column, always taking the
+    vertical run that overlaps the one before, until the run grows tall enough to be the torso. The arm's centre line is a
+    straight line fitted through those columns, so a drooping or raised arm is followed. The wrist is where the sleeve or cuff
+    ends (the run suddenly thins) when that is visible, otherwise a hand length from the tip; the shoulder keeps its template
+    x and takes the line's y; the elbow is halfway. Returns None when the arm cannot be followed (the caller keeps the template).
+    """
+    x0, y0, x1, y1 = bbox
+    H = float(y1 - y0)
+    h, w = mask.shape
+    cx = P["pelvis"][0]
+    y_ref = P["shoulder_L"][1]
+    out: Dict[str, Tuple[float, float]] = {}
+    for s, sign in (("L", 1), ("R", -1)):
+        top, bottom = int(max(0, y0 + 0.08 * H)), int(min(h, y0 + 0.5 * H))
+        cols = [x for x in range(w) if mask[top:bottom, x].any()]
+        if not cols:
+            return None
+        tip_x = max(cols) if sign > 0 else min(cols)
+        inner = cx + sign * 0.10 * H
+        track: List[Tuple[int, float, float]] = []          # (x, centre y, run length) from the tip inward
+        prev_c = None
+        x = tip_x
+        while (x - inner) * sign > 0 and 0 <= x < w:
+            runs = [(a, b) for a, b in _runs(mask[:, x]) if a < bottom and b > top]
+            if not runs:
+                x -= sign
+                continue
+            if prev_c is None:
+                a, b = min(runs, key=lambda r: abs((r[0] + r[1]) / 2 - y_ref))
+            else:
+                hit = [r for r in runs if r[0] <= prev_c < r[1]]
+                a, b = hit[0] if hit else min(runs, key=lambda r: abs((r[0] + r[1]) / 2 - prev_c))
+            if (b - a) > ARM_COLUMN_MAX[build] * H:
+                break                                       # this column is body
+            if abs(((a + b) / 2) - (prev_c if prev_c is not None else y_ref)) > 0.06 * H:
+                break                                       # jumped to something else (a hand of hair, a prop): stop following
+            prev_c = (a + b) / 2
+            track.append((x, prev_c, float(b - a)))
+            x -= sign
+        if len(track) < max(20, int(0.12 * H)):
+            return None
+        xs = np.array([t[0] for t in track], float)
+        ys = np.array([t[1] for t in track], float)
+        ls = np.array([t[2] for t in track], float)
+        n = len(track)
+        use = slice(int(0.12 * n), int(0.9 * n))            # skip the tapering hand and the shoulder end
+        A = np.vstack([xs[use], np.ones(len(xs[use]))]).T
+        slope, icpt = np.linalg.lstsq(A, ys[use], rcond=None)[0]
+        line = lambda xx: float(slope * xx + icpt)
+        mid = np.median(ls[int(0.3 * n):int(0.8 * n)])
+        thick = np.nonzero(ls >= 0.7 * mid)[0]              # columns (from the tip inward) that are as thick as the sleeve
+        wrist_x = None
+        if len(thick):
+            cand = float(xs[thick[0]])                      # the outermost thick column: where the cuff ends
+            if 0.04 * H <= abs(tip_x - cand) <= 0.13 * H:
+                wrist_x = cand
+        if wrist_x is None:
+            wrist_x = tip_x - sign * HAND_LEN[build] * H
+        sh_x = P[f"shoulder_{s}"][0]
+        out[f"hand_tip_{s}"] = (float(tip_x), line(tip_x))
+        out[f"wrist_{s}"] = (float(wrist_x), line(wrist_x))
+        out[f"shoulder_{s}"] = (float(sh_x), line(sh_x))
+        out[f"elbow_{s}"] = ((sh_x + wrist_x) / 2.0, line((sh_x + wrist_x) / 2.0))
+    return out
+
+
 # ── public entry ───────────────────────────────────────────────────────────────────────────────────────────────
 
 def find(rgb: np.ndarray, alpha: np.ndarray, bbox: Tuple[int, int, int, int], height_m: float,
@@ -267,6 +347,14 @@ def find(rgb: np.ndarray, alpha: np.ndarray, bbox: Tuple[int, int, int, int], he
         hint = pose_hint or ("tpose" if _looks_tpose(mask, bbox) else "relaxed")
         P, C = _from_template(mask, bbox, build, hint, feet_cropped)
         src = {k: "template" for k in P}
+        if hint == "tpose":
+            arms = _tpose_arms(mask, P, bbox, build)
+            if arms is None:
+                warns.append("The arms could not be followed in the cut-out, so they use the template. Drag the shoulders, elbows and wrists onto the arms.")
+            else:
+                for k, v in arms.items():
+                    P[k], C[k], src[k] = v, 0.6, "silhouette"
+                warns.append("The arm joints were measured from the cut-out, not detected. Check the elbows and wrists in the editor.")
     else:
         src = {k: "detector" for k in P}
         src["head_top"], src["neck"] = "silhouette", "derived"

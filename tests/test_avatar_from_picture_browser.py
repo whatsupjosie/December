@@ -241,7 +241,7 @@ def test_from_a_picture_to_a_saved_avatar_and_back_after_a_restart(reach):
             assert _extent(_canvas_png(page, "#view"))[1] > 5000                                   # and it draws again after the restart
             page.click("#versions button:has-text('v1')")                                         # undo is still there
             page.wait_for_function("(window.avatarFromPicture.state.shown || '').endsWith(':1')", timeout=120000)
-            assert page.evaluate("window.avatarFromPicture.state.draft.landmarks.source.elbow_L") == "template"
+            assert page.evaluate("window.avatarFromPicture.state.draft.landmarks.source.elbow_L") == "silhouette"
             assert len(page.evaluate("window.avatarFromPicture.state.draft.versions")) == 3
             library = httpx.get(host.base + "/api/avatars/imports", trust_env=False, timeout=20).json()["avatars"]
             assert len(library) == 1                                                              # the saved avatar survived too
