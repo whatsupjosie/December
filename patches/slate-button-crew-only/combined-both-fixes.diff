@@ -1,0 +1,108 @@
+diff --git a/modules/studio_slate.py b/modules/studio_slate.py
+index 7105961..951c73f 100644
+--- a/modules/studio_slate.py
++++ b/modules/studio_slate.py
+@@ -193,6 +193,28 @@ class SlateStore:
+         return s
+ 
+ 
++def floor_crew(slate, identity) -> bool:
++    """Whether this caller gets the floor's slate launcher button.
++
++    Crew and up in PubCast's room roles (the same rank the studio, control room
++    and director rooms require), anyone allowed to open a production, and anyone
++    the active slate itself names: its director, delegated editors and the
++    accounts assigned a department check-in. Performers are reached that way:
++    the director lists them on the roll call ("Cast = account ID"), because
++    sign-in has no performer role. Everyone else still sees the floor
++    whenever the director shows it on every screen; this only decides the button.
++    """
++    from modules.chat_rooms import ROLE_RANK
++    role = str(identity.get('role') or 'guest')
++    if ROLE_RANK.get(role, -1) >= ROLE_RANK['crew'] or role_gte(role, 'mod'):
++        return True
++    if not slate or slate.get('phase') == 'ended':
++        return False
++    user_id = identity.get('user_id')
++    return (user_id == slate.get('director_id') or user_id in slate.get('editors', ())
++            or any(entry.get('user_id') == user_id for entry in slate.get('departments', {}).values()))
++
++
+ def create_slate_router(path: Path):
+     router = APIRouter()
+     store = SlateStore(path)
+@@ -208,7 +230,8 @@ def create_slate_router(path: Path):
+         return {'slate': s, 'takes': store.recent_takes(s['id']) if s else [],
+                 'server_time': time.time(), 'user_id': identity['user_id'],
+                 'can_edit': bool(s and (identity['user_id'] == s['director_id'] or identity['user_id'] in s['editors'])),
+-                'is_director': bool(s and identity['user_id'] == s['director_id'])}
++                'is_director': bool(s and identity['user_id'] == s['director_id']),
++                'floor_crew': floor_crew(s, identity)}
+ 
+     async def send(peer, message):
+         async def write():
+@@ -525,8 +548,12 @@ def create_slate_router(path: Path):
+ 
+ # The Foresight Counter is its own shell (tray physics, programs, 2i hosting) and
+ # is served byte-for-byte from static/foresight_counter.html; the floor slate
+-# belongs to the studio pages and is never layered over it.
+-SLATE_EXEMPT_PATHS = frozenset({'/foresight-counter', '/static/foresight_counter.html'})
++# belongs to the studio pages and is never layered over it. Sign-in and the
++# member profile/onboarding page are not studio pages either: the launcher's
++# fixed bottom-right corner sits on their fixed action bar ("Skip optional
++# details"), so the overlay is not added there.
++SLATE_EXEMPT_PATHS = frozenset({'/foresight-counter', '/static/foresight_counter.html',
++                                '/login', '/static/login.html', '/static/human_profile.html'})
+ 
+ 
+ class SlateOverlayMiddleware:
+diff --git a/static/studio_slate.js b/static/studio_slate.js
+index 2d0efca..7b93f59 100644
+--- a/static/studio_slate.js
++++ b/static/studio_slate.js
+@@ -127,7 +127,7 @@
+   function render(refreshRoster=false) {
+     if(!snapshot)return;
+     const s=snapshot.slate, editor=snapshot.can_edit, director=snapshot.is_director;
+-    launcher.hidden=false;
++    launcher.hidden=!snapshot.floor_crew;
+     if(!s||s.phase==='ended'){if(takeRecorder?.active)takeRecorder.stop();root.hidden=true;launcher.textContent='Open production slate';stopMic();return;}
+     launcher.textContent='Production slate · '+s.phase;
+     if(s.visible)root.hidden=false;
+diff --git a/tests/test_studio_slate.py b/tests/test_studio_slate.py
+index f6bfdb5..3dbb545 100644
+--- a/tests/test_studio_slate.py
++++ b/tests/test_studio_slate.py
+@@ -146,3 +146,32 @@ def test_voice_rejects_malformed_and_cross_origin(floor):
+     with pytest.raises(WebSocketDisconnect):
+         with c.websocket_connect('/studio/slate/live',headers={**cookie,'origin':'https://hostile.invalid'}):
+             pass
++
++
++def test_slate_launcher_is_for_crew_and_the_slate_s_own_people(floor):
++    c,_=floor
++    flag=lambda user,role: c.get('/api/studio/slate',headers=headers(user,role)).json()['floor_crew']
++    # No production open: crew and up, and anyone who may open one.
++    assert [flag('m','viewer'),flag('g','guest'),flag('f','friend')]==[False,False,False]
++    assert [flag('c','crew'),flag('s','security'),flag('d','mod'),flag('a','admin'),flag('o','owner')]==[True]*5
++    post(c,'create');post(c,'delegate',{'editors':['assistant']})
++    post(c,'departments',{'departments':{'Camera':'cam','Cast':'lead'}})
++    # An open production adds the people its slate names, whatever their role,
++    # performers included once the director puts them on the roll call.
++    assert flag('assistant','viewer') and flag('cam','viewer') and flag('lead','viewer')
++    assert not flag('m','viewer')
++    post(c,'end')
++    assert not flag('cam','viewer') and not flag('lead','viewer')
++
++
++def test_sign_in_and_profile_pages_are_served_without_the_floor_overlay(tmp_path):
++    page='<!doctype html><html><head><title>Profile</title></head><body><button id="skip">Skip optional details</button></body></html>'
++    app=FastAPI()
++    app.include_router(create_slate_router(tmp_path/'slates.sqlite3'))
++    app.add_middleware(SlateOverlayMiddleware)
++    for path in ('/login','/static/login.html','/static/human_profile.html','/studio'):
++        app.add_api_route(path,lambda: HTMLResponse(page),methods=['GET'])
++    c=TestClient(app)
++    for path in ('/login','/static/login.html','/static/human_profile.html','/static/human_profile.html?onboarding=1'):
++        assert c.get(path).content==page.encode(),path
++    assert c.get('/studio').text.count('/static/studio_slate.js')==1

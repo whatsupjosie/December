@@ -1,0 +1,71 @@
+diff --git a/STATUS.md b/STATUS.md
+index cd8f89f..61b432a 100644
+--- a/STATUS.md
++++ b/STATUS.md
+@@ -19,6 +19,15 @@ Check the release candidate across Studio and Control Room, capture and export,
+ 
+ Local synthesized speech drives the bundled Pete rig through the Studio's dialogue mixer. Chromium with local Flite has verified rendered mouth movement, signal on the Program mixer, and neutral reset on Stop, normal completion, and production shutdown. This is audio-level mouth movement. Phoneme timing, phoneme-specific shapes, real device checks, and casting through the shared camera pool remain open. The original Studio cast remains the default.
+ 
++## 2026-11-27: Avatar from a picture (branch `claude/avatar-from-image-2026-11-27`, not merged)
++
++Ledger: `handoffs/AVATAR_FROM_PICTURE_2026-11-27.md`. Evidence: `handoffs/avatar_from_picture_2026-11-27/`.
++
++- A character picture becomes a rigged GLB (25 canonical joints, T-pose rest, Idle and Walk) with the artwork on the front, at `/avatar-from-picture` (linked from Avatar Foundry). The page lets a person drag joints, change thickness, height, hair and back view, undo, keep every version and save to the avatar library. Code: `modules/avatar_likeness/`. The old Dressing Room bake still returns only a colour and a voxel count and does not reach Studio.
++- Tested: 70 avatar tests plus the two model-dependent tests (with the optional model files), including a real-host browser test with quit and restart. Measured on three characters: the front overlaps its own picture at 0.92–0.93. Recorded mannequin clips retarget onto Pete and Repeat and read as the same movement.
++- **Not claimed:** side and back views are not the character (the sides are the front picture smeared; the backs are guessed; against Humphrey's Runway clip the back is ~20 Lab units off in colour). Humphrey's relaxed-pose arms stretch badly until his joints are placed by hand. No live capture was tried; the repo's ±35° motion consumer was not changed. Windows, PowerShell 5 and real GPUs were not tested. Hosted view-synthesis models were not run.
++- Shared-file changes: `main.py` (router, `/avatar-from-picture`, 64 MB body limit; 8 lines) and one card in `static/avatar_foundry.html`.
++
+ ## 2026-11-24: Liar's Dice at the Vortex Bar booth
+ 
+ Ledger: `handoffs/LIARS_DICE_2026-11-24.md`.
+diff --git a/main.py b/main.py
+index 0938140..b14c3fa 100644
+--- a/main.py
++++ b/main.py
+@@ -758,6 +758,7 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
+         ("/api/notes", 26 * 1024 * 1024),
+         ("/api/studio/slate/takes/", 128 * 1024 * 1024),
+         ("/api/avatars/imports", 210 * 1024 * 1024),  # avatar GLBs; the route caps the file at 200 MB
++        ("/api/avatars/likeness/", 64 * 1024 * 1024),  # a picture (25 MB cap) or a recorded-motion GLB (50 MB cap); the routes enforce their own caps
+         # Replay uploads: the route refuses files over 5 MB (and requests over 5 MB + 256 KB) itself; the 1 MB default
+         # rejected every replay between 1 and 5 MB before it got there.
+         ("/api/upload", 5 * 1024 * 1024 + 256 * 1024),
+@@ -2106,6 +2107,10 @@ app.include_router(_foresight_host_tools)
+ from modules.avatar_imports import create_avatar_import_router  # noqa: E402
+ _avatar_imports = create_avatar_import_router(DATA_DIR)
+ app.include_router(_avatar_imports)
++# A picture in, an editable rigged avatar out (modules/avatar_likeness/routes.py). Needs requirements-avatar.txt; without it the
++# routes answer 503 with the install line and the rest of the host is unaffected. Nothing is downloaded at startup.
++from modules.avatar_likeness.routes import create_avatar_likeness_router  # noqa: E402
++app.include_router(create_avatar_likeness_router(DATA_DIR, _avatar_imports.store))
+ # Bella Faux Pas Studio progress (room, spot, who you walk as, your avatars, size tuning), per owner on this host.
+ from modules.studio_progress import create_studio_progress_router  # noqa: E402
+ app.include_router(create_studio_progress_router(DATA_DIR))
+@@ -2870,6 +2875,9 @@ async def page_director_switcher(request: Request): return _page("director_switc
+ @app.get("/avatar-import", include_in_schema=False)
+ async def page_avatar_import(request: Request): return _page("avatar_import.html", request)
+ 
++@app.get("/avatar-from-picture", include_in_schema=False)
++async def page_avatar_from_picture(request: Request): return _page("avatar_from_picture.html", request)
++
+ @app.get("/avatar-walk-test", include_in_schema=False)
+ async def page_avatar_walk_test(request: Request): return _page("avatar_walk_test.html", request)
+ 
+diff --git a/static/avatar_foundry.html b/static/avatar_foundry.html
+index a8714ba..3e69b1c 100644
+--- a/static/avatar_foundry.html
++++ b/static/avatar_foundry.html
+@@ -147,6 +147,13 @@
+       <p style="font-size:0.72rem;color:var(--muted);margin-bottom:0.8rem">Upload a photo to bake a voxel portrait — face clearly visible for best results.</p>
+       <a href="/dressing" style="display:block;text-align:center;font-size:0.75rem;color:var(--accent);border:1px solid var(--border);border-radius:var(--r);padding:0.5rem">→ Go to Dressing Room to upload</a>
+     </div>
++
++    <!-- Picture to rigged avatar (added beside Photo Portrait; Photo Portrait is unchanged) -->
++    <div class="card">
++      <h2>Avatar from a picture</h2>
++      <p style="font-size:0.72rem;color:var(--muted);margin-bottom:0.8rem">Turn one image of a character into an editable, rigged 3D avatar that takes recorded or live motion.</p>
++      <a href="/avatar-from-picture" style="display:block;text-align:center;font-size:0.75rem;color:var(--accent);border:1px solid var(--border);border-radius:var(--r);padding:0.5rem">→ Build an avatar from a picture</a>
++    </div>
+   </div>
+ </main>
+ 

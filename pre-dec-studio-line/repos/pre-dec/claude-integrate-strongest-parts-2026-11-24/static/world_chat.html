@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>2i · Chat</title>
+  <link rel="stylesheet" href="/static/world_chat.css">
+  <link rel="stylesheet" href="/static/host_events.css">
+  <script src="/static/reach_auth.js" defer></script>
+  <script src="/static/speech_client.js" defer></script>
+  <script src="/static/world_chat_widget.js" defer></script>
+  <script src="/static/host_events.js" defer></script>
+</head>
+<body class="twoi-chat-page">
+  <header>
+    <h1>2i · Chat</h1>
+    <a href="/2i">Writer’s Room</a>
+    <a href="/2i/chat/archive">Chat Archive</a>
+    <button type="button" data-world-export>Save full room log</button>
+  </header>
+  <main class="world-chat-widget" data-world-chat data-world-restore-draft>
+    <h2>World Chat</h2>
+    <details class="host-events" data-host-events hidden>
+      <summary>Host alerts <span data-alert-count></span></summary>
+      <div data-event-list></div>
+      <p data-event-status role="status"></p>
+      <a href="/host-events">Open host event log</a>
+    </details>
+    <div role="status" aria-live="polite" data-world-status>Connecting to the world room…</div>
+    <div role="log" aria-label="World Chat messages" data-world-messages></div>
+    <form data-world-form>
+      <textarea data-world-input aria-label="Message the world" placeholder="Message the world…" maxlength="10000"></textarea>
+      <button type="button" data-world-mic aria-pressed="false" disabled>Dictate</button>
+      <button type="submit" data-world-send>Send</button>
+    </form>
+  </main>
+</body>
+</html>

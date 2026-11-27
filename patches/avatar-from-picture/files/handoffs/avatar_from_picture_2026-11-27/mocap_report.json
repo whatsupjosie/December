@@ -1,0 +1,48 @@
+{
+ "performer": "Xbot.glb (bundled Mixamo mannequin), recorded clips",
+ "live_input": "not used",
+ "avatars": {
+  "humphrey": {
+   "clips_written": [
+    "Mocap_run",
+    "Mocap_walk",
+    "Mocap_agree",
+    "Mocap_sneak_pose"
+   ],
+   "durations_s": {
+    "Mocap_run": 0.7,
+    "Mocap_walk": 0.967,
+    "Mocap_agree": 1.833,
+    "Mocap_sneak_pose": 0.067
+   }
+  },
+  "pete": {
+   "clips_written": [
+    "Mocap_run",
+    "Mocap_walk",
+    "Mocap_agree",
+    "Mocap_sneak_pose"
+   ],
+   "durations_s": {
+    "Mocap_run": 0.7,
+    "Mocap_walk": 0.967,
+    "Mocap_agree": 1.833,
+    "Mocap_sneak_pose": 0.067
+   }
+  },
+  "repeat": {
+   "clips_written": [
+    "Mocap_run",
+    "Mocap_walk",
+    "Mocap_agree",
+    "Mocap_sneak_pose"
+   ],
+   "durations_s": {
+    "Mocap_run": 0.7,
+    "Mocap_walk": 0.967,
+    "Mocap_agree": 1.833,
+    "Mocap_sneak_pose": 0.067
+   }
+  }
+ }
+}

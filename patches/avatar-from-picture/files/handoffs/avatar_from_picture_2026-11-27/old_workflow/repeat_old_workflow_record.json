@@ -1,0 +1,74 @@
+{
+ "picture": "fresh_man_tpose_camera_bag.png",
+ "host": "run_reach.py over a throwaway data folder",
+ "steps": [],
+ "bake_status_text_on_the_page": "\u2713 Portrait baked \u2014 skin: auto, face detected: no",
+ "bake_responses": [
+  [
+   "http://127.0.0.1:44789/api/avatars/me/bake",
+   200
+  ]
+ ],
+ "studio_screenshot": "old_studio_after.png",
+ "api_avatars_me": {
+  "available": true,
+  "user_id": "owner-old",
+  "display_name": "User",
+  "glow_color": "#00FFFF",
+  "badge": "",
+  "preset_id": "MANNY",
+  "color": "#00FFFF",
+  "mood": "calm",
+  "gesture": "idle"
+ },
+ "bake_api_status": 200,
+ "bake_api_body": {
+  "ok": true,
+  "bake": {
+   "bake_id": "bake_owner-old_1795797004",
+   "uid": "owner-old",
+   "mode": "TRACK",
+   "face_detected": false,
+   "dominant_rgb": [
+    157,
+    151,
+    144
+   ],
+   "skin_voxel": "skin_medium",
+   "layers": [
+    {
+     "layer": "head",
+     "voxel_id": "skin_medium",
+     "size": [
+      6,
+      7,
+      6
+     ]
+    },
+    {
+     "layer": "body",
+     "voxel_id": "skin_medium",
+     "size": [
+      6,
+      9,
+      4
+     ]
+    },
+    {
+     "layer": "detail",
+     "voxel_id": "auto",
+     "size": [
+      6,
+      7,
+      6
+     ]
+    }
+   ],
+   "baked_at": 1795797004.8673627,
+   "voxel_count": 3,
+   "grit_index": 0.596,
+   "skin_color": "#9d9790",
+   "hair_color": "#756f68"
+  }
+ }
+}

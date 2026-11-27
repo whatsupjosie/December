@@ -1,0 +1,41 @@
+diff --git a/modules/studio_slate.py b/modules/studio_slate.py
+index 7105961..3171e9c 100644
+--- a/modules/studio_slate.py
++++ b/modules/studio_slate.py
+@@ -525,8 +525,12 @@ def create_slate_router(path: Path):
+ 
+ # The Foresight Counter is its own shell (tray physics, programs, 2i hosting) and
+ # is served byte-for-byte from static/foresight_counter.html; the floor slate
+-# belongs to the studio pages and is never layered over it.
+-SLATE_EXEMPT_PATHS = frozenset({'/foresight-counter', '/static/foresight_counter.html'})
++# belongs to the studio pages and is never layered over it. Sign-in and the
++# member profile/onboarding page are not studio pages either: the launcher's
++# fixed bottom-right corner sits on their fixed action bar ("Skip optional
++# details"), so the overlay is not added there.
++SLATE_EXEMPT_PATHS = frozenset({'/foresight-counter', '/static/foresight_counter.html',
++                                '/login', '/static/login.html', '/static/human_profile.html'})
+ 
+ 
+ class SlateOverlayMiddleware:
+diff --git a/tests/test_studio_slate.py b/tests/test_studio_slate.py
+index f6bfdb5..17f23f3 100644
+--- a/tests/test_studio_slate.py
++++ b/tests/test_studio_slate.py
+@@ -146,3 +146,17 @@ def test_voice_rejects_malformed_and_cross_origin(floor):
+     with pytest.raises(WebSocketDisconnect):
+         with c.websocket_connect('/studio/slate/live',headers={**cookie,'origin':'https://hostile.invalid'}):
+             pass
++
++
++
++def test_sign_in_and_profile_pages_are_served_without_the_floor_overlay(tmp_path):
++    page='<!doctype html><html><head><title>Profile</title></head><body><button id="skip">Skip optional details</button></body></html>'
++    app=FastAPI()
++    app.include_router(create_slate_router(tmp_path/'slates.sqlite3'))
++    app.add_middleware(SlateOverlayMiddleware)
++    for path in ('/login','/static/login.html','/static/human_profile.html','/studio'):
++        app.add_api_route(path,lambda: HTMLResponse(page),methods=['GET'])
++    c=TestClient(app)
++    for path in ('/login','/static/login.html','/static/human_profile.html','/static/human_profile.html?onboarding=1'):
++        assert c.get(path).content==page.encode(),path
++    assert c.get('/studio').text.count('/static/studio_slate.js')==1

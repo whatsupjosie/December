@@ -1,0 +1,47 @@
+{
+ "note": "head and upper body only; turn angles judged by eye; Humphrey's back is the only real back reference available",
+ "views": [
+  {
+   "clip_frame": 67,
+   "nominal_yaw_deg": 80,
+   "old": {
+    "yaw_used_deg": 80,
+    "silhouette_iou": 0.697,
+    "mean_colour_delta_e": 4.4
+   },
+   "new": {
+    "yaw_used_deg": 80,
+    "silhouette_iou": 0.697,
+    "mean_colour_delta_e": 3.9
+   }
+  },
+  {
+   "clip_frame": 89,
+   "nominal_yaw_deg": 140,
+   "old": {
+    "yaw_used_deg": 220,
+    "silhouette_iou": 0.704,
+    "mean_colour_delta_e": 18.6
+   },
+   "new": {
+    "yaw_used_deg": 220,
+    "silhouette_iou": 0.704,
+    "mean_colour_delta_e": 19.9
+   }
+  },
+  {
+   "clip_frame": 111,
+   "nominal_yaw_deg": 170,
+   "old": {
+    "yaw_used_deg": 190,
+    "silhouette_iou": 0.782,
+    "mean_colour_delta_e": 21.1
+   },
+   "new": {
+    "yaw_used_deg": 190,
+    "silhouette_iou": 0.782,
+    "mean_colour_delta_e": 22.0
+   }
+  }
+ ]
+}

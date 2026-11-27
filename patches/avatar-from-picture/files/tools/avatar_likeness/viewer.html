@@ -1,0 +1,54 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>avatar_likeness viewer (development tool)</title>
+<!-- Renders a GLB at a chosen yaw, pitch, clip and time with the same three.js build the Studio uses. Not a product page:
+     tools/avatar_likeness/render.py drives it for turntables and comparison sheets. -->
+<body style="margin:0;background:#fff">
+<script type="importmap">{"imports":{"three":"/static/vendor/three-0.160.0/build/three.module.js","three/addons/":"/static/vendor/three-0.160.0/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { clone } from "three/addons/utils/SkeletonUtils.js";
+const canvas = document.createElement("canvas"); document.body.appendChild(canvas);
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+const scene = new THREE.Scene();
+scene.add(new THREE.HemisphereLight(0xffffff, 0x888888, 1.4));
+const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(1.5, 3, 4); scene.add(key);
+let avatar = null, mixer = null, clips = [], native = 1;
+window.loadAvatar = async (url) => {
+  const gltf = await new GLTFLoader().loadAsync(url);
+  if (avatar) scene.remove(avatar);
+  const root = clone(gltf.scene);
+  root.traverse(o => { if (o.isMesh) o.frustumCulled = false; });
+  let box = new THREE.Box3().setFromObject(root);
+  // A skinned model's geometry box can be in other units than its bones (Mixamo exports: centimetres under a 0.01 armature). When the two disagree, frame by the bones.
+  root.updateMatrixWorld(true);
+  const bb = new THREE.Box3(), tmp = new THREE.Vector3(); let nb = 0;
+  root.traverse(o => { if (o.isBone) { bb.expandByPoint(o.getWorldPosition(tmp)); nb++; } });
+  if (nb > 4 && box.getSize(new THREE.Vector3()).y < 0.7 * bb.getSize(tmp).y) {
+    const pad = 0.06 * bb.getSize(tmp).y; bb.min.y -= pad * 0.2; bb.max.y += pad; box = bb;
+  }
+  const size = box.getSize(new THREE.Vector3()), ctr = box.getCenter(new THREE.Vector3());
+  native = size.y;
+  root.position.set(-ctr.x, -box.min.y, -ctr.z);
+  const inner = new THREE.Group(); inner.add(root);
+  const outer = new THREE.Group(); outer.add(inner); outer.scale.setScalar(1 / size.y);
+  avatar = new THREE.Group(); avatar.add(outer); scene.add(avatar);
+  clips = gltf.animations; mixer = clips.length ? new THREE.AnimationMixer(avatar) : null;
+  return { clips: clips.map(c => ({ name: c.name, duration: c.duration })), nativeHeight: native, size: size.toArray() };
+};
+window.show = ({ yaw = 0, pitch = 0, clip = null, t = 0, w = 480, h = 640, bg = null, halfH = 0.56, aspect = null }) => {
+  if (mixer) { mixer.stopAllAction(); if (clip) { const c = clips.find(x => x.name.toLowerCase() === clip.toLowerCase()); if (c) { mixer.clipAction(c).play(); mixer.setTime(t); } } }
+  avatar.rotation.y = yaw * Math.PI / 180;
+  const A = aspect || w / h;
+  const cam = new THREE.OrthographicCamera(-halfH * A, halfH * A, halfH, -halfH, 0.01, 50);
+  const p = pitch * Math.PI / 180;
+  cam.position.set(0, 0.5 + 6 * Math.sin(p), 6 * Math.cos(p)); cam.lookAt(0, 0.5, 0);
+  renderer.setPixelRatio(1); renderer.setSize(w, h, false);
+  renderer.setClearColor(bg ? new THREE.Color(bg) : 0x000000, bg ? 1 : 0);
+  scene.updateMatrixWorld(true); renderer.render(scene, cam);
+  return canvas.toDataURL("image/png");
+};
+document.documentElement.dataset.ready = "1";
+</script>
