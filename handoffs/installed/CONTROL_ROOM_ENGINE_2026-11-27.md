@@ -1,0 +1,3 @@
+# Engine integrated from pre-dec
+
+Source 6c68e3dd8fd423befe83e66ebb225f8bd9772a87. Main.py reconciled narrowly: production route mount, recorder shutdown, isolated timeline take, transition forwarding, slate, voxel placement, reconstruction and performer routes. Preserves Liar's Dice and existing assembly-specific routes. Guest admission scope/airlock, unrelated PubPartner connector, bot edits and visual proposals not imported in this commit. Engine handoff records 458 pass, one flaky failure, three skips on donor, not on this destination. No fresh host run. Operator frontend integration follows; stage performer publishing and browser-stem capture remain open. Re-run actual destination tests before release.

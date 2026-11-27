@@ -61,6 +61,7 @@ from modules.recording import RecordingService, create_recording_service
 from modules.blackbox_runtime import BlackBoxRuntimeWitness, create_blackbox_witness
 from modules.blackbox_routes import create_blackbox_router
 from modules.production_routes import create_production_router
+from modules.studio_slate import SlateOverlayMiddleware, create_slate_router
 from modules.program_audio import ProgramAudioState, apply_audio_event
 from modules.studio25d_media_routes import create_studio25d_media_router
 from modules.governance import GovernanceEngine
@@ -755,6 +756,7 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
         # Production notes: up to 25 MB of attachments (modules/production_notes.py FILES_TOTAL_MAX) plus multipart overhead.
         # The route itself enforces the per-file and per-note ceilings while reading.
         ("/api/notes", 26 * 1024 * 1024),
+        ("/api/studio/slate/takes/", 128 * 1024 * 1024),
         ("/api/avatars/imports", 210 * 1024 * 1024),  # avatar GLBs; the route caps the file at 200 MB
         # Replay uploads: the route refuses files over 5 MB (and requests over 5 MB + 256 KB) itself; the 1 MB default
         # rejected every replay between 1 and 5 MB before it got there.
@@ -818,6 +820,20 @@ class PubCastContextAdapter:
 # —
 # Lifespan — 12-step boot
 # —
+
+async def _finish_recordings_at_shutdown(application: FastAPI) -> None:
+    """Let every take still recording finish its files before the server goes (codex/main-debug 62ad072).
+
+    Without this, FFmpeg is cut off with the process and an MP4 it was writing has no index."""
+    router = getattr(application.state, "production_router", None)
+    finish = getattr(router, "shutdown_captures", None)
+    if callable(finish):
+        await finish()
+    # A reconstruction in progress stops cleanly; its half-made file is removed, never added to a take.
+    service = getattr(application.state, "reconstruction_service", None)
+    if service is not None:
+        await service.shutdown()
+
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
@@ -921,6 +937,9 @@ async def lifespan(application: FastAPI):
             yield
         finally:
             application.state._pubcast_lifespan_users = 0
+            if timeline_player is not None:
+                await timeline_player.stop()
+            await _finish_recordings_at_shutdown(application)
             if rearmed_camera_broadcast is not None:
                 await rearmed_camera_broadcast.stop()
             if rearmed_camera_pool is not None:
@@ -1168,9 +1187,37 @@ async def lifespan(application: FastAPI):
     application.include_router(create_blackbox_router(blackbox_witness))
     recording = create_recording_service(DATA_DIR, cameras, blackbox_witness=blackbox_witness)
     program_audio_state = ProgramAudioState()
-    application.include_router(create_production_router(cameras, recording, hub, blackbox=blackbox_witness, program_audio_state=program_audio_state, include_overlapping_compat_routes=False))
+    production_router = create_production_router(
+        cameras, recording, hub, blackbox=blackbox_witness,
+        program_audio_state=program_audio_state, include_overlapping_compat_routes=False,
+        emergency_snapshot=_studio_emergency_snapshot,
+    )
+    application.include_router(production_router)
+    # Kept so shutdown (first entry or a re-entry) can finish the files of takes still recording.
+    application.state.production_router = production_router
+    # Performer data: where each 2.5D performer stands and moves, mouth weights, gestures and
+    # on-screen graphics, written into every live take's show data (modules/performance_capture.py).
+    from modules.performance_capture import PerformanceAuthority, create_performance_router
+    _performance_sends: set = set()
+
+    def _broadcast_performance(message: dict) -> None:
+        task = asyncio.get_running_loop().create_task(hub.broadcast_system_event(message))
+        _performance_sends.add(task)
+        task.add_done_callback(_performance_sends.discard)
+
+    performance_authority = PerformanceAuthority(record=production_router.recording_modes.record_event,
+                                                 broadcast=_broadcast_performance)
+    application.state.performance_authority = performance_authority
+    production_router.recording_modes.snapshot_providers.append(performance_authority.snapshot)
+    application.include_router(create_performance_router(performance_authority))
+    # Reconstruction: render a stopped take from its show data, from any camera (modules/reconstruction.py).
+    from modules.reconstruction_routes import ReconstructionService, create_reconstruction_router
+    reconstruction_service = ReconstructionService(recording)
+    application.state.reconstruction_service = reconstruction_service
+    application.include_router(create_reconstruction_router(reconstruction_service))
     from modules.studio25d_recording_ingest import create_studio25d_recording_router
     application.include_router(create_studio25d_recording_router(recording))
+    application.include_router(create_slate_router(DATA_DIR / "production_slates.sqlite3"))
     from modules.pubcast_vision_integration import PubcastVisionManager
     from modules.pubcast_vision_routes import create_vision_router
     vision_manager = PubcastVisionManager(camera_manager=cameras, data_dir=DATA_DIR)
@@ -1197,6 +1244,8 @@ async def lifespan(application: FastAPI):
     # Real cameras and microphones: listener addresses for phones/pro cameras, and the host's audio inputs.
     from modules.live_source_routes import create_live_source_router
     application.include_router(create_live_source_router(cameras))
+    from modules.studio25d_voxel_props import create_voxel_placement_router
+    application.include_router(create_voxel_placement_router(DATA_DIR))
     # Every program/preview change, from any route, reaches the stage pages.
     from modules.camera_broadcast import CameraBroadcastBridge
     camera_broadcast = CameraBroadcastBridge(cameras, hub)
@@ -1785,14 +1834,14 @@ async def lifespan(application: FastAPI):
         try:
             # Camera switches
             async def handle_timeline_camera(params):
-                to_cam = params.get('to', 'cam_1')
+                requested = params.get('to') or params.get('cam') or 'wide_shot'
+                to_cam = {'wide': 'wide_shot', 'medium': 'medium_shot', 'close': 'close_up'}.get(requested, requested)
                 transition = params.get('transition', 'cut')
-                if cameras:
-                    # Use correct method: set_program_source (not async)
-                    cameras.set_program_source(to_cam)
+                if not cameras or not cameras.set_program_source(to_cam):
+                    raise ValueError(f"Unavailable timeline camera: {to_cam}")
                 if production_log:
                     emit("timeline", "camera_switch", {"to": to_cam, "transition": transition})
-            
+
             # Lighting changes
             async def handle_timeline_lighting(params):
                 preset = params.get('preset')
@@ -1813,31 +1862,48 @@ async def lifespan(application: FastAPI):
                 if production_log:
                     emit("timeline", "bot_chat", {"user": user, "room": room})
             
-            # Recording control
+            # Recording control. The timeline owns exactly one take at a time and only ever
+            # stops that take, so an operator's own session is never touched by a stop cue.
+            timeline_take = None
+
             async def handle_timeline_record(params):
-                action = params.get('action')
-                if action == 'start' and recording:
-                    # Create recording session with timeline-specified parameters
+                nonlocal timeline_take
+                action = params.get("action")
+                if action == "start":
+                    if timeline_take and recording.get_session(timeline_take).state.value in {"active", "paused", "countdown"}:
+                        raise ValueError("Timeline already has an active recording")
+                    program = cameras.get_program_source()
                     session = recording.start_session(
-                        session_id=None,  # Auto-generate
-                        sources=params.get('sources', ['cam_1']),  # Default to cam_1
-                        profile_id=params.get('profile_id', 'broadcast_mp4'),  # Default profile
-                        operator='timeline_automation',
-                        preset=params.get('preset'),
-                        host_override=True,  # Timeline has authority
-                        countdown_seconds=0,  # Immediate start for timeline
+                        session_id=None,
+                        sources=params.get("sources", [program.source_id] if program else []),
+                        profile_id=params.get("profile_id", "broadcast_mp4"),
+                        operator="timeline_automation", preset=params.get("preset"),
+                        countdown_seconds=0,
                     )
-                    if production_log:
-                        emit("timeline", "recording_start", {"session_id": session.session_id})
-                elif action == 'stop' and recording:
-                    # Stop most recent active session
-                    active_sessions = [s for s in recording.list_sessions() 
-                                     if s.state in ['active', 'countdown']]
-                    if active_sessions:
-                        recording.stop_session(active_sessions[-1].session_id)
-                    if production_log:
-                        emit("timeline", "recording_stop", {})
-            
+                    timeline_take = session.session_id
+                    try:
+                        paths = await production_router.begin_take(session)
+                        if len(paths) != len(session.sources):
+                            raise RuntimeError("Timeline could not start every requested encoder")
+                    except BaseException:
+                        try:
+                            await production_router.end_take(timeline_take)
+                        except Exception:
+                            logger.exception("Timeline take %s could not be closed after a failed start", timeline_take)
+                        raise
+                elif action == "stop":
+                    if not timeline_take:
+                        raise ValueError("Timeline has no recording to stop")
+                    _session, artifacts, warnings = await production_router.end_take(timeline_take)
+                    if warnings:
+                        raise RuntimeError("Timeline recording has capture problems: " + "; ".join(warnings))
+                    if not artifacts:
+                        raise RuntimeError("Timeline recording produced no media")
+                else:
+                    raise ValueError("Unknown timeline recording action")
+                if production_log:
+                    emit("timeline", "recording_" + action, {"session_id": timeline_take})
+
             register_timeline_handler(EventType.CAMERA, handle_timeline_camera)
             register_timeline_handler(EventType.LIGHTING, handle_timeline_lighting)
             register_timeline_handler(EventType.CHAT, handle_timeline_chat)
@@ -1881,9 +1947,9 @@ async def lifespan(application: FastAPI):
     if cameras and production_log:
         try:
             original_set_program = cameras.set_program_source
-            def logged_set_program(source_id: str) -> bool:
+            def logged_set_program(source_id: str, **how) -> bool:
                 from_cam = cameras.get_program_source()
-                result = original_set_program(source_id)
+                result = original_set_program(source_id, **how)
                 emit("cameras", "switch", {"from": from_cam.source_id if from_cam else "unknown", "to": source_id})
                 return result
             cameras.set_program_source = logged_set_program
@@ -1919,6 +1985,9 @@ async def lifespan(application: FastAPI):
 
     # — Shutdown —
     logger.info("— PubCast AI shutting down —")
+    if timeline_player is not None:
+        await timeline_player.stop()
+    await _finish_recordings_at_shutdown(application)
     for _speech in (stt_engine, tts_engine):
         if _speech is not None:
             await _speech.close()
@@ -1996,6 +2065,7 @@ _cors_origins, _cors_credentials = _resolve_cors_origins()
 app.add_middleware(CORSMiddleware,
     allow_origins=_cors_origins, allow_credentials=_cors_credentials,
     allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(SlateOverlayMiddleware)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(BodySizeLimitMiddleware)
 from modules.unicode_guard import UnicodeGuardMiddleware  # noqa: E402
@@ -3395,16 +3465,11 @@ async def studio_preflight(request: Request, identity: Dict[str, Any] = Depends(
     except Exception as exc:
         raise HTTPException(500, str(exc))
 
-@app.post("/api/studio/emergency-save")
-async def studio_emergency_save(request: Request, identity: Dict[str, Any] = Depends(require_role("mod"))):
-    """Trigger the dead man's switch emergency save."""
+async def _studio_emergency_snapshot() -> Dict[str, Any]:
+    """Persist the console state after the production router stops capture."""
     if studio_control is None:
-        raise HTTPException(503, "Studio Control not available")
-    try:
-        result = await studio_control.emergency_save()
-        return {"ok": bool(result.get("ok")), "result": result}
-    except Exception as exc:
-        raise HTTPException(500, str(exc))
+        return {"ok": False, "error": "Studio Control not available"}
+    return await studio_control.emergency_save()
 
 
 # —

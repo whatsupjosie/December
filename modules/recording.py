@@ -15,19 +15,23 @@ import subprocess
 import time
 import tempfile
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 from zipfile import ZipFile, ZipInfo, ZIP_DEFLATED, ZIP_STORED
 
-from .cameras import CameraManager, CameraSource
+from .cameras import CameraManager, CameraSource, CameraTransport
 from .persistence import write_json
 
 logger = logging.getLogger(__name__)
 
 _SESSION_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
+# A take's non-media files: plain names only, never a path, never hidden.
+_DATA_FILE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+# The three ways a take can record picture (modules/recording_modes.py has what each does).
+RECORDING_MODES = ("camcorder", "data_only", "main_camera")
 
 
 class ContainerFormat(str, Enum):
@@ -62,6 +66,9 @@ class RecordingArtifact:
     # camera or rendered PubWorld video. Only written to disk when True, so
     # existing session files and exports are unchanged.
     synthetic: bool = False
+    # For media copied into the take from another location: a digest of where it came from, so the
+    # same source is replaced in place and a different source with the same file name stays distinct.
+    source_key: Optional[str] = None
 
 
 @dataclass
@@ -97,6 +104,17 @@ class RecordingSession:
     markers: List[RecordingMarker] = field(default_factory=list)
     recovery: Optional[Dict[str, Any]] = None
     ingest: Optional[Dict[str, Any]] = None
+    # How picture is recorded (modules/recording_modes.py): "camcorder", "data_only" or
+    # "main_camera". Takes saved before recording modes existed were camcorder takes.
+    mode: str = "camcorder"
+    # Whether the show-data record ran under this take. Older takes had none.
+    record_data: bool = False
+    # Non-media files of this take (show data, the mode record), by file name in the
+    # session folder. They travel with the media on export and import.
+    data_files: List[str] = field(default_factory=list)
+    # Sources that did not record properly, each {"source_id", "error", "phase"} with phase "start"
+    # or "stop". Kept with the take so a reload still says which camera is missing from it.
+    capture_errors: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> Dict:
         return {
@@ -113,6 +131,11 @@ class RecordingSession:
             "ended_at": self.ended_at,
             "recovery": self.recovery,
             "ingest": self.ingest,
+            "mode": self.mode,
+            "record_data": self.record_data,
+            "data_files": list(self.data_files),
+            # Only written when something failed, so takes that recorded cleanly keep their files as before.
+            **({"capture_errors": [dict(item) for item in self.capture_errors]} if self.capture_errors else {}),
             "artifacts": [
                 {
                     "name": art.name,
@@ -120,6 +143,7 @@ class RecordingSession:
                     "file_path": art.file_path.as_posix(),
                     "size_bytes": art.size_bytes,
                     **({"synthetic": True} if art.synthetic else {}),
+                    **({"source_key": art.source_key} if art.source_key else {}),
                 }
                 for art in self.artifacts
             ],
@@ -234,6 +258,8 @@ class RecordingService:
                     f"2.5D source '{source_id}' provides confidence images only; "
                     "use the local full-resolution recorder until media ingest is connected"
                 )
+            if camera.transport == CameraTransport.VOXEL_3D and camera.endpoint.startswith("rust://"):
+                raise ValueError(f"Native voxel source '{source_id}' has pose control only and no recordable media.")
             policy = self.room_policy(camera.location)
             rule = policy.get("recording", "allowed")
             if rule == "never" and not host_override:
@@ -290,9 +316,17 @@ class RecordingService:
         preset: Optional[str] = None,
         host_override: bool = False,
         countdown_seconds: int = 5,
+        mode: str = "camcorder",
+        record_data: bool = True,
     ) -> RecordingSession:
-        if not sources:
+        from .recording_modes import validate_mode_request  # recording_modes imports this module
+
+        mode = validate_mode_request(self, mode, sources, profile_id, record_data=record_data,
+                                     host_override=host_override)
+        if not sources and mode != "data_only":
             raise ValueError("At least one source is required")
+        if len(set(sources)) != len(sources):
+            raise ValueError("Each recording source must be selected only once")
         session_id = self._validated_session_id(
             session_id or f"rec_{uuid.uuid4().hex[:10]}"
         )
@@ -312,12 +346,27 @@ class RecordingService:
             host_override=host_override,
             countdown_seconds=countdown_seconds,
             state=RecordingState.COUNTDOWN if countdown_seconds else RecordingState.ACTIVE,
+            mode=mode,
+            record_data=bool(record_data),
         )
-        self._sessions[session_id] = session
         session_dir = self._session_dir(session_id)
-        session_dir.mkdir(parents=True, exist_ok=True)
-        self._write_metadata(session)
-        
+        try:
+            session_dir.mkdir(parents=True, exist_ok=False)
+        except FileExistsError as exc:
+            raise ValueError(f"Session '{session_id}' already active") from exc
+        try:
+            self._write_metadata(session)
+        except BaseException:
+            # A failed first write leaves nothing behind, so the same take can be retried.
+            # Only the empty folder this call just reserved is removed.
+            try:
+                if not any(session_dir.iterdir()):
+                    session_dir.rmdir()
+            except OSError:
+                logger.warning("Could not remove the empty reservation %s", session_dir)
+            raise
+        self._sessions[session_id] = session
+
         # NEW: Create pipeline session for detailed event logging
         try:
             from .recording_pipeline import ServerRecordingSession
@@ -339,13 +388,40 @@ class RecordingService:
         logger.info("Recording session %s created with sources %s", session_id, sources)
         return session
 
+    def note_capture_errors(self, session_id: str, errors: List[Dict[str, Any]]) -> RecordingSession:
+        """Record, with the take, which sources failed to record and why.
+
+        ``errors`` are {"source_id", "error", "phase"}; one already noted for the same source and
+        phase is replaced by the newer account rather than listed twice."""
+        session = self.get_session(session_id)
+        merged = {(item.get("source_id"), item.get("phase")): dict(item) for item in session.capture_errors}
+        for item in errors:
+            source_id = str(item.get("source_id") or "")
+            if not source_id:
+                continue
+            phase = str(item.get("phase") or "start")
+            merged[(source_id, phase)] = {"source_id": source_id, "error": str(item.get("error") or "Capture failed"),
+                                          "phase": phase}
+        updated = list(merged.values())
+        if updated != session.capture_errors:
+            self._commit_metadata(session, capture_errors=updated, updated_at=time.time())
+        return session
+
+    def _commit_metadata(self, session: RecordingSession, **changes) -> None:
+        """Change a session only if the change reaches disk.
+
+        The new state is written first, from a copy. Callers that hold the live session see the
+        change only once the on-disk replacement has succeeded, so a full disk can never leave
+        memory saying a take stopped, paused or was marked when the saved file says otherwise."""
+        self._write_metadata(replace(session, **changes))
+        for name, value in changes.items():
+            setattr(session, name, value)
+
     def activate_session(self, session_id: str) -> RecordingSession:
         session = self.get_session(session_id)
         if session.state not in {RecordingState.REQUESTED, RecordingState.COUNTDOWN}:
             raise ValueError(f"Cannot activate session in state {session.state}")
-        session.state = RecordingState.ACTIVE
-        session.updated_at = time.time()
-        self._write_metadata(session)
+        self._commit_metadata(session, state=RecordingState.ACTIVE, updated_at=time.time())
         self._blackbox_event("recording.state", actor=session.operator, data={"session_id": session.session_id, "state": "active"})
         logger.info("Recording session %s is now active", session_id)
         return session
@@ -439,10 +515,8 @@ class RecordingService:
         session = self.get_session(session_id)
         if session.state == RecordingState.STOPPED:
             return session
-        session.state = RecordingState.STOPPED
-        session.ended_at = time.time()
-        session.updated_at = session.ended_at
-        self._write_metadata(session)
+        ended_at = time.time()
+        self._commit_metadata(session, state=RecordingState.STOPPED, ended_at=ended_at, updated_at=ended_at)
         
         # NEW: Stop pipeline session and log summary
         pipeline = self._pipeline_sessions.pop(session_id, None)
@@ -491,9 +565,7 @@ class RecordingService:
         session = self.get_session(session_id)
         if session.state not in {RecordingState.ACTIVE, RecordingState.PAUSED}:
             raise ValueError("Cannot pause a session that is not active")
-        session.state = RecordingState.PAUSED if paused else RecordingState.ACTIVE
-        session.updated_at = time.time()
-        self._write_metadata(session)
+        self._commit_metadata(session, state=RecordingState.PAUSED if paused else RecordingState.ACTIVE, updated_at=time.time())
         self._blackbox_event("recording.state", actor=session.operator, data={"session_id": session.session_id, "state": session.state.value, "paused": paused})
         logger.info("Recording session %s %s", session_id, "paused" if paused else "resumed")
         return session
@@ -502,18 +574,14 @@ class RecordingService:
         session = self.get_session(session_id)
         if session.state != RecordingState.STOPPED:
             raise ValueError("Only stopped sessions can be archived")
-        session.state = RecordingState.ARCHIVED
-        session.updated_at = time.time()
-        self._write_metadata(session)
+        self._commit_metadata(session, state=RecordingState.ARCHIVED, updated_at=time.time())
         logger.info("Recording session %s archived", session_id)
         return session
 
     def mark_moment(self, session_id: str, label: str, operator: Optional[str] = None) -> RecordingMarker:
         session = self.get_session(session_id)
         marker = RecordingMarker(timestamp=time.time(), label=label, operator=operator)
-        session.markers.append(marker)
-        session.updated_at = marker.timestamp
-        self._write_metadata(session)
+        self._commit_metadata(session, markers=[*session.markers, marker], updated_at=marker.timestamp)
         self._blackbox_event("recording.state", actor=operator or session.operator, data={"session_id": session.session_id, "state": session.state.value, "marker_label": label})
         logger.info("Session %s :: marker '%s'", session_id, label)
         return marker
@@ -544,20 +612,50 @@ class RecordingService:
             except ValueError:
                 artifact_format = self.get_profile(session.profile_id).container
 
-        artifact = RecordingArtifact(
-            name=name or path.name,
-            format=artifact_format,
-            file_path=path,
-            size_bytes=path.stat().st_size,
-            synthetic=bool(synthetic),
-        )
-        session.artifacts = [
-            existing for existing in session.artifacts
-            if Path(existing.file_path).resolve() != path.resolve()
-        ]
-        session.artifacts.append(artifact)
-        session.updated_at = time.time()
-        self._write_metadata(session)
+        # Media from outside the take (a camera on removable or remote storage) is copied in, so it
+        # is still there after a restart and cannot be confused with a same-named file of another source.
+        # Capture workers already write inside the take and are registered where they are.
+        session_dir = self._session_dir(session_id)
+        source = path.resolve()
+        source_key = None
+        owned_path = None
+        previous_copy = None
+        if source.parent != session_dir.resolve():
+            source_key = hashlib.sha256(os.fsencode(os.path.normcase(str(source)))).hexdigest()
+            previous_copy = next((a for a in session.artifacts if a.source_key == source_key), None)
+            # The final name appears only after the whole copy is flushed to disk.
+            with tempfile.TemporaryDirectory(dir=session_dir, prefix=".source-copy-") as staging:
+                pending = Path(staging) / "media"
+                with source.open("rb") as stream, pending.open("xb") as output:
+                    shutil.copyfileobj(stream, output, length=1024 * 1024)
+                    output.flush()
+                    os.fsync(output.fileno())
+                owned_path = session_dir / f"source-{uuid.uuid4().hex}{path.suffix}"
+                pending.replace(owned_path)
+
+        try:
+            artifact_path = owned_path or path
+            artifact = RecordingArtifact(
+                name=name or path.name,
+                format=artifact_format,
+                file_path=artifact_path,
+                size_bytes=artifact_path.stat().st_size,
+                synthetic=bool(synthetic),
+                source_key=source_key,
+            )
+            kept = [a for a in session.artifacts
+                    if a is not previous_copy and Path(a.file_path).resolve() != source]
+            self._commit_metadata(session, artifacts=[*kept, artifact], updated_at=time.time())
+        except BaseException:
+            if owned_path is not None:
+                owned_path.unlink(missing_ok=True)
+            raise
+        if (previous_copy is not None and previous_copy.file_path.parent.resolve() == session_dir.resolve()
+                and previous_copy.file_path.name.startswith("source-")):
+            try:
+                previous_copy.file_path.unlink(missing_ok=True)
+            except OSError:
+                logger.warning("Superseded media copy retained at %s", previous_copy.file_path)
         self._blackbox_event(
             "recording.artifact",
             actor=session.operator,
@@ -569,6 +667,25 @@ class RecordingService:
             },
         )
         return artifact
+
+    def attach_data_file(self, session_id: str, file_path: Path) -> str:
+        """Record a non-media file of a take (show data, the mode record) so it is kept with the take.
+
+        The file must already be a regular file directly in the session's own folder; only its name is stored,
+        the same way media artifacts are relinked after a restart or an import.
+        """
+        session = self.get_session(session_id)
+        path = Path(file_path)
+        session_dir = self._session_dir(session_id)
+        if path.parent.resolve() != session_dir.resolve() or not path.is_file() or path.is_symlink():
+            raise ValueError(f"Data file must be a regular file in the session folder: {path.name}")
+        if path.name == f"{session_id}.json" or not _DATA_FILE_NAME.fullmatch(path.name):
+            raise ValueError(f"Not a valid data file name: {path.name}")
+        if path.name not in session.data_files:
+            session.data_files.append(path.name)
+        session.updated_at = time.time()
+        self._write_metadata(session)
+        return path.name
 
     # ------------------------------------------------------------------
     # Import / export
@@ -724,13 +841,19 @@ class RecordingService:
         session = self.get_session(session_id)
         if session.state not in {RecordingState.STOPPED, RecordingState.ARCHIVED}:
             raise ValueError("Stop the recording before exporting immutable media")
-        if not session.artifacts:
+        if not session.artifacts and not session.data_files:
             raise ValueError("No recorded media is available for export")
         if session.ingest and session.ingest.get("state") != "complete":
             raise ValueError("Encoded take has not completed validation")
+        if len({Path(a.file_path).resolve() for a in session.artifacts}) != len(session.artifacts):
+            raise ValueError("Distinct recording sources resolve to the same file; relink original media before export")
         for artifact in session.artifacts:
             if not artifact.file_path.is_file():
                 raise ValueError(f"Missing recording artifact: {artifact.name}")
+        data_paths = [self._session_dir(session_id) / name for name in session.data_files]
+        for path in data_paths:
+            if not path.is_file():
+                raise ValueError(f"Missing recording data file: {path.name}")
         profile = self._profiles.get(session.profile_id)
         archive_path = self.exports_dir / f"{session_id}.{container.value}.{uuid.uuid4().hex[:12]}.zip"
         metadata_name = f"{session_id}.json"
@@ -795,6 +918,16 @@ class RecordingService:
                                                         "audio_bitrate_setting": self._ffmpeg_bitrate(export_profile.audio_bitrate)})
                         else:
                             manifest["warnings"].append(f"Conversion failed for {artifact.name}; original media preserved")
+                # Show data and the mode record are part of the take, byte for byte; they are never converted.
+                for path in data_paths:
+                    member = "data/" + path.name
+                    digest, size = hashlib.sha256(), 0
+                    entry = ZipInfo(member)
+                    entry.compress_type = ZIP_STORED
+                    with path.open("rb") as source, bundle.open(entry, "w", force_zip64=True) as target:
+                        for block in iter(lambda: source.read(1 << 20), b""):
+                            target.write(block); digest.update(block); size += len(block)
+                    manifest["files"][member] = {"sha256": digest.hexdigest(), "bytes": size}
                 metadata_bytes = json.dumps(metadata, indent=2).encode("utf-8")
                 bundle.writestr(metadata_name, metadata_bytes)
                 manifest["files"][metadata_name] = {"sha256": hashlib.sha256(metadata_bytes).hexdigest(),
@@ -851,6 +984,15 @@ class RecordingService:
                     raise ValueError("Duplicate recording media names")
                 if any(artifact.file_path.name not in media_names for artifact in session.artifacts):
                     raise ValueError("Missing media referenced by recording metadata")
+                data_members = [name for name in names if name.startswith("data/") and not name.endswith("/")]
+                data_names = {name.removeprefix("data/") for name in data_members}
+                if (len(data_names) != len(data_members)
+                        or not all(_DATA_FILE_NAME.fullmatch(leaf) for leaf in data_names)
+                        or data_names & media_names or f"{session_id}.json" in data_names):
+                    raise ValueError("Invalid recording data path")
+                if set(session.data_files) != data_names:
+                    raise ValueError("Recording data files do not match the recording metadata")
+                media_members = media_members + data_members   # both are extracted and verified the same way
                 manifest = None
                 if "EXPORT_MANIFEST.json" in names:
                     if bundle.getinfo("EXPORT_MANIFEST.json").file_size > 8 * 1024 ** 2:
@@ -975,7 +1117,18 @@ class RecordingService:
             ended_at=payload.get("ended_at"),
             recovery=payload.get("recovery"),
             ingest=payload.get("ingest"),
+            mode=str(payload.get("mode") or "camcorder"),
+            record_data=bool(payload.get("record_data", False)),
         )
+        if session.mode not in RECORDING_MODES:
+            raise ValueError(f"Unknown recording mode {session.mode!r}")
+        data_files = payload.get("data_files") or []
+        if not isinstance(data_files, list) or not all(
+                isinstance(name, str) and _DATA_FILE_NAME.fullmatch(name) and name != f"{session.session_id}.json"
+                for name in data_files):
+            raise ValueError("Invalid recording data file list")
+        session.data_files = list(dict.fromkeys(data_files))
+        session.capture_errors = _capture_errors_from(payload.get("capture_errors"))
         session.artifacts = [
             RecordingArtifact(
                 name=item["name"],
@@ -983,6 +1136,7 @@ class RecordingService:
                 file_path=self._session_dir(session.session_id) / Path(str(item["file_path"]).replace("\\", "/")).name,
                 size_bytes=item.get("size_bytes", 0),
                 synthetic=bool(item.get("synthetic", False)),
+                source_key=item.get("source_key") or None,
             )
             for item in payload.get("artifacts", [])
         ]
@@ -996,6 +1150,19 @@ class RecordingService:
         ]
         self._encoded_capture_timing(session)
         return session
+
+
+def _capture_errors_from(value: Any) -> List[Dict[str, Any]]:
+    """Saved capture failures: the list this line writes, or the {source_id: error} map of takes
+    saved by the codex/main-debug line, read as start-or-stop failures with no phase."""
+    if not value:
+        return []
+    if isinstance(value, dict):
+        return [{"source_id": str(k), "error": str(v), "phase": "unknown"} for k, v in value.items()]
+    if not isinstance(value, list) or not all(isinstance(item, dict) and item.get("source_id") for item in value):
+        raise ValueError("Invalid capture error list")
+    return [{"source_id": str(item["source_id"]), "error": str(item.get("error") or "Capture failed"),
+             "phase": str(item.get("phase") or "unknown")} for item in value]
 
 
 # ----------------------------------------------------------------------

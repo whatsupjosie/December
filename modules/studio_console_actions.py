@@ -66,6 +66,13 @@ def _confirmed(payload: Mapping[str, Any]) -> bool:
     return payload.get("confirm") is True or str(payload.get("confirm") or "").strip().lower() == "yes"
 
 
+def confirmed_stop_session_id(payload: Mapping[str, Any]) -> str:
+    """The take a console stop names, once it is confirmed; checked before any media is finished."""
+    if not _confirmed(payload):
+        raise ValueError("recording.stop requires confirm=true")
+    return _require(payload, "session_id")
+
+
 def execute_studio_action(
     action_id: str,
     payload: Mapping[str, Any],
@@ -77,6 +84,10 @@ def execute_studio_action(
 ) -> Dict[str, Any]:
     body = dict(payload or {})
     action_id = str(action_id or "").strip()
+
+    # "false" as text is truthy in Python and would grant the override; only a real boolean is taken.
+    if action_id in {"recording.start", "recording.preflight"} and not isinstance(body.get("host_override", False), bool):
+        raise ValueError("host_override must be a boolean")
 
     if action_id == "studio.readiness":
         result = studio_readiness(cameras, recording, audio_status=audio_state.status())
@@ -113,9 +124,10 @@ def execute_studio_action(
         if not _confirmed(body):
             raise ValueError("recording.start requires confirm=true")
         sources = body.get("sources") if isinstance(body.get("sources"), list) else []
+        mode = str(body.get("mode") or "camcorder").strip().lower()
         if not sources:
-            program = cameras.get_program_source()
-            sources = [program.source_id] if program is not None else []
+            from .recording_modes import default_sources  # same defaults as /api/recording/start
+            sources = default_sources(recording, mode)
         session = recording.start_session(
             str(body.get("session_id") or "").strip() or None,
             [str(item) for item in sources],
@@ -123,12 +135,12 @@ def execute_studio_action(
             operator=actor,
             countdown_seconds=int(body.get("countdown_seconds", 0) or 0),
             host_override=bool(body.get("host_override")),
+            mode=mode,
+            record_data=body.get("record_data", True),
         )
         result = session.to_dict()
     elif action_id == "recording.stop":
-        if not _confirmed(body):
-            raise ValueError("recording.stop requires confirm=true")
-        result = recording.stop_session(_require(body, "session_id")).to_dict()
+        result = recording.stop_session(confirmed_stop_session_id(body)).to_dict()
     elif action_id == "audio.status":
         result = audio_state.status()
     elif action_id == "audio.event":
@@ -141,4 +153,4 @@ def execute_studio_action(
     return {"ok": True, "action_id": action_id, "actor": actor, "result": result}
 
 
-__all__ = ["execute_studio_action", "list_studio_actions", "StudioActionSpec"]
+__all__ = ["confirmed_stop_session_id", "execute_studio_action", "list_studio_actions", "StudioActionSpec"]
