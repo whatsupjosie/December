@@ -75,6 +75,12 @@ At 4cbf57a, Foresight Counter signals ready after the signed-in user's saved lay
 
 For 9e872cb and 310c858, static/control_room.html and static/director_switcher.html both parse December's array of source errors and capture-report warnings. Six director browser checks passed, including display of the failed camera at start and stop. The Control Room now also has its own passing partial-start, reload/reconciliation and cumulative-stop Chromium regression at 4cbf57a.
 
+### Recovered from the separate November 27 assembly conversation
+
+December's Option C engineering branch at 401ecf057e52219e793f4d4422d5b1c4c2f45030 retained Bubble Stack changes from 1e13f7e, 6f46d4c and 401ecf0. Integrated the spatial and room changes into main-assembly at 4a4576ed72c8c7ebeaa9524c1ba6ca60d9337b95. Thirteen focused destination tests passed. The real main.app accepted configure, AI presence and skeleton-frame calls and returned Pete in the active room status. This check covers the room route and engine regressions. Full-show proof is deferred.
+
+Two separately recoverable October 24 chat attachments are PubCast_October24_Integration_Source_Staging.zip (libfile_96530796d9188191a3268b9c8ce70b94) and PubCast_CI_Integration_Working_2026-10-24.zip (libfile_cad7bc86d3708191a2612a1f1a4c86f3). Compare at the October-24 queue entry before crediting the source import. The November 14 speech conversation also reported Pete character-voice routing committed locally at f185845. Beyond-October does not resolve the abbreviated SHA and its published speech branch tip is 6707e7c. Check actual Studio dialogue routing when reconciling that branch. These leads do not close either donor.
+
 ## Resume point
 
 Beyond-October, `11-12-merge` at `d70952e52c81f89178f4ab557206fcde109bf970`. Next candidate: `daed761b2c866afd91fdcef103b62797c1b435d2`, the Primp and set-building applicator UI proposal. Compare its operator actions against the live destination controls. The branch has 107 commits not inherited by the completed main-debug branch, so it remains open. The branch inventory below pins sources only. Rows without a disposition above still require behavioral reconciliation.
