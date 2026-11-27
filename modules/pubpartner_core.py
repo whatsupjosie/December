@@ -47,6 +47,7 @@ from .pubpartner_provider import PubPartnerProviderDispatcher
 from .pubpartner_voice import AlexPersonalizationEngine
 from .pubpartner_profiles import PubPartnerProfileStore
 from .pubpartner_guidance import PubPartnerGuidanceStore
+from .pubpartner_blackbox_light import PubPartnerBlackboxLight
 from .pubpartner_tokens import PubPartnerTokenCounter
 from .pubpartner_receipts import PubPartnerReceiptStore
 from .pubpartner_relationship import RelationshipEngine
@@ -681,6 +682,7 @@ class PubPartnerSpine:
         self.guidance_store = PubPartnerGuidanceStore(self.data_dir)
         self.token_counter = PubPartnerTokenCounter()
         self.receipts = PubPartnerReceiptStore(self.data_dir)
+        self.blackbox_light = PubPartnerBlackboxLight(self.data_dir)
         self.relationship = RelationshipEngine(self.data_dir)
         self.knowledge = PubPartnerKnowledgeBroker()
         # User-owned project notes: shared by every friend and model the user
@@ -707,6 +709,49 @@ class PubPartnerSpine:
         }
         return merged
 
+    def _owned_cartridge_memories(
+        self, *, user_id: str, friend_id: str, message: str,
+        limit: int, private: bool,
+    ) -> tuple[List[MemoryRef], Dict[str, Any]]:
+        """Reuse an existing cartridge's ranked memories, never a second store.
+
+        The published cartridge studio records a creator ID. Do not surface its
+        personal memories to other users or shared PubCast rooms. The profile
+        is a discovery pointer, not authorization.
+        """
+        if not private or limit < 1:
+            return [], {"status": "skipped", "reason": "not_private_or_no_memory_budget"}
+        if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{1,47}", friend_id):
+            return [], {"status": "skipped", "reason": "not_a_cartridge_id"}
+        saved = self.profiles.load_profile("friend", friend_id, fallback_id="friend")
+        cartridge_metadata = saved.get("cartridge") if isinstance(saved, dict) else None
+        if not isinstance(cartridge_metadata, dict) or saved.get("id") != friend_id:
+            return [], {"status": "skipped", "reason": "not_a_cartridge"}
+        if str(cartridge_metadata.get("created_by") or "") != str(user_id):
+            return [], {"status": "skipped", "reason": "different_owner"}
+        folder = self.data_dir / "pubpartner" / "cartridges" / friend_id
+        if folder.is_symlink() or not (folder / "character.yaml").is_file():
+            return [], {"status": "skipped", "reason": "cartridge_unavailable"}
+        try:
+            from pubpartner.cartridge import load_cartridge
+            with load_cartridge(folder) as loaded:
+                scored = loaded.memory.query(message, top_k=limit)
+            rows = [
+                MemoryRef(
+                    id=f"cartridge:{friend_id}:{item.memory.id}",
+                    kind=item.memory.memory_type,
+                    text=item.memory.text,
+                    importance=max(1, min(10, round(item.memory.importance * 10))),
+                    source="cartridge_memory",
+                )
+                for item in scored
+            ]
+            return rows, {"status": "ok", "count": len(rows)}
+        except Exception as exc:
+            # Missing/corrupted cartridge memory never destroys an otherwise
+            # valid conversation. Report failure rather than fabricate recall.
+            return [], {"status": "failed", "error": f"{type(exc).__name__}: {exc}"[:200]}
+
     def set_byok_manager(self, manager: Any) -> None:
         """Attach the encrypted BYOK store after the main app boots it.
 
@@ -730,7 +775,11 @@ class PubPartnerSpine:
             return {}
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
-            return payload if isinstance(payload, dict) else {}
+            if not isinstance(payload, dict):
+                return {}
+            if payload.get("user_id") != user_id or payload.get("session_id") != session_id:
+                return {}
+            return payload
         except Exception:
             return {}
 
@@ -778,6 +827,16 @@ class PubPartnerSpine:
             "friend": profile.compact(),
             "user": primer.compact(),
             "provider": provider_profile.compact(),
+            # Keep non-secret connection details for resumed sessions. The FCP1
+            # packet deliberately contains only the normalized provider name and
+            # model, so it cannot reconstruct a local host or BYOK reference.
+            "provider_runtime": {
+                key: value for key, value in
+                (provider.items() if isinstance(provider, dict) else [])
+                if key in {"provider", "name", "model", "host", "base_url",
+                           "credential_model_id", "require_api_key", "max_tokens"}
+                and isinstance(value, (str, int, float, bool))
+            },
             "alex_bridge": alex_packet,
             "jeremy_whisper": whisper,
             "created_at": _now(),
@@ -928,12 +987,17 @@ class PubPartnerSpine:
                     pass  # recall is an enrichment; it must never break the turn
 
 
-        guidance = self.guidance_store.compact(
-            user_id=user_id,
-            friend_id=profile.friend_id,
-            project_id=project_id or "default",
-            task=task or {},
-            limit=8,
+        # User-owned guidance is private relationship material. Reuse the same
+        # audience boundary already applied to Vessel and Relationship Engine:
+        # shared studio rooms must not receive someone's private preferences.
+        guidance = (
+            self.guidance_store.compact(
+                user_id=user_id,
+                friend_id=profile.friend_id,
+                project_id=project_id or "default",
+                task=task or {},
+                limit=8,
+            ) if turn_audience == "private" else []
         )
         relationship_guidance = (
             self.relationship.compact(
@@ -986,6 +1050,16 @@ class PubPartnerSpine:
                 # Notes enrich a turn; a damaged notes file must never block one.
                 work_notes_status = {"status": "unavailable", "in_context": 0,
                                      "error": f"{type(exc).__name__}: {exc}"[:240]}
+
+        # Existing portable cartridges already have ranked SQLite memory. Reuse
+        # it in hosted PubPartner for the cartridge's owner only; profile data
+        # alone otherwise loses all portable memory at the hosted boundary.
+        cartridge_memories, cartridge_recall = self._owned_cartridge_memories(
+            user_id=user_id, friend_id=profile.friend_id, message=message,
+            limit=min(3, max(0, max_memories)), private=turn_audience == "private",
+        )
+        if cartridge_memories:
+            memories = [*cartridge_memories, *memories][:max_memories]
         packet = FCP1Packet(
             language=language or primer.language,
             user=primer,
@@ -1026,6 +1100,7 @@ class PubPartnerSpine:
             "alex_bridge": alex_packet,
             "jeremy_whisper": whisper,
             "memory_count": len(memories),
+            "cartridge_recall": cartridge_recall,
             "vessel_context_hash": vessel_context.get("context_hash"),
             "vessel_claim_count": len(vessel_context.get("claims") or []),
             "vessel_event_count": len(vessel_context.get("events") or []),
@@ -1103,6 +1178,17 @@ class PubPartnerSpine:
             task=knowledge_task,
         )
         turn = self.knowledge.inject_reference(turn, knowledge_result)
+        # A resumed session must use its saved non-secret provider connection,
+        # not silently fall back to localhost/default just because this turn
+        # omitted the provider object. Explicit per-turn configuration wins.
+        dispatch_config = provider
+        if dispatch_config is None:
+            saved = self._read_session_state(user_id or "anon", session_id or "default")
+            dispatch_config = saved.get("provider_runtime") or saved.get("provider")
+        if isinstance(dispatch_config, str):
+            dispatch_config = self.profiles.resolve_provider(dispatch_config)
+        if not isinstance(dispatch_config, dict):
+            dispatch_config = {}
         if self.blackbox_witness is not None:
             turn['blackbox_started'] = bool(self.blackbox_witness.record_event(
                 'partner.turn_started', source='pubpartner', actor=user_id,
@@ -1112,11 +1198,11 @@ class PubPartnerSpine:
                           'recipient':(turn.get('fcp1') or {}).get('f', {}).get('id'),
                           'text':turn.get('jeremy_whisper', '')}}))
         try:
-            provider_result = await self.provider_dispatcher.dispatch(turn, provider or {})
+            provider_result = await self.provider_dispatcher.dispatch(turn, dispatch_config)
             provider_fallback: Optional[Dict[str, Any]] = None
             if allow_fallback and not provider_result.ok and provider_result.provider not in {"offline", "mock"}:
                 provider_fallback = provider_result.as_dict()
-                fallback_config = dict(provider or {})
+                fallback_config = dict(dispatch_config)
                 fallback_config["provider"] = "offline"
                 provider_result = await self.provider_dispatcher.dispatch(turn, fallback_config)
                 provider_result.warnings.append("fell back to offline provider after requested provider was unavailable")
@@ -1288,6 +1374,24 @@ class PubPartnerSpine:
                 live_result["docking_capture"] = {"status": "recorded", "id": experience_id}
             except Exception as exc:
                 live_result["docking_capture"] = {"status": "failed", "error": type(exc).__name__}
+        # Reuse ConversationArchive as the searchable exact-dialogue projection.
+        # Original user text still belongs to VerbatimVault; shared rooms stay out.
+        archive_result: Dict[str, Any] = {"status": "skipped", "reason": "not_successful_private_turn"}
+        effective_project = (turn.get("fcp1") or {}).get("proj") or {}
+        effective_room = str(effective_project.get("room") or room_id)
+        if provider_result.ok and _turn_audience(task, effective_room) == "private":
+            try:
+                archive_result = self.blackbox_light.capture_exchange(
+                    user_id=user_id or "anon", friend_id=friend_id,
+                    session_id=session_id or "default",
+                    source_id=str((turn.get("source") or {}).get("id") or ""),
+                    user_text=message, friend_response=voice.friend_response,
+                    provider=provider_result.provider, model=provider_result.model,
+                    receipt_id=str(receipt.get("receipt_id") or ""),
+                )
+            except Exception as exc:
+                archive_result = {"status": "failed", "error": f"{type(exc).__name__}: {exc}"[:240]}
+        live_result["blackbox_light"] = archive_result
         self._append_turn(user_id or "anon", session_id or "default", live_result)
         live_result["work_notes"] = self._record_work_notes(
             user_id=user_id or "anon", session_id=session_id or "default",

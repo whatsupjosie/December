@@ -788,7 +788,8 @@ async def create_backup(request: Request, identity: Dict[str, Any] = Depends(req
 
 
 @router.get("/backups/{filename}")
-async def download_backup(filename: str, identity=Depends(require_role("owner"))):
+async def download_backup(filename: str, request: Request, identity=Depends(require_role("owner"))):
+    owner = _scoped_user_id(request=request, identity=identity)
     safe = Path(filename).name
     if safe != filename or not safe.endswith(".zip"):
         raise HTTPException(status_code=400, detail="invalid backup filename")
@@ -798,15 +799,21 @@ async def download_backup(filename: str, identity=Depends(require_role("owner"))
     check = verify_friend_backup(path)
     if not check.get("ok"):
         raise HTTPException(status_code=409, detail=f"backup failed verification: {check.get('error')}")
-    return FileResponse(path, media_type="application/zip", filename=safe)
+    if (check.get("manifest") or {}).get("user_id") != owner:
+        raise HTTPException(status_code=404, detail="backup not found")
+    return FileResponse(path, media_type="application/zip", filename=safe, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/backups/{filename}/verify")
-async def verify_backup(filename: str, identity=Depends(require_role("owner"))) -> Dict[str, Any]:
+async def verify_backup(filename: str, request: Request, identity=Depends(require_role("owner"))) -> Dict[str, Any]:
+    owner = _scoped_user_id(request=request, identity=identity)
     safe = Path(filename).name
     if safe != filename or not safe.endswith(".zip"):
         raise HTTPException(status_code=400, detail="invalid backup filename")
-    return verify_friend_backup(get_spine().data_dir / "pubpartner" / "backups" / safe)
+    check = verify_friend_backup(get_spine().data_dir / "pubpartner" / "backups" / safe)
+    if check.get("ok") and (check.get("manifest") or {}).get("user_id") != owner:
+        raise HTTPException(status_code=404, detail="backup not found")
+    return check
 
 
 @router.get("/living/state")
@@ -1029,3 +1036,273 @@ async def withdraw_work_note(note_id: str, request: Request, identity: Dict[str,
     body = await _json_dict(request)
     scoped_user = _scoped_user_id(request=request, identity=identity, explicit_value=body.get("user_id"))
     return _work_notes_call(lambda: get_spine().work_notes.withdraw(user_id=scoped_user, note_id=note_id))
+
+# Calibration is owned by the existing PubPartner host spine, not a second server.
+from .pubpartner_calibration import CalibrationStore, CalibrationError
+
+
+def _calibration_store() -> CalibrationStore:
+    return CalibrationStore(get_spine().data_dir)
+
+
+@router.post("/calibration/interviews")
+async def calibration_start(request: Request, identity: Dict[str, Any] = Depends(current_identity)) -> Dict[str, Any]:
+    body = await _json_dict(request)
+    user = _scoped_user_id(request=request, identity=identity, explicit_value=body.get("user_id"))
+    try:
+        return _calibration_store().start(
+            user_id=user,
+            partner_id=str(body.get("partner_id") or ""),
+            mode=str(body.get("mode") or ""),
+        )
+    except CalibrationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/calibration/interviews")
+async def calibration_list(request: Request, identity: Dict[str, Any] = Depends(current_identity)) -> Dict[str, Any]:
+    user = _scoped_user_id(request=request, identity=identity)
+    return {"ok": True, "interviews": _calibration_store().list_interviews(user_id=user)}
+
+
+@router.get("/calibration/interviews/{interview_id}")
+async def calibration_get(interview_id: str, request: Request, identity: Dict[str, Any] = Depends(current_identity)) -> Dict[str, Any]:
+    user = _scoped_user_id(request=request, identity=identity)
+    try:
+        return _calibration_store().get(user_id=user, interview_id=interview_id)
+    except (CalibrationError, FileNotFoundError):
+        raise HTTPException(status_code=404, detail="calibration interview not found")
+
+
+@router.post("/calibration/interviews/{interview_id}/events")
+async def calibration_event(interview_id: str, request: Request, identity: Dict[str, Any] = Depends(current_identity)) -> Dict[str, Any]:
+    body = await _json_dict(request)
+    user = _scoped_user_id(request=request, identity=identity, explicit_value=body.get("user_id"))
+    try:
+        return _calibration_store().record(
+            user_id=user, interview_id=interview_id,
+            action=str(body.get("action") or ""),
+            text=body.get("text") or "",
+            question_id=str(body.get("question_id") or ""),
+            evidence=body.get("evidence"), modality=str(body.get("modality") or "text"),
+        )
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="calibration interview not found")
+    except CalibrationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/calibration/interviews/{interview_id}/finish")
+async def calibration_finish(interview_id: str, request: Request, identity: Dict[str, Any] = Depends(current_identity)) -> Dict[str, Any]:
+    user = _scoped_user_id(request=request, identity=identity)
+    try:
+        return _calibration_store().finish_formal(user_id=user, interview_id=interview_id)
+    except (CalibrationError, FileNotFoundError):
+        raise HTTPException(status_code=404, detail="calibration interview not found")
+
+
+@router.post("/calibration/interviews/{interview_id}/close")
+async def calibration_close(interview_id: str, request: Request, identity: Dict[str, Any] = Depends(current_identity)) -> Dict[str, Any]:
+    user = _scoped_user_id(request=request, identity=identity)
+    try:
+        return _calibration_store().close(user_id=user, interview_id=interview_id)
+    except (CalibrationError, FileNotFoundError):
+        raise HTTPException(status_code=404, detail="calibration interview not found")
+
+
+@router.post("/calibration/interviews/{interview_id}/approve")
+async def calibration_approve(interview_id: str, request: Request,
+                              identity: Dict[str, Any] = Depends(current_identity)) -> Dict[str, Any]:
+    """Turn a *specific, explicitly approved* calibration answer into guidance.
+
+    No inference from unreviewed emotion, no automatic persona rewriting.
+    Existing RelationshipEngine owns the versioned/reversible lesson record.
+    """
+    body = await _json_dict(request)
+    owner = _scoped_user_id(request=request, identity=identity, explicit_value=body.get("user_id"))
+    if body.get("approve") is not True:
+        raise HTTPException(status_code=400, detail="explicit approve=true required")
+    text = body.get("text")
+    if not isinstance(text, str) or not text.strip():
+        raise HTTPException(status_code=400, detail="approved guidance text is required")
+    try:
+        interview = _calibration_store().get(user_id=owner, interview_id=interview_id)
+    except (FileNotFoundError, CalibrationError):
+        raise HTTPException(status_code=404, detail="calibration interview not found")
+
+    question_id = body.get("question_id")
+    continuation_index = body.get("continuation_index")
+    if isinstance(question_id, str) and question_id:
+        question = next((row for row in interview.get("questions", [])
+                         if row.get("id") == question_id), None)
+        if question is None or not isinstance(question.get("answer"), dict):
+            raise HTTPException(status_code=400, detail="an answered interview question is required")
+        evidence = question["answer"]
+        anchor = "question:" + question_id
+    elif isinstance(continuation_index, int) and not isinstance(continuation_index, bool):
+        rows = interview.get("continuation") or []
+        if continuation_index < 0 or continuation_index >= len(rows):
+            raise HTTPException(status_code=400, detail="unknown continuation event")
+        evidence = rows[continuation_index]
+        anchor = "continuation:" + str(continuation_index)
+    else:
+        raise HTTPException(status_code=400, detail="question_id or continuation_index is required")
+
+    if interview.get("mode") not in {"user", "system"}:
+        raise HTTPException(status_code=409, detail="invalid calibration mode")
+    from .pubpartner_relationship import VALID_KIND
+    default_kind = "workflow" if interview["mode"] == "system" else "preference"
+    kind = str(body.get("kind") or default_kind)
+    if kind not in VALID_KIND:
+        raise HTTPException(status_code=400, detail="unsupported lesson kind")
+    evidence_ref = f"calibration:{interview_id}:{anchor}"
+    try:
+        result = get_spine().add_relationship_lesson(
+            user_id=owner,
+            friend_id=str(interview["partner_id"]),
+            text=text,
+            kind=kind,
+            status="confirmed",
+            confidence=1.0,
+            source="calibration_explicit_approval",
+            evidence_ids=[evidence_ref],
+            metadata={
+                "calibration_interview_id": interview_id,
+                "calibration_mode": interview["mode"],
+                "calibration_event": anchor,
+                "original_evidence": evidence.get("evidence", {}),
+                "approved_by_user": True,
+            },
+        )
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"ok": True, "approved": True, "evidence_ref": evidence_ref, **result}
+
+
+@router.get("/calibration/moments")
+async def calibration_moments(request: Request, session_id: str = "pubpartner_live",
+                              friend_id: str = "alex",
+                              identity: Dict[str, Any] = Depends(current_identity)) -> Dict[str, Any]:
+    """Actual recent exchanges across sessions, scoped by user and partner.
+
+    Encounter rows are pointers only. Read real replies from the session turn log
+    and original user messages from VerbatimVault. Never fabricate EQ findings.
+    """
+    user_id = _scoped_user_id(request=request, identity=identity)
+    spine = get_spine()
+    fid = str(friend_id or "alex")[:120]
+    preferred = str(session_id or "pubpartner_live")[:120]
+    encounters = spine.list_relationship_encounters(
+        user_id=user_id, friend_id=fid, limit=120).get("encounters", [])
+    encountered_sessions = list(dict.fromkeys(
+        [preferred, *[str(row.get("session_id") or "") for row in reversed(encounters)
+                     if isinstance(row, dict) and row.get("session_id")]]
+    ))[:30]
+    moments = []
+    seen = set()
+    for sid in encountered_sessions:
+        try:
+            turns = spine.list_turns(user_id=user_id, session_id=sid, limit=60)["turns"]
+        except (OSError, ValueError, KeyError, FileNotFoundError):
+            continue
+        for turn in reversed(turns):
+            if not isinstance(turn, dict) or not (turn.get("provider_result") or {}).get("ok"):
+                continue
+            source = turn.get("source") or {}
+            source_id = str(source.get("id") or "")
+            if not source_id or (sid, source_id) in seen:
+                continue
+            turn_friend = str(((turn.get("fcp1") or {}).get("f") or {}).get("id") or fid)
+            if turn_friend != fid:
+                continue
+            try:
+                exact = spine.restore_source(user_id=user_id, session_id=sid, source_id=source_id)
+            except (OSError, ValueError, KeyError, FileNotFoundError):
+                continue
+            user_text = str(exact.get("text") or "")
+            partner_text = str(turn.get("friend_response") or "")
+            if not user_text or not partner_text:
+                continue
+            seen.add((sid, source_id))
+            moments.append({
+                "session_id": sid, "source_id": source_id,
+                "turn_id": str(turn.get("turn_id") or (turn.get("receipt") or {}).get("receipt_id") or ""),
+                "user_excerpt": user_text[:600], "partner_excerpt": partner_text[:600],
+                "truncated": len(user_text) > 600 or len(partner_text) > 600,
+            })
+            if len(moments) >= 30:
+                return {"ok": True, "moments": moments}
+    return {"ok": True, "moments": moments}
+
+@router.post("/calibration/interviews/{interview_id}/audio")
+async def calibration_upload_audio(interview_id: str, request: Request,
+                                   identity: Dict[str, Any] = Depends(current_identity)) -> Dict[str, Any]:
+    """Authenticated optional recorded audio for future EQ review, not diagnosis."""
+    user_id = _scoped_user_id(request=request, identity=identity)
+    size = request.headers.get("content-length")
+    if size:
+        try:
+            declared = int(size)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="invalid content length")
+        if declared > 4 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="audio sample too large")
+    payload = await request.body()
+    if len(payload) > 4 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="audio sample too large")
+    try:
+        return _calibration_store().save_audio(
+            user_id=user_id, interview_id=interview_id, data=payload,
+            content_type=request.headers.get("content-type", ""),
+        )
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="calibration interview not found")
+    except CalibrationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/calibration/interviews/{interview_id}/audio/{audio_ref}")
+async def calibration_download_audio(interview_id: str, audio_ref: str, request: Request,
+                                     identity: Dict[str, Any] = Depends(current_identity)):
+    user_id = _scoped_user_id(request=request, identity=identity)
+    try:
+        path = _calibration_store().audio_path(
+            user_id=user_id, interview_id=interview_id, audio_ref=audio_ref)
+    except (FileNotFoundError, CalibrationError):
+        raise HTTPException(status_code=404, detail="audio sample not found")
+    mime = {".webm": "audio/webm", ".ogg": "audio/ogg",
+            ".m4a": "audio/mp4", ".wav": "audio/wav"}[path.suffix]
+    return FileResponse(path, media_type=mime, headers={"Cache-Control": "no-store"})
+
+
+# Searchable private conversation history, reusing the canonical Blackbox Light adapter.
+@router.get("/blackbox-light/conversations")
+async def blackbox_light_list(request: Request, friend_id: str = "alex",
+                              identity: Dict[str, Any] = Depends(current_identity)) -> Dict[str, Any]:
+    owner = _scoped_user_id(request=request, identity=identity)
+    rows = get_spine().blackbox_light.list_conversations(user_id=owner, friend_id=friend_id[:120])
+    return {"ok": True, "conversations": rows}
+
+
+@router.get("/blackbox-light/conversations/{conversation_id}")
+async def blackbox_light_get(conversation_id: str, request: Request, friend_id: str = "alex",
+                             identity: Dict[str, Any] = Depends(current_identity)) -> Dict[str, Any]:
+    owner = _scoped_user_id(request=request, identity=identity)
+    try:
+        return get_spine().blackbox_light.get_conversation(
+            user_id=owner, friend_id=friend_id[:120], conversation_id=conversation_id[:120])
+    except KeyError:
+        raise HTTPException(status_code=404, detail="conversation not found")
+
+
+@router.get("/blackbox-light/search")
+async def blackbox_light_search(request: Request, q: str, friend_id: str = "alex",
+                                identity: Dict[str, Any] = Depends(current_identity)) -> Dict[str, Any]:
+    owner = _scoped_user_id(request=request, identity=identity)
+    import sqlite3
+    try:
+        rows = get_spine().blackbox_light.search(
+            user_id=owner, friend_id=friend_id[:120], query=q[:256], limit=40)
+    except sqlite3.OperationalError:
+        raise HTTPException(status_code=400, detail="invalid search expression")
+    return {"ok": True, "results": rows}
