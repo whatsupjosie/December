@@ -1,6 +1,6 @@
 # December source sweep
 
-Baseline assembly 06c69eb, parts 94ef55b, main 38787ec. Current verified installation ed7c72156a72ec008dbf3b634809abcbb0f0ab67. No repository has reached full accounting yet.
+Baseline assembly 06c69eb, parts 94ef55b, main 38787ec. Current verified installation 4a4576ed72c8c7ebeaa9524c1ba6ca60d9337b95. No repository has reached full accounting yet.
 
 Sir Purfluous recovery archive follow-up (PARTS.md item 10): the `sir_purfluous_bot(1).zip` member `sir_purfluous_bot/director.py` supplied the slow, underplay and stress transformations. December's existing `modules/sir_purfluous_runtime.py` applies these to explicit quoted-line demonstrations after existing intents. The offline BotManager path returned the actor's line with the rehearsal beat. All 17 focused responder checks passed. The full original director remains in the parts archive. Other archive behaviors and the repository-wide archive audit remain open.
 
@@ -68,6 +68,9 @@ All 25 distinct commits on `codex/main-debug-20261119` now have a recorded desti
 | Filler Cream prototype 1bf605e | Already superseded in place by December's `modules/filler_cream.py` engine v7 and its `VoxelStudio` apply/status/regenerate/bake path. The current engine keeps the donor's separate reversible layer and bounded fill behavior while adding 1/128 internal units, outer-point fitting, ceiling and overhang protection, diagonal cracks, corner pieces, material/UV bake guards, deterministic fingerprints and stale-layer refusal. Sixty-four focused engine and VoxelStudio connection tests passed. The older module and fixture must not replace this live implementation. |
 | c4793b9 session handoff | Reproduced the handoff's GLB padding defect through the current VoxelStudio.bake_object path. Assembly 9d01a230 corrects the shared GLB writer for ordinary and cream geometry and exercises strict JSON decoding across all four padding alignments. The donor's proposed bake hookup already exists. |
 | ec36c41, b8df3fb, dd81940 and b534ed3 | VoxelStudio.apply_filler and bake_object reach the current v7 engine. December retains blueprint marks, selectable fidelity, outer-point fit and mixed-fidelity coverage. Destination tests exercised ridge reach, fingertip boundaries, all six face orientations, optimized versus exhaustive computation, bake and restart. dd81940 only corrected historical test counts. Both focused suites passed together (65 tests at 9d01a230). No second implementation needed. |
+| daed761, b4088f2, c2401b1, 2f42e9e, 6b74297, 5b8a720 | Applicator and sanding proposals. Both cumulative design blobs match main-assembly exactly (fda235d0 and baba5812). Primp's GLB texture painter and VoxelStudio's primitive-based cream engine have separate inputs. PARTS.md now outlines the missing surface-selection connection, reusable variants and reversible geometry edits. No duplicate source. |
+| eff99fa, 302272d, 060f838, 02fcc5e, 8606d6e | Current FillerStore refreshes or refuses stale layers before VoxelStudio writes its ordinary bake. Current engine and destination tests cover ceilings, overhangs, fingerprint changes, generator conversion, UV geometry, and malformed arrays. The donor textured GLB matches December blob f03f7fff. The textured writer is available separately; the operator-facing paint and re-bake connection is recorded in PARTS.md. The 65-test result at 9d01a230 is prior destination evidence. This pass compared remote source and tests only. |
+| fca1c24, 21b2f23, bc1d7f1 | Object pipeline, archive test scope, and weak spots were handoff revisions. December's handoff retains the paint invalidation and text-stamp gaps, distinguishes archive-only checks from repo checks, and retains the engine limitations. No new executable files in these commits. |
 
 ### Foresight and per-camera warnings
 
@@ -83,7 +86,7 @@ Two separately recoverable October 24 chat attachments are PubCast_October24_Int
 
 ## Resume point
 
-Beyond-October, `11-12-merge` at `d70952e52c81f89178f4ab557206fcde109bf970`. Next candidate: `daed761b2c866afd91fdcef103b62797c1b435d2`, the Primp and set-building applicator UI proposal. Compare its operator actions against the live destination controls. The branch has 107 commits not inherited by the completed main-debug branch, so it remains open. The branch inventory below pins sources only. Rows without a disposition above still require behavioral reconciliation.
+Beyond-October, `11-12-merge` at `d70952e52c81f89178f4ab557206fcde109bf970`. Next candidate: `c703bf4af36ac159feffed0119211394b5256f68`, the reproducible Feic Mo Chroí heart. Check the generator, rendered asset and destination entry point. The branch has 107 commits not inherited by the completed main-debug branch, so it remains open. The branch inventory below pins sources only. Rows without a disposition above still require behavioral reconciliation.
 - `11-12-merge` — `d70952e52c81f89178f4ab557206fcde109bf970`
 - `2i-beta-polish` — `df737caaeff206e4128932532663776af74ec0e8`
 - `audit/standard-first-2026-11-19` — `6cccfd7a5b2b74f3c29829ed723c0e85128ee322`
