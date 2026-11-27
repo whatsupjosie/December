@@ -54,15 +54,15 @@ class Host:
             self.port = sock.getsockname()[1]
         self.base = f"http://127.0.0.1:{self.port}"
 
-    def start(self):
+    def start(self, *, cwd: Path = ROOT):
         env = {k: v for k, v in os.environ.items() if not k.startswith("PUBCAST_")}
         env.update(self.extra_env)
         # The launcher must read the persisted secrets, not a test-supplied key.
         self.output = self.log_path.open("w", encoding="utf-8")
         self.process = subprocess.Popen(
-            [sys.executable, "run_reach.py", "--data-dir", str(self.data),
+            [sys.executable, str(ROOT / "run_reach.py"), "--data-dir", str(self.data),
              "--port", str(self.port), "--no-browser", "--no-legacy-2i"],
-            cwd=ROOT, env=env, stdout=self.output, stderr=subprocess.STDOUT)
+            cwd=cwd, env=env, stdout=self.output, stderr=subprocess.STDOUT)
         deadline = time.monotonic() + 90
         with httpx.Client(base_url=self.base, trust_env=False, timeout=2) as client:
             while True:
@@ -200,8 +200,8 @@ def test_restore_real_host_sign_in_open_work_and_play_recording(tmp_path):
         assert (recovered / "secure/jwt_secret.txt").read_bytes() == key_before
         assert CredentialStore(recovered).get_secret(username, "recovery-key-check", "api_key") == private_secret
 
-        restored_host = Host(recovered, tmp_path / "restored-host.log")
-        restored_host.start()
+        restored_host = Host(recovered.relative_to(tmp_path), tmp_path / "restored-host.log")
+        restored_host.start(cwd=tmp_path)
         with httpx.Client(base_url=restored_host.base, trust_env=False, timeout=30) as api:
             assert _ok(api.get("/api/auth/status"))["setup_required"] is False
             assert api.post("/api/auth/login", json={"username": username, "password": "wrong-password"}).status_code == 401

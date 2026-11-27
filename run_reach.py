@@ -34,9 +34,11 @@ def _seed_packaged_bot_configs(root: Path, data: Path) -> list[str]:
 
 
 def main() -> int:
+    root = Path(__file__).resolve().parent
     parser = argparse.ArgumentParser(description="Open Reach’s writer’s room")
     parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument("--data-dir", default="reach_userdata")
+    parser.add_argument("--data-dir", type=Path, default=root / "reach_userdata",
+                        help="Host data directory. Relative paths start in the calling directory.")
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--install-legacy-2i", action="store_true", help="explicitly allow installing optional Node utilities; normal startup never downloads them")
     parser.add_argument("--no-legacy-2i", action="store_true", help="skip optional original 2i Node utilities")
@@ -58,9 +60,8 @@ def main() -> int:
             print(f"Reach cannot use port {args.port}: {error}")
             print("Close the other Reach terminal if it is already running. If another app needs this port, start this installation with --port 8001.")
             return 1
-        root = Path(__file__).resolve().parent
+        data = args.data_dir.expanduser().resolve()
         os.chdir(root)
-        data = Path(args.data_dir).expanduser().resolve()
         data.mkdir(parents=True, exist_ok=True)
         seeded_bots = _seed_packaged_bot_configs(root, data)
         if seeded_bots:

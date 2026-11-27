@@ -39,7 +39,7 @@ def main() -> int:
     def stop(_signum, _frame):
         raise KeyboardInterrupt
     signal.signal(signal.SIGTERM, stop)
-    os.chdir(ROOT)
+    launch_directory = Path.cwd()
     for relative in ("requirements.txt", "run_reach.py", "main.py", "modules", "2i/index.html"):
         if not (ROOT / relative).exists():
             print("Reach is missing " + relative + ". Right-click the ZIP, choose Extract All, then run OPEN_REACH_WINDOWS.bat inside the extracted folder.")
@@ -58,9 +58,9 @@ def main() -> int:
             print(message, flush=True)
             log.write(message + "\n"); log.flush()
 
-        def run(command: list[str]) -> int:
+        def run(command: list[str], *, cwd: Path = ROOT) -> int:
             env = dict(os.environ, PYTHONUTF8="1", PYTHONUNBUFFERED="1")
-            process = subprocess.Popen(command, cwd=ROOT, env=env, stdin=subprocess.DEVNULL,
+            process = subprocess.Popen(command, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
             try:
                 for line in process.stdout:
@@ -107,7 +107,7 @@ def main() -> int:
             say("Reach's Python environment is ready.")
             if sys.argv[1:] == ["--check"]:
                 return 0
-            result = run([str(python), "-u", str(ROOT / "run_reach.py"), *sys.argv[1:]])
+            result = run([str(python), "-u", str(ROOT / "run_reach.py"), *sys.argv[1:]], cwd=launch_directory)
             if result:
                 raise LaunchError("Reach stopped with exit code " + str(result) + ". Send the last error shown here, or the last lines of reach-startup.log.")
             return 0
