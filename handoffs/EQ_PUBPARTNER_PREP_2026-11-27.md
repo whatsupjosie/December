@@ -39,7 +39,8 @@ scikit-learn 1.9.1 and pytest-asyncio 1.5.0 were installed on her yes ("Install 
 2. "Everyday wins" level (0.4) for plain achievement messages, from the Pre-Dec merge plan. Not changed.
 3. PubPartner Memory menu order: now "Project notes" then "Calibrate PubPartner…", as main-assembly has it. The pubpartner branch had them reversed.
 4. Fold each prep branch into `alex` and `pubpartner`.
-5. Integration into main-assembly. That also needs the newer shared provider files in PARTS item 16 (`llm_framework.py`, `provider_capabilities.py`, `ollama_provider.py`), without which PubPartner's xAI choice fails. With them, all 8 hosted provider tests pass.
+5. Which cartridge memory path to keep (PARTS item 14, asked on the PubPartner memory choices task). The PubPartner prep branch carries Beyond-October 7fd1fea's `_owned_cartridge_memories` in `pubpartner_core.py`, plus main-assembly's creator check. It has none of pre-dec `feat/pubpartner-cartridge-context-2026-11-22` (`modules/pubpartner_cartridge_context.py` is not on it). Integration waits for this answer too.
+6. Integration into main-assembly. That also needs the newer shared provider files in PARTS item 16 (`llm_framework.py`, `provider_capabilities.py`, `ollama_provider.py`), without which PubPartner's xAI choice fails. With them, all 8 hosted provider tests pass.
 
 ## Not tested
 
