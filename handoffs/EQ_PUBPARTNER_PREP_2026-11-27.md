@@ -8,8 +8,8 @@ Done by Claude in the December repo. Nothing went into main-assembly or main. No
 
 | Program | Prep branch | Starts from | Tip |
 |---|---|---|---|
-| EQ (Alex) | `claude/eq-prep-2026-11-27` | `alex` 769645a | 6e88969 |
-| PubPartner | `claude/pubpartner-prep-2026-11-27` | `pubpartner` da0f2a9 | 188a367 |
+| EQ (Alex) | `claude/eq-prep-2026-11-27` | `alex` 769645a | 41ccde7 |
+| PubPartner | `claude/pubpartner-prep-2026-11-27` | `pubpartner` da0f2a9 | 6eb64c1 |
 
 Each branch has a `STANDALONE.md` that says what changed, how to build and run it on its own (PowerShell 5 commands), what each test run proved, and what was not tested. The program branches `alex` and `pubpartner` are unchanged; folding each prep branch into its program branch is her call.
 
@@ -24,15 +24,18 @@ Each branch has a `STANDALONE.md` that says what changed, how to build and run i
 
 `tools/standalone/assemble.py` (same file on both prep branches) builds a run folder from the branch plus the shared files it imports or loads from `static/`, each pinned by branch, path and Git blob in `STANDALONE_DEPS.json`. Nothing shared is duplicated into a program branch. `check` reports pinned files that changed since.
 
-## Proven (Linux cloud computer, Python 3.13, no scikit-learn or pytest-asyncio)
+## Proven (Linux cloud computer, Python 3.13)
+
+scikit-learn 1.9.1 and pytest-asyncio 1.5.0 were installed on her yes ("Install them", Nov 27 23:01 UTC), with mcp 1.30.0 for the connector.
 
 - EQ engines need nothing from PubPartner, Alex Core or a host: `tests/test_eq_engines_standalone.py`, 2 passed, from a branch checkout and from a run folder.
-- EQ branch in a run folder: 369 passed, 6 failed, 2 skipped. 4 failures are the "everyday wins" achievement cases (her decision); 2 need the PubPartner host and pass there except the one that needs scikit-learn.
-- PubPartner run folder: 145 passed, 1 skipped; federation 14 passed.
+- EQ branch in a run folder: 369 passed, 6 failed, 2 skipped. 4 failures are the "everyday wins" achievement cases (her decision). The other 2 need the PubPartner host, and pass in the PubPartner run folder.
+- PubPartner run folder: 246 passed, 1 skipped; federation 14 passed. Still failing: 2 xAI tests (need item 16's provider files) and 10 tests that need PubCast's `main.py` or `run_reach.py` with Chromium.
+- `pubpartner_app.py` started on its own and served `/pubpartner`, the 2i chat pages and the avatar import page, with every script and style sheet they name.
 
 ## Her calls
 
-1. Install scikit-learn and pytest-asyncio on the cloud computer for testing. Both are in the project's own requirements. Without scikit-learn, `pubpartner_app.py` and the cartridge studio cannot start, so most PubPartner tests cannot run.
+1. Done on her yes: scikit-learn and pytest-asyncio installed for testing.
 2. "Everyday wins" level (0.4) for plain achievement messages, from the Pre-Dec merge plan. Not changed.
 3. PubPartner Memory menu order: now "Project notes" then "Calibrate PubPartner…", as main-assembly has it. The pubpartner branch had them reversed.
 4. Fold each prep branch into `alex` and `pubpartner`.
@@ -40,7 +43,7 @@ Each branch has a `STANDALONE.md` that says what changed, how to build and run i
 
 ## Not tested
 
-Any real browser (this machine cannot download Chromium), PubPartner serving its pages, Windows, a live model reply, and the tests that need the PubCast host (`main.py`, `run_reach.py`).
+Any real browser (this machine cannot download Chromium, so pages were served but never opened or clicked), Windows, a live model reply, and the tests that need the PubCast host (`main.py`, `run_reach.py`).
 
 ## Noticed, not changed
 
