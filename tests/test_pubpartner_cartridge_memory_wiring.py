@@ -51,3 +51,18 @@ async def test_builtin_friend_does_not_open_cartridge_storage(tmp_path):
         friend="alex", provider={"provider": "mock"}, message="Hello",
     )
     assert result["cartridge_recall"]["reason"] == "not_a_cartridge"
+
+
+@pytest.mark.asyncio
+async def test_private_turn_requires_owner_record_in_cartridge(tmp_path):
+    studio = CartridgeStudio(tmp_path)
+    item = studio.create({"name": "Calypso", "summary": "A companion"}, owner="alice")
+    # A restored profile can disagree with the portable cartridge on disk.
+    profile = studio.profiles.load_profile("friend", item["id"], fallback_id="friend")
+    profile["cartridge"]["created_by"] = "bob"
+    studio.profiles.save_profile("friend", item["id"], profile)
+    result = await PubPartnerSpine(tmp_path).run_turn(
+        user_id="bob", session_id="rehearsal", room_id="phone",
+        friend=item["id"], provider={"provider": "mock"}, message="Hello",
+    )
+    assert result["cartridge_recall"] == {"status": "skipped", "reason": "owner_unverified"}

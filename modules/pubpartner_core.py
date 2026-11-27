@@ -733,7 +733,17 @@ class PubPartnerSpine:
         if folder.is_symlink() or not (folder / "character.yaml").is_file():
             return [], {"status": "skipped", "reason": "cartridge_unavailable"}
         try:
+            import yaml
             from pubpartner.cartridge import load_cartridge
+
+            # The friend profile can be edited independently of the cartridge.
+            # Confirm the creator recorded at creation before opening memory.
+            appearance_path = folder / "appearance.yaml"
+            if appearance_path.is_symlink() or not appearance_path.is_file():
+                return [], {"status": "skipped", "reason": "owner_unverified"}
+            appearance = yaml.safe_load(appearance_path.read_text(encoding="utf-8"))
+            if not user_id or not isinstance(appearance, dict) or appearance.get("created_by") != user_id:
+                return [], {"status": "skipped", "reason": "owner_unverified"}
             with load_cartridge(folder) as loaded:
                 scored = loaded.memory.query(message, top_k=limit)
             rows = [
