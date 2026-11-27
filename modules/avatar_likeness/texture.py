@@ -23,11 +23,14 @@ from typing import Dict, Optional, Tuple
 import numpy as np
 
 from . import deps
-from .intake import Cutout
+from .intake import SEED, Cutout
 from .parts import PARTS
 
 MAX_HALF = 1024
 BACK_MODES = ("plain", "mirror", "custom")
+BACK_PALETTE = 7             # colours the back of the outfit is reduced to before small patches are merged; 0 turns the whole step off
+BACK_FOOTWEAR = 0.14         # the bottom of the figure (shoes, boot shafts) is not flattened
+BACK_PATCH_OF_PART = 0.25    # a colour patch smaller than this share of the body part it sits on is a print, pocket or strap, not a garment
 
 
 def _bleed(rgb: np.ndarray, alpha: np.ndarray) -> np.ndarray:
@@ -95,6 +98,61 @@ def _hair_around(rgb: np.ndarray, head: np.ndarray, face: np.ndarray, top: Optio
     return np.median(px, axis=0) if len(px) >= 30 else None
 
 
+def _flatten_regions(rgb: np.ndarray, area: np.ndarray, part_label: np.ndarray) -> np.ndarray:
+    """Reduce ``rgb`` inside ``area`` to a few flat colours and merge every patch that is small for the body part it sits on.
+
+    A print, a pocket, a lapel or a strap is a small patch of another colour on a big garment; a boot, a sleeve, a pair of
+    jeans or a hat band is not small for the part it is on. Small patches take the colour of what surrounds them, so the
+    front's details do not show through on the back, while garment boundaries and shoes survive.
+    """
+    cv2 = deps.require("cv2", "opencv-python-headless")
+    from scipy import ndimage
+    if BACK_PALETTE <= 0 or area.sum() < 400:
+        return rgb
+    rows = np.nonzero(area.any(axis=1))[0]
+    area = area.copy()
+    area[rows[-1] - int(BACK_FOOTWEAR * (rows[-1] - rows[0])):] = False      # shoes and boots keep the front's colours, as before
+    pts = np.argwhere(area)
+    if len(pts) < 400:
+        return rgb
+    cv2.setRNGSeed(SEED)
+    lab = cv2.cvtColor(rgb, cv2.COLOR_RGB2LAB).astype(np.float32)
+    pick = pts[np.linspace(0, len(pts) - 1, min(len(pts), 30000)).astype(int)]
+    sample = lab[pick[:, 0], pick[:, 1]]
+    k = int(min(BACK_PALETTE, max(2, len(np.unique(np.round(sample / 8).astype(int), axis=0)))))
+    _, _, centres = cv2.kmeans(sample, k, None, (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 40, 0.5), 3, cv2.KMEANS_PP_CENTERS)
+    ys, xs = np.nonzero(area)
+    d = ((lab[ys, xs][:, None, :] - centres[None, :, :]) ** 2).sum(axis=2)
+    lab_idx = np.full(area.shape, -1, np.int32)
+    lab_idx[ys, xs] = d.argmin(axis=1)
+    part_area = {int(p): int(((part_label == p) & area).sum()) for p in np.unique(part_label[area])}
+    for _round in range(3):
+        small = np.zeros(area.shape, bool)
+        for c in range(k):
+            n, cc, stats, _centroids = cv2.connectedComponentsWithStats(((lab_idx == c) & area).astype(np.uint8), connectivity=4)
+            for j in range(1, n):
+                x, y, bw, bh, count = (int(v) for v in stats[j])
+                m = cc[y:y + bh, x:x + bw] == j
+                part = int(np.bincount(part_label[y:y + bh, x:x + bw][m].clip(0)).argmax())
+                if count < BACK_PATCH_OF_PART * part_area.get(part, 0):
+                    small[y:y + bh, x:x + bw] |= m
+        if not small.any():
+            break
+        keep = area & ~small
+        if not keep.any():
+            break
+        near = ndimage.distance_transform_edt(~keep, return_distances=False, return_indices=True)
+        lab_idx = np.where(small, lab_idx[near[0], near[1]], lab_idx)
+    out = rgb.copy()
+    for c in range(k):                                           # each remaining patch gets the colour it actually has, not its cluster's
+        n, cc, stats, _centroids = cv2.connectedComponentsWithStats(((lab_idx == c) & area).astype(np.uint8), connectivity=4)
+        for j in range(1, n):
+            x, y, bw, bh, _count = (int(v) for v in stats[j])
+            m = cc[y:y + bh, x:x + bw] == j
+            out[y:y + bh, x:x + bw][m] = np.median(rgb[y:y + bh, x:x + bw][m], axis=0).astype(np.uint8)
+    return out
+
+
 def _plain_back(rgb: np.ndarray, alpha: np.ndarray, labels: np.ndarray, crop: Tuple[int, int, int, int],
                 hair_override: Optional[Tuple[int, int, int]] = None) -> np.ndarray:
     """The back of the outfit as flat painted colour, and the back of the head as the front's hair or hat with the face painted out."""
@@ -105,7 +163,10 @@ def _plain_back(rgb: np.ndarray, alpha: np.ndarray, labels: np.ndarray, crop: Tu
     # straps (details that belong to the front) while keeping the big garment boundaries (jacket against jeans).
     k = max(5, int(0.045 * h)) | 1
     flat = cv2.medianBlur(cv2.pyrMeanShiftFiltering(rgb, sp=max(6, int(0.012 * h)), sr=26, maxLevel=2), min(k, 255))
-    head = (labels[y0:y0 + h, x0:x0 + w] == PARTS.index("head")) & solid
+    part_label = labels[y0:y0 + h, x0:x0 + w]
+    head = (part_label == PARTS.index("head")) & solid
+    hands = np.isin(part_label, [PARTS.index("hand_L"), PARTS.index("hand_R")])
+    flat = _flatten_regions(flat, solid & ~head & ~hands, part_label)
     face = _face(rgb, head)
     crown = _hair_colour(rgb, alpha, labels, crop).astype(np.float32)
     hair = np.array(hair_override, np.float32) if hair_override is not None else _hair_around(rgb, head, face, crown)

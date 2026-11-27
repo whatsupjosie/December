@@ -1,0 +1,311 @@
+{
+ "name": "humphrey",
+ "glb": "humphrey.glb",
+ "fingerprint": "ceefb33e8a329eda",
+ "models_used": {
+  "cutout_network": true,
+  "pose_detector": false
+ },
+ "report": {
+  "height_m": 0.8931,
+  "height_requested_m": 0.889,
+  "height_pub_blocks": 3.516,
+  "build": "toddler",
+  "pose_in_picture": "relaxed",
+  "pose_detector_used": false,
+  "cutout_method": "matting-network",
+  "background": "plain-dark",
+  "vertices": 35470,
+  "triangles": 68984,
+  "bones": 25,
+  "atlas": {
+   "back_mode": "plain",
+   "half_size": [
+    257,
+    419
+   ],
+   "scale": 1.0,
+   "hair_rgb": [
+    143,
+    120,
+    92
+   ]
+  },
+  "atlas_size": [
+   514,
+   419
+  ],
+  "bake_max_move_m": 0.364,
+  "measures_m": {
+   "height_pelvis_m": 0.2708,
+   "shoulder_width_m": 0.3023,
+   "hip_width_m": 0.16,
+   "upper_arm_m": 0.1398,
+   "forearm_m": 0.1283,
+   "thigh_m": 0.1245,
+   "calf_m": 0.1023,
+   "spine_m": 0.28,
+   "neck_to_head_m": 0.0222
+  },
+  "joint_sources": {
+   "template": 20
+  },
+  "warnings": [
+   "The picture is cropped at the feet. The legs will end where the picture ends and the shoes are closed off; set the floor line yourself if the shoes are visible.",
+   "No pose model is installed, so joints come from the build template. Check them in the editor.",
+   "The pose in the picture is far from a T-pose, so the arms were swung a long way into the rest pose. Check the shoulders and elbows in the editor."
+  ],
+  "not_in_the_picture": [
+   "The back and the sides of the character are not in the picture. They are generated from the front's colours (back view setting) and a rounded body shape inferred from the outline.",
+   "Depth is inferred. Parts are given rounded cross-sections sized from their own width; use the depth sliders where the character is flatter or deeper than that.",
+   "Shoes are given a sole length from the build; the picture shows them head-on."
+  ]
+ },
+ "old_workflow": {
+  "page_said": "\u2713 Portrait baked \u2014 skin: auto, face detected: no",
+  "skin_color": "#6a543f",
+  "voxel_count": 3,
+  "face_detected": false,
+  "preset_after": "MANNY",
+  "studio": "flat figure; nothing from the picture reaches Studio"
+ },
+ "pose_compared": "first frame of the Idle clip (the picture is not a T-pose, so its drawn pose is what to compare)",
+ "front_rest_vs_picture": {
+  "proportions": {
+   "a": {
+    "aspect_w_over_h": 0.5864,
+    "mass_centre_from_top": 0.5261
+   },
+   "b": {
+    "aspect_w_over_h": 0.5608,
+    "mass_centre_from_top": 0.5167
+   },
+   "aspect_relative_difference": 0.0437,
+   "width_profile_l1": 0.0222
+  },
+  "silhouette": {
+   "iou": 0.9222,
+   "iou_bands": {
+    "upper": 0.9735,
+    "middle": 0.9168,
+    "lower": 0.8849
+   }
+  },
+  "palette": {
+   "mean_delta_e": 2.28,
+   "colours_in_a_missing_from_b": [],
+   "colours_in_b_missing_from_a": []
+  },
+  "style_reference": {
+   "ink_outline_fraction": 0.571,
+   "interior_edge_density": 0.1154,
+   "flat_colour_fraction": 0.6612
+  },
+  "style_render": {
+   "ink_outline_fraction": 0.4836,
+   "interior_edge_density": 0.1075,
+   "flat_colour_fraction": 0.6755
+  },
+  "ink_outline_loss": 0.153,
+  "findings": []
+ },
+ "mesh_stretch": {
+  "Idle": {
+   "clip": "Idle",
+   "duration": 4.0,
+   "samples": 24,
+   "triangles": 68984,
+   "triangles_ever_stretched_or_collapsed": 0.0717,
+   "worst_area_ratio": 662.15,
+   "worst_at_s": 0.333,
+   "share_by_part": {
+    "arm_L": 0.3636,
+    "arm_R": 0.3723,
+    "foot_L": 0.0,
+    "foot_R": 0.0,
+    "hand_L": 0.0902,
+    "hand_R": 0.3367,
+    "head": 0.0,
+    "leg_L": 0.0074,
+    "leg_R": 0.0,
+    "torso": 0.0356
+   },
+   "findings": [
+    "7.2% of triangles grow or shrink by more than 2.5x against the bind pose in 'Idle' (arm_R 37%, arm_L 36%, hand_R 34%, hand_L 9%, torso 4%)"
+   ]
+  },
+  "Walk": {
+   "clip": "Walk",
+   "duration": 0.6,
+   "samples": 24,
+   "triangles": 68984,
+   "triangles_ever_stretched_or_collapsed": 0.0963,
+   "worst_area_ratio": 1248.96,
+   "worst_at_s": 0.125,
+   "share_by_part": {
+    "arm_L": 0.42,
+    "arm_R": 0.4278,
+    "foot_L": 0.0,
+    "foot_R": 0.0,
+    "hand_L": 0.2131,
+    "hand_R": 0.4235,
+    "head": 0.0,
+    "leg_L": 0.044,
+    "leg_R": 0.0558,
+    "torso": 0.0539
+   },
+   "findings": [
+    "9.6% of triangles grow or shrink by more than 2.5x against the bind pose in 'Walk' (arm_R 43%, hand_R 42%, arm_L 42%, hand_L 21%, leg_R 6%, torso 5%, leg_L 4%)"
+   ]
+  }
+ },
+ "front_picture_use_by_yaw": [
+  {
+   "yaw_deg": 0,
+   "visible_from_generated_back": 0.0431,
+   "seen_well": 0.902,
+   "edge_on": 0.051,
+   "hidden": 0.0471,
+   "visible_edge_on_share": 0.0266
+  },
+  {
+   "yaw_deg": 30,
+   "visible_from_generated_back": 0.0762,
+   "seen_well": 0.7446,
+   "edge_on": 0.1839,
+   "hidden": 0.0715,
+   "visible_edge_on_share": 0.07
+  },
+  {
+   "yaw_deg": 60,
+   "visible_from_generated_back": 0.2105,
+   "seen_well": 0.5555,
+   "edge_on": 0.1728,
+   "hidden": 0.2717,
+   "visible_edge_on_share": 0.0578
+  },
+  {
+   "yaw_deg": 90,
+   "visible_from_generated_back": 0.4664,
+   "seen_well": 0.3206,
+   "edge_on": 0.1895,
+   "hidden": 0.4899,
+   "visible_edge_on_share": 0.0829
+  },
+  {
+   "yaw_deg": 120,
+   "visible_from_generated_back": 0.7449,
+   "seen_well": 0.1085,
+   "edge_on": 0.1707,
+   "hidden": 0.7207,
+   "visible_edge_on_share": 0.2306
+  },
+  {
+   "yaw_deg": 180,
+   "visible_from_generated_back": 0.9569,
+   "seen_well": 0.0269,
+   "edge_on": 0.0201,
+   "hidden": 0.9529,
+   "visible_edge_on_share": 0.1295
+  }
+ ],
+ "turntable_stability_rest_pose": {
+  "frames": 24,
+  "height_drift": 0.0,
+  "min_consecutive_iou": 0.8832,
+  "findings": []
+ },
+ "against_reference_clip": {
+  "note": "head and upper body only (the clip is a close-up). The turn angle of each clip frame was judged by eye; the render is at that angle or its mirror, whichever overlaps better, and the pose is the picture's drawn pose.",
+  "views": [
+   {
+    "video_frame": 1,
+    "nominal_yaw_deg": 0,
+    "yaw_used_deg": 0,
+    "silhouette_iou_head_and_upper_body": 0.748,
+    "palette_mean_delta_e": 1.31,
+    "findings": [
+     "silhouette overlap is 0.75 (below 0.8): the outline is a different shape",
+     "the upper third overlaps only 0.69",
+     "the middle third overlaps only 0.67",
+     "width per row differs by 0.147 of the height on average (head, shoulders or legs are sized differently)"
+    ]
+   },
+   {
+    "video_frame": 56,
+    "nominal_yaw_deg": 40,
+    "yaw_used_deg": 320,
+    "silhouette_iou_head_and_upper_body": 0.557,
+    "palette_mean_delta_e": 4.14,
+    "findings": [
+     "silhouette overlap is 0.56 (below 0.8): the outline is a different shape",
+     "the upper third overlaps only 0.55",
+     "the middle third overlaps only 0.61",
+     "the lower third overlaps only 0.52",
+     "the figure is 27% wider or narrower for its height than the reference",
+     "width per row differs by 0.237 of the height on average (head, shoulders or legs are sized differently)",
+     "the dark outline along the edge is 52% weaker than in the reference"
+    ]
+   },
+   {
+    "video_frame": 67,
+    "nominal_yaw_deg": 80,
+    "yaw_used_deg": 80,
+    "silhouette_iou_head_and_upper_body": 0.697,
+    "palette_mean_delta_e": 6.4,
+    "findings": [
+     "silhouette overlap is 0.70 (below 0.8): the outline is a different shape",
+     "the upper third overlaps only 0.64",
+     "the lower third overlaps only 0.68",
+     "the figure is 19% wider or narrower for its height than the reference",
+     "width per row differs by 0.135 of the height on average (head, shoulders or legs are sized differently)",
+     "the dark outline along the edge is 80% weaker than in the reference"
+    ]
+   },
+   {
+    "video_frame": 89,
+    "nominal_yaw_deg": 140,
+    "yaw_used_deg": 220,
+    "silhouette_iou_head_and_upper_body": 0.704,
+    "palette_mean_delta_e": 9.78,
+    "findings": [
+     "silhouette overlap is 0.70 (below 0.8): the outline is a different shape",
+     "the middle third overlaps only 0.64",
+     "the figure is 13% wider or narrower for its height than the reference",
+     "width per row differs by 0.145 of the height on average (head, shoulders or legs are sized differently)",
+     "a colour that covers 31% of the reference is not in the render (nearest is 32 away)"
+    ]
+   },
+   {
+    "video_frame": 111,
+    "nominal_yaw_deg": 170,
+    "yaw_used_deg": 190,
+    "silhouette_iou_head_and_upper_body": 0.782,
+    "palette_mean_delta_e": 12.39,
+    "findings": [
+     "silhouette overlap is 0.78 (below 0.8): the outline is a different shape",
+     "the middle third overlaps only 0.65",
+     "width per row differs by 0.061 of the height on average (head, shoulders or legs are sized differently)",
+     "colours are 12.4 Lab units apart on average",
+     "a colour that covers 24% of the reference is not in the render (nearest is 36 away)",
+     "a colour that covers 21% of the reference is not in the render (nearest is 29 away)"
+    ]
+   }
+  ]
+ },
+ "studio_player": {
+  "hasWalk": true,
+  "hasIdle": true,
+  "skinned": 1,
+  "bones": 25,
+  "nativeHeight": 0.8930588522752202
+ },
+ "walk_turn_stability": {
+  "frames": 121,
+  "height_drift": 0.0542,
+  "min_consecutive_iou": 0.8106,
+  "findings": [
+   "the silhouette jumps between two frames (overlap 0.81)"
+  ]
+ }
+}

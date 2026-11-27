@@ -1,0 +1,232 @@
+{
+ "name": "repeat",
+ "glb": "repeat.glb",
+ "fingerprint": "0ad9956b127b5fca",
+ "models_used": {
+  "cutout_network": false,
+  "pose_detector": false
+ },
+ "report": {
+  "height_m": 1.7544,
+  "height_requested_m": 1.7526,
+  "height_pub_blocks": 6.907,
+  "build": "adult",
+  "pose_in_picture": "tpose",
+  "pose_detector_used": false,
+  "cutout_method": "background-model+grabcut",
+  "background": "plain-light",
+  "vertices": 16010,
+  "triangles": 29788,
+  "bones": 25,
+  "atlas": {
+   "back_mode": "plain",
+   "half_size": [
+    969,
+    1022
+   ],
+   "scale": 1.0,
+   "hair_rgb": [
+    176,
+    65,
+    4
+   ]
+  },
+  "atlas_size": [
+   1938,
+   1022
+  ],
+  "bake_max_move_m": 0.0132,
+  "measures_m": {
+   "height_pelvis_m": 0.8273,
+   "shoulder_width_m": 0.4031,
+   "hip_width_m": 0.1928,
+   "upper_arm_m": 0.2204,
+   "forearm_m": 0.2204,
+   "thigh_m": 0.3593,
+   "calf_m": 0.3856,
+   "spine_m": 0.6397,
+   "neck_to_head_m": 0.0526
+  },
+  "joint_sources": {
+   "silhouette": 8,
+   "template": 12
+  },
+  "warnings": [
+   "No pose model is installed, so joints come from the build template. Check them in the editor.",
+   "The arm joints were measured from the cut-out, not detected. Check the elbows and wrists in the editor."
+  ],
+  "not_in_the_picture": [
+   "The back and the sides of the character are not in the picture. They are generated from the front's colours (back view setting) and a rounded body shape inferred from the outline.",
+   "Depth is inferred. Parts are given rounded cross-sections sized from their own width; use the depth sliders where the character is flatter or deeper than that.",
+   "Shoes are given a sole length from the build; the picture shows them head-on."
+  ]
+ },
+ "old_workflow": {
+  "page_said": "\u2713 Portrait baked \u2014 skin: auto, face detected: no",
+  "skin_color": "#9d9790",
+  "voxel_count": 3,
+  "face_detected": false,
+  "preset_after": "MANNY",
+  "studio": "flat figure; nothing from the picture reaches Studio"
+ },
+ "pose_compared": "bind pose (the picture is a T-pose)",
+ "front_rest_vs_picture": {
+  "proportions": {
+   "a": {
+    "aspect_w_over_h": 0.9461,
+    "mass_centre_from_top": 0.4408
+   },
+   "b": {
+    "aspect_w_over_h": 0.9472,
+    "mass_centre_from_top": 0.4408
+   },
+   "aspect_relative_difference": 0.0012,
+   "width_profile_l1": 0.0052
+  },
+  "silhouette": {
+   "iou": 0.932,
+   "iou_bands": {
+    "upper": 0.9272,
+    "middle": 0.9766,
+    "lower": 0.8732
+   }
+  },
+  "palette": {
+   "mean_delta_e": 3.74,
+   "colours_in_a_missing_from_b": [],
+   "colours_in_b_missing_from_a": []
+  },
+  "style_reference": {
+   "ink_outline_fraction": 0.5752,
+   "interior_edge_density": 0.1412,
+   "flat_colour_fraction": 0.6997
+  },
+  "style_render": {
+   "ink_outline_fraction": 0.5739,
+   "interior_edge_density": 0.1248,
+   "flat_colour_fraction": 0.6652
+  },
+  "ink_outline_loss": 0.002,
+  "findings": []
+ },
+ "mesh_stretch": {
+  "Idle": {
+   "clip": "Idle",
+   "duration": 4.0,
+   "samples": 24,
+   "triangles": 29788,
+   "triangles_ever_stretched_or_collapsed": 0.0006,
+   "worst_area_ratio": 3.6,
+   "worst_at_s": 2.667,
+   "share_by_part": {
+    "arm_L": 0.0011,
+    "arm_R": 0.0,
+    "foot_L": 0.0,
+    "foot_R": 0.0,
+    "hand_L": 0.0,
+    "hand_R": 0.0,
+    "head": 0.0,
+    "leg_L": 0.0,
+    "leg_R": 0.0,
+    "torso": 0.0011
+   },
+   "findings": []
+  },
+  "Walk": {
+   "clip": "Walk",
+   "duration": 1.046,
+   "samples": 24,
+   "triangles": 29788,
+   "triangles_ever_stretched_or_collapsed": 0.0086,
+   "worst_area_ratio": 10.72,
+   "worst_at_s": 0.262,
+   "share_by_part": {
+    "arm_L": 0.0022,
+    "arm_R": 0.0038,
+    "foot_L": 0.0,
+    "foot_R": 0.0,
+    "hand_L": 0.0,
+    "hand_R": 0.0,
+    "head": 0.0,
+    "leg_L": 0.026,
+    "leg_R": 0.0225,
+    "torso": 0.0032
+   },
+   "findings": []
+  }
+ },
+ "front_picture_use_by_yaw": [
+  {
+   "yaw_deg": 0,
+   "visible_from_generated_back": 0.0,
+   "seen_well": 0.9887,
+   "edge_on": 0.0113,
+   "hidden": 0.0,
+   "visible_edge_on_share": 0.0113
+  },
+  {
+   "yaw_deg": 30,
+   "visible_from_generated_back": 0.0038,
+   "seen_well": 0.7855,
+   "edge_on": 0.1838,
+   "hidden": 0.0308,
+   "visible_edge_on_share": 0.0576
+  },
+  {
+   "yaw_deg": 60,
+   "visible_from_generated_back": 0.1477,
+   "seen_well": 0.5481,
+   "edge_on": 0.193,
+   "hidden": 0.259,
+   "visible_edge_on_share": 0.0875
+  },
+  {
+   "yaw_deg": 90,
+   "visible_from_generated_back": 0.461,
+   "seen_well": 0.2925,
+   "edge_on": 0.2046,
+   "hidden": 0.503,
+   "visible_edge_on_share": 0.0809
+  },
+  {
+   "yaw_deg": 120,
+   "visible_from_generated_back": 0.8022,
+   "seen_well": 0.1249,
+   "edge_on": 0.1292,
+   "hidden": 0.7459,
+   "visible_edge_on_share": 0.2342
+  },
+  {
+   "yaw_deg": 180,
+   "visible_from_generated_back": 1.0,
+   "seen_well": 0.0,
+   "edge_on": 0.0,
+   "hidden": 1.0,
+   "visible_edge_on_share": 0.0
+  }
+ ],
+ "turntable_stability_rest_pose": {
+  "frames": 24,
+  "height_drift": 0.0035,
+  "min_consecutive_iou": 0.8082,
+  "findings": [
+   "the silhouette jumps between two frames (overlap 0.81)"
+  ]
+ },
+ "studio_player": {
+  "hasWalk": true,
+  "hasIdle": true,
+  "skinned": 1,
+  "bones": 25,
+  "nativeHeight": 1.7544435291313207
+ },
+ "walk_turn_stability": {
+  "frames": 108,
+  "height_drift": 0.0713,
+  "min_consecutive_iou": 0.2792,
+  "findings": [
+   "the figure's height moves 7.1% across the run",
+   "the silhouette jumps between two frames (overlap 0.28)"
+  ]
+ }
+}

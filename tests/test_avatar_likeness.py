@@ -330,3 +330,49 @@ def test_every_bone_that_can_visibly_move_has_skin_on_it(path):
         np.add.at(w, P.joints[:, k], P.weights[:, k])
     for bone in ("Pelvis", "Spine_02", "Head", "UpperArm_L", "LowerArm_L", "Hand_L", "UpperArm_R", "LowerArm_R", "Hand_R", "Thigh_L", "Calf_L", "Foot_L", "Thigh_R", "Calf_R", "Foot_R"):
         assert w[P.names.index(bone)] > 20, f"{bone} controls no part of the mesh, so capturing it would move nothing"
+
+
+# ── the generated back ─────────────────────────────────────────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("path", [PETE, REPEAT], ids=["pete", "repeat"])
+def test_the_back_does_not_carry_the_fronts_print_or_neckline(path):
+    """The back is a guess, so it must not paint the front's details onto a place they are not: Repeat's shirt print, Pete's
+    open jacket over a tank top. Measured on the torso: warm skin/print pixels and the number of distinct colours."""
+    import cv2
+    from modules.avatar_likeness import texture
+    b = pipeline.build(path.read_bytes(), pipeline.Settings(height_m=PETE_M))
+    front, back = texture.split_atlas(b.atlas)
+    x0, y0, w, h = b.shell.crop
+    th, tw = front.shape[:2]
+    torso = cv2.resize((b.labels[y0:y0 + h, x0:x0 + w] == parts.PARTS.index("torso")).astype(np.uint8), (tw, th), interpolation=cv2.INTER_NEAREST).astype(bool)
+    on_front, on_back = torso & (front[..., 3] > 200), torso[:, ::-1] & (back[..., 3] > 200)        # the back half is stored as seen from behind
+
+    def warm(im):
+        return ((im[..., 0].astype(int) - im[..., 2]) > 70) & (im[..., 0] > 130)
+
+    def colours(im, m):
+        return len({tuple(c // 16) for c in im[..., :3][m]})
+
+    assert warm(front)[on_front].mean() > 0.03, "the fixture no longer has a print or skin on the front of the torso; pick another check"
+    assert warm(back)[on_back].mean() < 0.002
+    assert colours(back, on_back) <= 12 < colours(front, on_front) / 10
+
+
+def test_small_patches_are_merged_but_garments_and_shoes_are_kept():
+    from modules.avatar_likeness import texture
+    P = parts.PARTS
+    H, W = 400, 200
+    rgb = np.zeros((H, W, 3), np.uint8)
+    part = np.full((H, W), -1, np.int8)
+    area = np.zeros((H, W), bool)
+    rgb[60:220, 50:150], part[60:220, 50:150] = (40, 40, 45), P.index("torso")                     # a dark top
+    rgb[100:130, 80:110] = (230, 120, 20)                                                         # a print: 30x30 on a 100x160 part
+    rgb[220:360, 70:130], part[220:360, 70:130] = (60, 110, 130), P.index("leg_L")                 # jeans
+    rgb[360:395, 70:130], part[360:395, 70:130] = (110, 70, 30), P.index("foot_L")                 # shoes
+    area[part >= 0] = True
+    out = texture._flatten_regions(rgb, area, part)
+    assert np.abs(out[100:130, 80:110].astype(int) - (40, 40, 45)).max() <= 3, "the print should have taken the colour of the top"
+    assert np.abs(out[230:350, 80:120].astype(int) - (60, 110, 130)).max() <= 3, "jeans are a garment, not a patch"
+    assert (out[360:395, 70:130] == rgb[360:395, 70:130]).all(), "shoes keep the front's colours"
+    again = texture._flatten_regions(rgb, area, part)
+    assert (again == out).all(), "the same picture must flatten the same way every time"

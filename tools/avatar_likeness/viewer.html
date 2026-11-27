@@ -21,7 +21,15 @@ window.loadAvatar = async (url) => {
   if (avatar) scene.remove(avatar);
   const root = clone(gltf.scene);
   root.traverse(o => { if (o.isMesh) o.frustumCulled = false; });
-  const box = new THREE.Box3().setFromObject(root), size = box.getSize(new THREE.Vector3()), ctr = box.getCenter(new THREE.Vector3());
+  let box = new THREE.Box3().setFromObject(root);
+  // A skinned model's geometry box can be in other units than its bones (Mixamo exports: centimetres under a 0.01 armature). When the two disagree, frame by the bones.
+  root.updateMatrixWorld(true);
+  const bb = new THREE.Box3(), tmp = new THREE.Vector3(); let nb = 0;
+  root.traverse(o => { if (o.isBone) { bb.expandByPoint(o.getWorldPosition(tmp)); nb++; } });
+  if (nb > 4 && box.getSize(new THREE.Vector3()).y < 0.7 * bb.getSize(tmp).y) {
+    const pad = 0.06 * bb.getSize(tmp).y; bb.min.y -= pad * 0.2; bb.max.y += pad; box = bb;
+  }
+  const size = box.getSize(new THREE.Vector3()), ctr = box.getCenter(new THREE.Vector3());
   native = size.y;
   root.position.set(-ctr.x, -box.min.y, -ctr.z);
   const inner = new THREE.Group(); inner.add(root);

@@ -19,6 +19,15 @@ Check the release candidate across Studio and Control Room, capture and export, 
 
 Local synthesized speech drives the bundled Pete rig through the Studio's dialogue mixer. Chromium with local Flite has verified rendered mouth movement, signal on the Program mixer, and neutral reset on Stop, normal completion, and production shutdown. This is audio-level mouth movement. Phoneme timing, phoneme-specific shapes, real device checks, and casting through the shared camera pool remain open. The original Studio cast remains the default.
 
+## 2026-11-27: Avatar from a picture (branch `claude/avatar-from-image-2026-11-27`, not merged)
+
+Ledger: `handoffs/AVATAR_FROM_PICTURE_2026-11-27.md`. Evidence: `handoffs/avatar_from_picture_2026-11-27/`.
+
+- A character picture becomes a rigged GLB (25 canonical joints, T-pose rest, Idle and Walk) with the artwork on the front, at `/avatar-from-picture` (linked from Avatar Foundry). The page lets a person drag joints, change thickness, height, hair and back view, undo, keep every version and save to the avatar library. Code: `modules/avatar_likeness/`. The old Dressing Room bake still returns only a colour and a voxel count and does not reach Studio.
+- Tested: 70 avatar tests plus the two model-dependent tests (with the optional model files), including a real-host browser test with quit and restart. Measured on three characters: the front overlaps its own picture at 0.92–0.93. Recorded mannequin clips retarget onto Pete and Repeat and read as the same movement.
+- **Not claimed:** side and back views are not the character (the sides are the front picture smeared; the backs are guessed; against Humphrey's Runway clip the back is ~20 Lab units off in colour). Humphrey's relaxed-pose arms stretch badly until his joints are placed by hand. No live capture was tried; the repo's ±35° motion consumer was not changed. Windows, PowerShell 5 and real GPUs were not tested. Hosted view-synthesis models were not run.
+- Shared-file changes: `main.py` (router, `/avatar-from-picture`, 64 MB body limit; 8 lines) and one card in `static/avatar_foundry.html`.
+
 ## 2026-11-24: Liar's Dice at the Vortex Bar booth
 
 Ledger: `handoffs/LIARS_DICE_2026-11-24.md`.
