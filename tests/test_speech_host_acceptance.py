@@ -127,6 +127,10 @@ def test_real_host_browser_dictation_recordable_speech_stop_and_restart(tmp_path
                 page.goto(host.base + "/login?next=/writers-room")
                 page.fill("#loginUser",username); page.fill("#loginPass",password); page.click("#loginBtn")
                 page.wait_for_url("**/writers-room"); page.wait_for_function("window.reachStarted !== undefined")
+                # The current single-page desk keeps PubPartner in its own side
+                # panel until the operator opens it; exercise that real route.
+                page.click("#twoiDrawerTabPartner")
+                page.wait_for_function("document.querySelector('#chatInput').getClientRects().length > 0")
                 original_words = "Keep my existing words."
                 page.fill("#chatInput",original_words)
                 page.click("#chatMicBtn")
@@ -161,10 +165,20 @@ def test_real_host_browser_dictation_recordable_speech_stop_and_restart(tmp_path
                 evidence["late_permission_cancel_released_real_fixture_tracks"] = True
 
                 # Exercise real 2i reading, rather than calling the client in isolation.
-                page.click("#modeBadge")
-                page.evaluate("pool = ['The studio lights are ready.']; pointer = 0; reading = null; render();")
+                page.evaluate("if (!coWriting) modeBadge.click()")
+                page.wait_for_function("document.querySelector('#playBtn').getClientRects().length > 0")
+                # The current narrative room reads the presented draft buffer;
+                # the older donor read the superseded generation pool.
+                page.evaluate("buffer = ['The studio lights are ready.']; draftArea.value = buffer[0]; render();")
+                dialogue_starts = page.evaluate("window.PubcastProgramAudio.status().dialogueStarts")
                 page.click("#playBtn")
-                page.wait_for_function("window.PubcastProgramAudio.status().dialogueActive === 1",timeout=30000)
+                try:
+                    page.wait_for_function("before => window.PubcastProgramAudio.status().dialogueStarts > before", arg=dialogue_starts, timeout=30000)
+                except Exception:
+                    pytest.fail("2i read-aloud never reached Program audio: " + json.dumps(page.evaluate("""() => ({
+                      speechClient:!!window.PubcastSpeech,coWriting,playing,reading,buffer,
+                      notice:chatLog.innerText,audio:PubcastProgramAudio.status()
+                    })""")))
                 page.click("#stopBtn")
                 page.wait_for_function("window.PubcastProgramAudio.status().activeSources === 0")
                 assert page.evaluate("playing") is False
@@ -202,8 +216,9 @@ def test_real_host_browser_dictation_recordable_speech_stop_and_restart(tmp_path
                     recorded_words = _ok(api.post("/api/stt/transcribe",content=capture.read_bytes(),headers={"Content-Type":"audio/webm"}))["text"]
                 assert recorded_words == PHRASE
                 evidence["recorded_dialogue"]={"bytes":capture.stat().st_size,"decoded_samples":len(samples),"rms":rms,"recognized_recording":recorded_words,"sha256":hashlib.sha256(capture.read_bytes()).hexdigest(),"events":page.evaluate("speechEvents")}
+                dialogue_starts = page.evaluate("PubcastProgramAudio.status().dialogueStarts")
                 page.fill("#tts-text",PHRASE*2); page.click("#tts-say")
-                page.wait_for_function("PubcastProgramAudio.status().dialogueActive === 1",timeout=30000)
+                page.wait_for_function("before => PubcastProgramAudio.status().dialogueStarts > before", arg=dialogue_starts, timeout=30000)
                 page.click("#tts-stop")
                 page.wait_for_function("PubcastProgramAudio.status().activeSources === 0")
                 assert page.evaluate("PubcastProgramAudio.status().dialogueActive") == 0

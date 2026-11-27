@@ -351,6 +351,48 @@ def test_recorder_error_preserves_available_media_as_incomplete(studio):
     assert "INCOMPLETE" in page.locator("#sessionList").inner_text()
 
 
+def test_crashed_studio_page_reopens_committed_media_in_another_tab(studio, tmp_path):
+    page, context = studio
+    wait_for_actors(page)
+    page.click("#start")
+    page.wait_for_function("document.querySelector('#switcherLink').textContent === 'VIDEO: SHARED SWITCHER'")
+    page.click("#record")
+    page.wait_for_function("PubCast25DStudio.state().recording")
+    page.wait_for_function("PubCast25DStudio.state().journal?.bytes > 1000", timeout=45000)
+    take_id = page.evaluate("""async () => {
+      const rows = await PubCast25DStore.listCaptures();
+      return rows.find(row => row.kind !== 'audio-source' && row.bytes > 1000)?.id || null;
+    }""")
+    assert take_id, "The live program take never reached its durable journal"
+
+    # A renderer-process crash bypasses beforeunload, Stop and every finalizer.
+    url = page.url
+    with page.expect_event("crash", timeout=15000):
+        with pytest.raises(pw.Error):
+            page.goto("chrome://crash", timeout=15000)
+
+    reopened = context.new_page()
+    reopened.goto(url)
+    reopened.wait_for_function("document.documentElement.dataset.production25d === 'ready'")
+    selector = f'#captureRecoveryList button[data-capture-id="{take_id}"]'
+    reopened.wait_for_function(
+        "id => { const b=document.querySelector('#captureRecoveryList button[data-capture-id=\"'+id+'\"]'); return b && !b.disabled; }",
+        arg=take_id, timeout=30000,
+    )
+    reopened.locator(selector).click()
+    reopened.wait_for_function("document.querySelector('#sessionList').textContent.includes('INCOMPLETE')")
+    reopened.wait_for_function("playback.readyState >= 2 && playback.videoWidth === 1280")
+    reopened.evaluate("playback.play()")
+    reopened.wait_for_function("playback.currentTime > 0")
+    with reopened.expect_download() as pending:
+        reopened.click("#download")
+    path = tmp_path / "interrupted.webm"
+    pending.value.save_as(path)
+    subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-frames:v", "1", "-f", "null", "-"], check=True)
+    assert reopened.locator("#alert").inner_text() == ""
+    reopened.close()
+
+
 def test_remote_panic_stops_real_capture_blacks_program_and_silences_audio(studio, production_server):
     page, _ = studio
     wait_for_actors(page)
