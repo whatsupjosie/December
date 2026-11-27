@@ -1,6 +1,6 @@
 # December source sweep
 
-Baseline assembly 06c69eb, parts 94ef55b, main 38787ec. Current verified installation b2ef0a1dfb71f0b23d01b9021aa78049ad22bbbb. No repository has reached full accounting yet.
+Baseline assembly 06c69eb, parts 94ef55b, main 38787ec. Current verified installation b70040c25e87ceb0a8600c926c68fda71b7298e7. No repository has reached full accounting yet.
 
 Sir Purfluous recovery archive follow-up (PARTS.md item 10): the `sir_purfluous_bot(1).zip` member `sir_purfluous_bot/director.py` supplied the slow, underplay and stress transformations. December's existing `modules/sir_purfluous_runtime.py` applies these to explicit quoted-line demonstrations after existing intents. The offline BotManager path returned the actor's line with the rehearsal beat. All 17 focused responder checks passed. The full original director remains in the parts archive. Other archive behaviors and the repository-wide archive audit remain open.
 
@@ -98,9 +98,29 @@ On 11-12-merge, c703bf4 regenerated the heart PNG through December's CLI (1,492 
 - `bca9d59`, `c82069b` — checked the sticky-note room and spot chooser, Blackbox disconnect/integrity and HTTP polling, slow recorder and offline PubWorld sets. Focused checks passed, including all three disconnect/real HTTP cases on localhost after installing the missing HTTP client dependency.
 - `3641f31` closes this internal merge range (empty remerge diff). `ad96bd1` owner correction matches. The `0bf0159` handoff and its additive `f3b8863` revision are retained in the final text. All four recovered documents from `5c039e5` match December. No new parts copy was needed for this range.
 
+### Beyond-October · 11-12-merge completion
+
+The second-parent range of `fcab09c` contains 52 commits from `5f4242f` through `1cfb2d2`. All 531 touched paths exist on December. At the final donor snapshot 500 match December's pre-fix assembly byte for byte, including the handoffs and evidence. The remaining files overlap newer runtime, UI and tests. The merge has no additional conflict resolution.
+
+| Donor work | December destination and exercised behavior |
+|---|---|
+| Milestone and recovered recording, `5f4242f` through `5d12f2c` | `main.py` mounts camera pool, original-take ingest and studio media. Production mounts participant audio. `static/production25d.html` loads capture, audio and clacker modules. Chromium exercised short stop, PANIC, reuse of actual rendered pose pixels, isolated 15-second reference audio/video and recovery after a stopped audio clock. Node checked chunk backpressure and archival. |
+| Profiles and independent guests, `b2ecb20` through `df7c400` | Foresight registers the profile and guest pages. Verified two independent hosts, persistent waiting-room decisions and actual admitted guests mixing, recording, reconnecting and exporting. Chromium reproduced a newer mobile integration defect: the slate launcher intercepted Save. Assembly `b70040c25e87ceb0a8600c926c68fda71b7298e7` reserves space above visible slate controls and scrolls fields clear of the action bar. All 10 profile and onboarding checks passed, including private drafts, selective sharing, Save and Skip and three viewport sizes. |
+| Groups, notes, contacts and integrity, `3e7e460` through `91d6421` | Foresight launches `human_contacts.html` and `production_groups.html`. 29 destination tests passed on group and note delivery, cross-worker authority, attachment staging and archive integrity. Contact switch/retry and editorial source-bound Node cases also passed. |
+| Editor, `e18e924` through `16c6538` | Control loads the editorial interchange and sync station. Both real-browser finishing transfers passed, including reopening on a fresh host and relinking preview and export. Historical endurance findings remain in the donor handoff. |
+| VTR, graphics, local monitor and validation, `bc38460` through `e86d20b` | `/control` uses the Jinja base and station scripts. Reproduced a duplicate WSHub declaration on actual page entry; the prior acceptance test discarded it. Assembly `e6614fd2f1282f0187301349529314ef1ac50cc4` loads the shared dependencies once before the station scripts. Six tests passed with the page-error filter removed, including actual uploaded WebM decoding, stop/hide, confirmed graphics, local monitor, vision mixer, camera motion and concurrent uploads. Cue text assertions follow current host acknowledgements, with playback independently checked. |
+| Live studio/Blackbox, `1cfb2d2`, and final camera saves `24a290b`, `a117615`, `ddcf977`, `d70952e` | The host starts Blackbox chat replay and stops it on shutdown. 91 combined destination checks passed for Blackbox restart, background events, replay, retention, dispatch, infrastructure, password choice, disk-backed camera settings and Primp host integration. The final integration handoff matches December. |
+| Primp merge `922d74d` | Seven donor commits `1c275ff` through `946016e`. All 34 touched paths are present, 31 exact. Foresight and Avatar Foundry open `/static/primp.html`. The newer app and browser test retain paint, undo, comparison, save, reopen, export and recovery. The live Chromium workflow and all 34 Node checks passed. Earlier live-makeup and set-building outlines remain in PARTS.md. |
+
+The branch `11-12-merge` at `d70952e52c81f89178f4ab557206fcde109bf970` is accounted for together with the preceding entries. No new parts copy.
+
+### Beyond-October · 2i-beta-polish and backup alias
+
+Both refs resolve to `df737caaeff206e4128932532663776af74ec0e8`. The five distinct commits cover desk layout/zoom, native text undo, manuscript locks and replacement, and two handoff updates. Earlier assembly fixes `ab559b4` and `5671372` already installed the reconciled behavior. Foresight's file provider opens `/writers-room`, served by main.py from `2i/writers-room-v22.html`. The 36 current offline polish checks passed, as did both desktop and narrow-tray edit/save/export/reopen checks. The old layout test evolved into the polish suite. The final donor handoff is byte-identical in parts at `beyond-october-inventory/recovered/2I_BETA_POLISH_2026-11-17.md`. Both refs are accounted for.
+
 ## Resume point
 
-Beyond-October, `11-12-merge` at `d70952e52c81f89178f4ab557206fcde109bf970`. Next candidate: merge `fcab09cb4438c23c6d33bb9c7b797a7ab902256c`, beginning with second-parent commit `5f4242fa696b19b0376654d01daabb2cee458666` (owner-scoped recording and people milestone handoff). Verify its claims against the destination and continue through the second-parent range. The branch has 107 commits not inherited by the completed main-debug branch, so it remains open. The branch inventory below pins sources only. Rows without a disposition above still require behavioral reconciliation.
+Beyond-October, `audit/standard-first-2026-11-19` at `6cccfd7a5b2b74f3c29829ed723c0e85128ee322`. Next candidate: `082b622b5d3556a82f5c5593e94dc156d5f39b22`, Alex correction handling in `modules/alex_core.py` and `tests/test_alex_keyword_matching.py`. Check how a negated feeling and a contrasting affirmative clause reach stored memory through the current host. Continue through this branch's distinct candidates. The branch inventory follows.
 - `11-12-merge` — `d70952e52c81f89178f4ab557206fcde109bf970`
 - `2i-beta-polish` — `df737caaeff206e4128932532663776af74ec0e8`
 - `audit/standard-first-2026-11-19` — `6cccfd7a5b2b74f3c29829ed723c0e85128ee322`
