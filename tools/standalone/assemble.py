@@ -62,6 +62,36 @@ def blob_at(branch: str, path: str) -> str | None:
         return None
 
 
+def blobs_under(branch: str, prefix: str) -> dict[str, str]:
+    """Every file at or under prefix on branch, as {path: blob}."""
+    try:
+        out = git("ls-tree", "-r", remote_ref(branch), "--", prefix)
+    except subprocess.CalledProcessError:
+        return {}
+    found = {}
+    for line in out.splitlines():
+        meta, _, path = line.partition("\t")
+        kind, blob = meta.split()[1:3]
+        if kind == "blob" and (path == prefix or path.startswith(prefix.rstrip("/") + "/")):
+            found[path] = blob
+    return found
+
+
+def pin_includes(includes: list[str], pins: dict[str, dict], own: set[str], unresolved: set[str]) -> None:
+    """Pin files and folders that code reaches by a path, not an import (a mounted
+    asset folder, a test model). Each comes whole from the first branch that has it."""
+    for prefix in includes:
+        for br in (USE.get(x, x) for x in SOURCE_BRANCHES):
+            found = {p: b for p, b in blobs_under(br, prefix).items() if p not in own}
+            if found:
+                for path, blob in found.items():
+                    pins.setdefault(path, {"path": path, "branch": br, "blob": blob})
+                break
+        else:
+            if not any(o == prefix or o.startswith(prefix.rstrip("/") + "/") for o in own):
+                unresolved.add(prefix)
+
+
 def own_files() -> list[str]:
     return [p for p in git("ls-files").splitlines() if p]
 
@@ -128,10 +158,11 @@ def is_local(name: str) -> bool:
     return top in LOCAL_PACKAGES or top in HOSTS
 
 
-def discover(entries: list[str]) -> dict:
+def discover(entries: list[str], includes: list[str] | None = None) -> dict:
     own = set(own_files())
     pins: dict[str, dict] = {}
     unresolved: set[str] = set()
+    pin_includes(includes or [], pins, own, unresolved)
     seen: set[str] = set()
     queue = list(entries)
 
@@ -249,6 +280,8 @@ def main() -> int:
     sub.add_parser("check")
     d = sub.add_parser("discover"); d.add_argument("entries", nargs="+")
     d.add_argument("--note", default="")
+    d.add_argument("--include", action="append", default=[], metavar="PATH",
+                   help="also pin this file or folder (kept for later runs), e.g. 2i/2i-assets")
     d.add_argument("--use", action="append", default=[], metavar="BRANCH=OTHER",
                    help="read OTHER in place of BRANCH, e.g. alex=claude/eq-prep-2026-11-27")
     args = ap.parse_args()
@@ -261,12 +294,14 @@ def main() -> int:
         if k not in SOURCE_BRANCHES or not v:
             ap.error(f"--use wants BRANCH=OTHER with BRANCH one of {SOURCE_BRANCHES}")
         USE[k] = v
-    result = discover(args.entries)
     old = json.loads(MANIFEST.read_text(encoding="utf-8")) if MANIFEST.exists() else {}
+    includes = sorted(set(old.get("includes", [])) | set(args.include))
+    result = discover(args.entries, includes)
     manifest = {
         "about": "Shared files this program imports, pinned by blob. Built into a run folder by tools/standalone/assemble.py; never copied into this branch.",
         "program": old.get("program") or git("rev-parse", "--abbrev-ref", "HEAD"),
         "entries": args.entries,
+        "includes": includes,
         "source_order": [USE.get(x, x) for x in SOURCE_BRANCHES],
         "pins": result["pins"],
         "unresolved_imports": result["unresolved"],
