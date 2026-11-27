@@ -1,6 +1,6 @@
 # December source sweep
 
-Baseline assembly 06c69eb, parts 94ef55b, main 38787ec. Current verified installation 205da084542b1f3a0364f4656491a7d3d357bcfb. No repository has reached full accounting yet.
+Baseline assembly 06c69eb, parts 94ef55b, main 38787ec. Current verified installation ab559b423729041381866c1581a539e6a76e61a5. No repository has reached full accounting yet.
 
 ## Repository queue
 
@@ -36,9 +36,17 @@ Older repository references come from December's AGENTS.md and docs/missions/pub
 
 58 destination tests passed at 06c69eb across backup isolation, Blackbox Light, explicit calibration approval, cartridge memory, existing wiring, calibration, calibration UI, menu browser and work notes. Chromium used the real run_reach.py server. The four cartridge regressions were rerun after the creator check. Provider calls used the deterministic test provider.
 
+## Additional verified pieces
+
+- Speech playback (6707e7c). December’s real studio page passed test_studio_pete_speech.py. Chromium cast Pete, detected a changed jaw image and audible Program output, then verified both explicit Stop and normal completion. The Primp host integration test also passed with authenticated startup, both GLB models and a second lifespan.
+- Clacker (gpt/clacker-timecode-verification). The duplicate/unmatched decoded-mark test and the destination recording browser checks passed. No donor recording or clock code replaced the assembly implementation.
+- 2i desk (df737ca, original change 26fca15). December’s desktop and mobile CSS forced a fixed chat-entry font. Installed the donor scaling rule and reconciled the phone override at ab559b4. Both formerly expected-failing Chromium cases passed at 1366 × 768 and 390 × 844.
+- Studio long-take verification (884c1cd). Exact harness preserved in parts at tools/acceptance/studio_long_take.py. See PARTS.md item 15 for its dependency and production-proof assumptions.
+- Foresight front door, governance admission persistence, Bubble route checks, clacker recording and 2i polish together ran 47 passing tests with six expected failures, all in 2i polish. The two chat zoom cases subsequently passed. These checks do not close the wider Foresight, Bubble Stack or admission inventories.
+
 ## Resume point
 
-Beyond-October, gpt/speech-playback-lifecycle, Pete's synthesized line through the active studio mixer and jaw rig. Compare 6707e7c with December and run the focused browser exercise. The branch inventory below pins sources only. Rows without a disposition above still require behavioral reconciliation.
+Beyond-October, 2i-beta-polish, notebook layout and protected-line indications in the current offline Writer’s Room. Chat entry zoom restored. Compare the remaining donor visual contracts with December’s measured paragraph numbering and notebook presentation. The branch inventory below pins sources only. Rows without a disposition above still require behavioral reconciliation.
 - `11-12-merge` — `d70952e52c81f89178f4ab557206fcde109bf970`
 - `2i-beta-polish` — `df737caaeff206e4128932532663776af74ec0e8`
 - `audit/standard-first-2026-11-19` — `6cccfd7a5b2b74f3c29829ed723c0e85128ee322`
