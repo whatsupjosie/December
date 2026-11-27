@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import struct
 
 import pytest
 
@@ -23,6 +24,18 @@ def test_bake_without_cream_is_unchanged(studio):
     obj = studio.get_object("filler_cream_fixture")
     path = studio.bake_object(obj.object_id)
     assert path.read_bytes() == VoxelBaker().bake(obj)
+
+
+def test_baked_glb_json_is_valid_for_strict_readers(studio):
+    obj = studio.get_object("filler_cream_fixture")
+    for length in range(1, 5):
+        obj.name = "a" * length
+        studio.save_object(obj)
+        glb = studio.bake_object(obj.object_id).read_bytes()
+        size, chunk_type = struct.unpack_from("<II", glb, 12)
+        assert chunk_type == 0x4E4F534A
+        assert size % 4 == 0
+        assert json.loads(glb[20:20 + size])["nodes"][0]["name"] == obj.name
 
 
 def test_apply_bake_and_reload_after_restart(studio, tmp_path):

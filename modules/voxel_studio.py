@@ -284,9 +284,9 @@ def pack_glb(verts: np.ndarray, normals: np.ndarray,
              faces: np.ndarray, name: str) -> bytes:
     """Pack geometry into a minimal valid GLB (glTF 2.0 binary)."""
 
-    def pad4(b: bytes) -> bytes:
+    def pad4(b: bytes, padding: bytes = b"\x00") -> bytes:
         r = len(b) % 4
-        return b + b"\x00" * ((4 - r) % 4)
+        return b + padding * ((4 - r) % 4)
 
     pos_b  = pad4(verts.tobytes())
     nrm_b  = pad4(normals.tobytes())
@@ -328,7 +328,7 @@ def pack_glb(verts: np.ndarray, normals: np.ndarray,
                        "doubleSided": False}],
     }
 
-    j_bytes  = pad4(json.dumps(gltf, separators=(",", ":")).encode())
+    j_bytes  = pad4(json.dumps(gltf, separators=(",", ":")).encode(), b" ")
     j_chunk  = struct.pack("<II", len(j_bytes), 0x4E4F534A) + j_bytes
     bin_chunk= struct.pack("<II", len(bin_data), 0x004E4942) + bin_data
     total    = 12 + len(j_chunk) + len(bin_chunk)
