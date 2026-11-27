@@ -151,16 +151,12 @@ def test_save_stays_on_screen_after_scrolling_down_a_phone_or_tablet(served, wid
     page.context.close()
 
 
-@pytest.mark.xfail(strict=True, reason="Measured on the default standard-page look, where this part of the notebook look is not on "
-                   "screen. Not yet re-aimed at the notebook look; unverified whether the notebook look itself is right.")
-def test_the_reach_desk_layer_is_applied_after_the_page_styles(served):
+def test_notebook_wide_desk_keeps_three_usable_columns(served):
     page = served(1366, 768)
-    # The desk layer's top bar (76 px) and three-column desk only show if its
-    # stylesheet comes after the page's own <style>.
-    rows = page.evaluate("getComputedStyle(document.querySelector('.app-shell')).gridTemplateRows")
-    assert rows.split()[0] == "76px", rows
+    page.evaluate("twoiSetPresentation('notebook')")
     columns = page.evaluate("getComputedStyle(document.querySelector('.main-area')).gridTemplateColumns").split()
     assert len(columns) == 3, columns
+    assert all(float(column.removesuffix("px")) >= 180 for column in columns), columns
     page.context.close()
 
 
@@ -194,12 +190,12 @@ def test_chat_text_zoom_reaches_the_box_you_type_in(served, width, height):
     page.context.close()
 
 
-@pytest.mark.xfail(strict=True, reason="Measured on the default standard-page look, where this part of the notebook look is not on "
-                   "screen. Not yet re-aimed at the notebook look; unverified whether the notebook look itself is right.")
 def test_the_spiral_is_redrawn_when_the_page_changes_size(served):
     page = served(1366, 768)
+    page.evaluate("twoiSetPresentation('notebook')")
+    page.wait_for_selector("#spineCanvas", state="visible")
     fit = """() => {
-        const c = document.getElementById('spineCanvas'), r = c.parentElement.getBoundingClientRect();
+        const c = document.getElementById('spineCanvas'), r = c.getBoundingClientRect();
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
         return [c.width, Math.round(r.width * dpr), c.height, Math.round(r.height * dpr)];
     }"""
@@ -287,13 +283,14 @@ def test_shortcuts_work_with_caps_lock_on(served):
     page.context.close()
 
 
-@pytest.mark.xfail(strict=True, reason="Measured on the default standard-page look, where this part of the notebook look is not on "
-                   "screen. Not yet re-aimed at the notebook look; unverified whether the notebook look itself is right.")
 def test_the_lantern_light_canvas_follows_the_page_size(served):
     page = served(1366, 768)
+    page.evaluate("twoiSetPresentation('notebook')")
+    page.wait_for_selector("#spineCanvas", state="visible")
     page.click("#sidebarToggle")
     page.wait_for_timeout(200)
     canvas, frame = page.evaluate("[document.getElementById('lanternCanvas').width, document.getElementById('notebookFrame').clientWidth]")
+    assert frame >= 300, "hiding the sidebar must leave the notebook usable"
     assert canvas == frame
     page.context.close()
 
@@ -361,14 +358,16 @@ def test_a_lock_moves_with_its_line_when_lines_are_added_or_removed_above(served
     page.context.close()
 
 
-@pytest.mark.xfail(strict=True, reason="The bullet that marked a locked line in the line numbers came from "
-                   "origin/2i-beta-polish and was lost when the numbers were rewritten (measured paragraph "
-                   "numbers). Not ported: Josie to say whether she wants it back.")
 def test_a_locked_line_is_marked_in_the_line_numbers(served):
     page = served(1366, 768)
     _write(page, ["A", "B locked", "C"])
     _lock_line(page, 1)
-    assert '<span class="ln-locked"' in page.inner_html("#lineNumbers")
+    marks = page.locator("#lineNumbers .line-numbers-strip > div")
+    assert marks.nth(1).evaluate("el => getComputedStyle(el, '::before').content.includes('•')")
+    assert marks.nth(0).get_attribute("class") != "ln-locked"
+    _caret_to(page, 1)
+    page.evaluate("lockedLines.delete(1); render()")
+    assert marks.nth(1).get_attribute("class") != "ln-locked"
     page.context.close()
 
 

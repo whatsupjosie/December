@@ -466,6 +466,8 @@ html, body {
   border-right:1px solid var(--margin-red);
   counter-reset:paragraph;
 }
+.line-numbers-strip > .ln-locked { color:var(--gold-deep); font-weight:600; }
+.line-numbers-strip > .ln-locked::before { content:"• " counter(paragraph); }
 .line-numbers-strip > div { counter-increment:paragraph; overflow:hidden; }
 /* The number is set smaller than the writing, so it is lowered to stand on the same baseline as its row. */
 .line-numbers-strip > div::before { content:counter(paragraph); position:relative; top:calc(var(--solo-row, 24px) * .21 - 4px); }
@@ -981,6 +983,12 @@ body[data-twoi-desk="standard"] .solo-textarea { border-radius:0 0 3px 0; }
    are put away. The left tab brings the tools beside the page and puts them away again. The right tab opens the
    AI side, which starts Collab; in Collab the panels are where they always were. */
 @media (min-width:851px) {
+  .main-area:has(> #chatSection) {
+    grid-template-columns:minmax(180px,18%) minmax(0,1fr) minmax(200px,22%);
+  }
+  .main-area.sidebar-hidden:has(> #chatSection) {
+    grid-template-columns:minmax(0,1fr) minmax(200px,22%);
+  }
   body[data-twoi-desk="standard"]:has(#pageSheets.solo-mode) #mainArea { position:relative; grid-template-columns:minmax(0,1fr); }
   body[data-twoi-desk="standard"]:has(#pageSheets.solo-mode) #mainArea > #chatSection,
   body[data-twoi-desk="standard"]:not([data-twoi-panel="tools"]):has(#pageSheets.solo-mode) #mainArea > #sidebar { display:none; }
@@ -2435,6 +2443,8 @@ function render() {
     draftArea.value = buffer.join('\n');
   } else {
     updateLineNumbers();
+    for (const mark of lineStrip.querySelectorAll('.ln-locked')) mark.classList.remove('ln-locked');
+    for (const index of lockedLines) lineStrip.children[index]?.classList.add('ln-locked');
   }
 
   renderRefs();
@@ -2600,6 +2610,7 @@ function updateLineNumbers(measureAll = false) {
   const marks = document.createDocumentFragment();
   for (const row of lineMeasure.children) {
     const mark = document.createElement('div');
+    if (lockedLines.has(head + marks.childElementCount)) mark.className = 'ln-locked';
     mark.style.height = row.getBoundingClientRect().height + 'px';
     marks.append(mark);
   }
@@ -2933,7 +2944,9 @@ document.addEventListener('keydown',e=>{
     mx = e.clientX - r.left; my = e.clientY - r.top;
     if (!raf) raf = requestAnimationFrame(() => { draw(); raf = 0; });
   });
-  window.addEventListener('resize', resize); resize();
+  window.addEventListener('resize', resize);
+  if (typeof ResizeObserver === 'function') new ResizeObserver(resize).observe(frame);
+  resize();
 })();
 
 // ── CANVAS: SPIRAL SPINE ───────────────────────────────────────────
