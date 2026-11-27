@@ -10,7 +10,7 @@ Prep branch `claude/pubpartner-prep-2026-11-27`, from the `pubpartner` branch at
    - From main-assembly's core: the room a turn is spoken in comes from the turn's own FCP1 packet, and a saved session is read back only for the same person and session.
    - Kept from this branch: the identity checkpoint and receipt chain, the EQ observation notes on calibration moments and the EQ observation routes, the connector host, the ChatGPT link, local setup and the other branch-only files. 6247ed2 (backend hardening) was already on this branch.
    - The calibration script keeps this branch's API address with a trailing slash (pre-dec 74f2f64), which main-assembly's copy had lost.
-2. `tools/standalone/assemble.py` and `STANDALONE_DEPS.json`: 93 shared files pinned by branch, path and blob (68 from main-assembly, 16 from the EQ prep branch, 4 from 2i, 1 from blackbox). The pins now include the pages and scripts PubPartner loads from `static/`, such as `static/reach_auth.js`, not only Python imports.
+2. `tools/standalone/assemble.py` and `STANDALONE_DEPS.json`: 181 shared files pinned by branch, path and blob (91 from 2i, 73 from main-assembly, 16 from the EQ prep branch, 1 from blackbox). The pins include the pages and scripts PubPartner loads from `static/`, such as `static/reach_auth.js`, and two things it reaches by path: the `2i/2i-assets` folder the host mounts, and the test model `static/world/test_avatars/Xbot.glb` (listed under "includes").
 
 One choice to confirm: the Memory menu lists "Project notes" before "Calibrate PubPartner…", as main-assembly has it. This branch had them the other way round. Nothing else in the menu differs.
 
@@ -23,28 +23,26 @@ The EQ files are pinned from `claude/eq-prep-2026-11-27` (EQ prep, not yet folde
     python tools/standalone/assemble.py build --out ..\pubpartner-run
     cd ..\pubpartner-run
     pip install -r <main-assembly requirements.txt and requirements-dev.txt>
-    python -m pytest -q tests
+    python -m pytest -q -o asyncio_mode=auto tests
     python pubpartner_app.py
 
 The federation tests import `pubpartner_federation` from inside `pubpartner\`, so run them with that folder on the path: `$env:PYTHONPATH = "pubpartner"; python -m pytest -q tests\pubpartner_federation`.
 
 ## Tested on Nov 27, 2026 (Linux cloud computer, Python 3.13)
 
-Without scikit-learn and pytest-asyncio, which wait on Josie's yes. The coroutine tests ran through a small stand-in that is not part of this branch.
+With scikit-learn 1.9.1 and pytest-asyncio 1.5.0 installed on Josie's yes, and mcp 1.30.0 for the connector. Run with `-o asyncio_mode=auto`, as main-assembly's pytest.ini sets it.
 
-- 145 passed, 1 skipped, in the built run folder.
+- 246 passed, 1 skipped, in the built run folder.
 - `tests/pubpartner_federation`: 14 passed with `pubpartner` on the path.
-- With the EQ tests that need the PubPartner host added to the run folder: `tests/test_alex_personality_continuity.py` passes here.
-- The connector: mcp 1.30 is installed in the test environment, but only one connector test runs without scikit-learn (a broken tunnel record keeps local controls), and it passes. The connector's own tests need scikit-learn.
+- The EQ tests that need the PubPartner host (`tests/test_eq_observation.py`, `tests/test_alex_personality_continuity.py`, from the EQ prep branch): 62 passed here.
+- `pubpartner_app.py` started on its own (uvicorn, empty data folder). `/pubpartner`, its script, style sheet, calibration script and `reach_auth.js`, `/2i/chat`, `/2i/chat/archive` and the avatar import page all answered 200, and every script and style sheet those pages name answered 200, including the three.js files the avatar import loads. With no account set up yet, the host reports itself in relaxed development mode, as its first-run setup is designed.
 
 ## Fails here, and why
 
-- scikit-learn is missing: `pubpartner/memory_store.py` imports it, so the `pubpartner` package, the cartridge studio and `pubpartner_app.py` itself cannot start. That stops 10 test files from loading and 5 more tests, including the project notes routes and the EQ observation routes.
 - The hosted provider choice for xAI (2 tests): main-assembly's `modules/llm_framework.py` has no xAI adapter. The newer copy that has it waits in parts-assembly item 16 (pre-dec studio line). With that copy, and its `provider_capabilities.py` and `ollama_provider.py`, put into a scratch run folder, all 8 hosted provider tests pass. So integration needs item 16's provider files too.
-- Host tests: `test_existing_canonical_api_registered_in_both_hosts` reads `main.py`, and the browser tests in `tests/test_pubpartner_connections.py` and `tests/test_pubpartner_menus_browser.py` start `run_reach.py` and Chromium. Both hosts are PubCast's, so these belong to integration.
+- Host tests (10): `test_existing_canonical_api_registered_in_both_hosts` reads `main.py`; the browser tests in `tests/test_pubpartner_connections.py`, `tests/test_pubpartner_menus_browser.py` and the cartridge restart test in `tests/test_pubpartner_cartridges.py` start `run_reach.py` and Chromium. Both hosts are PubCast's, so these belong to integration.
 
 ## Not tested
 
-- Any real browser. This machine cannot download Chromium, so the page, its menus and the calibration screen were not opened or clicked.
-- `pubpartner_app.py` actually serving pages (it cannot start without scikit-learn).
+- Any real browser. This machine cannot download Chromium, so the page, its menus and the calibration screen were served but not opened or clicked.
 - Windows and PowerShell 5 itself, and a live model reply.

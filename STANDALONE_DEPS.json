@@ -116,6 +116,10 @@
     "tests/test_pubpartner_work_notes.py",
     "tools/standalone/assemble.py"
   ],
+  "includes": [
+    "2i/2i-assets",
+    "static/world/test_avatars/Xbot.glb"
+  ],
   "source_order": [
     "pubpartner",
     "claude/eq-prep-2026-11-27",
@@ -124,6 +128,441 @@
     "main-assembly"
   ],
   "pins": [
+    {
+      "path": "2i/2i-assets/artwork.css",
+      "branch": "2i",
+      "blob": "4676cb25bbcbc2c633dfa7790af5168f3718d7db"
+    },
+    {
+      "path": "2i/2i-assets/artwork.js",
+      "branch": "2i",
+      "blob": "68ed45ac519189198ee110e6e44cf399f3c145aa"
+    },
+    {
+      "path": "2i/2i-assets/button-bindings.js",
+      "branch": "2i",
+      "blob": "7467f12625637271223a199a2219cdc6a6680da5"
+    },
+    {
+      "path": "2i/2i-assets/desk-controls.js",
+      "branch": "2i",
+      "blob": "88a75310be91f2d4c62f7b80990c4cbd9a0d67a1"
+    },
+    {
+      "path": "2i/2i-assets/docx-workspace.js",
+      "branch": "2i",
+      "blob": "960961e56c0d2634ab38f59c6286b3f458679808"
+    },
+    {
+      "path": "2i/2i-assets/file-workspace.js",
+      "branch": "2i",
+      "blob": "de69a6058b1f82cb0a2382cde57df1d28bbbde26"
+    },
+    {
+      "path": "2i/2i-assets/format-core.js",
+      "branch": "2i",
+      "blob": "227e882828d3047405cd27bc8ab7d3d8bf652470"
+    },
+    {
+      "path": "2i/2i-assets/format-menu.css",
+      "branch": "2i",
+      "blob": "94bb8732bcb82236efefc1e07cefd52ef84b86f5"
+    },
+    {
+      "path": "2i/2i-assets/format-menu.js",
+      "branch": "2i",
+      "blob": "c524305bb5a007b3be2c85bbd61816689e5bfe51"
+    },
+    {
+      "path": "2i/2i-assets/hotspots.json",
+      "branch": "2i",
+      "blob": "d9589413d3ec27afa22a220e727e1bed944bdd28"
+    },
+    {
+      "path": "2i/2i-assets/language-panel.js",
+      "branch": "2i",
+      "blob": "5587526d4e1b4b6419d7e5ff5782f12089f547fc"
+    },
+    {
+      "path": "2i/2i-assets/language.js",
+      "branch": "2i",
+      "blob": "76166b237fa4a005c7af1006949d26254a0a8814"
+    },
+    {
+      "path": "2i/2i-assets/language/WORDNET_LICENSE",
+      "branch": "2i",
+      "blob": "e527857908727226c459cb9bb5417e035fd00846"
+    },
+    {
+      "path": "2i/2i-assets/language/dict-a.js",
+      "branch": "2i",
+      "blob": "54b524b53bcad6451beec0454b2ce16c9d8b7ef6"
+    },
+    {
+      "path": "2i/2i-assets/language/dict-b.js",
+      "branch": "2i",
+      "blob": "3555825051902c87275a4f6057c9236b8dd78654"
+    },
+    {
+      "path": "2i/2i-assets/language/dict-c.js",
+      "branch": "2i",
+      "blob": "ee88ffb81b249a493f6ed4532932634745d14b06"
+    },
+    {
+      "path": "2i/2i-assets/language/dict-d.js",
+      "branch": "2i",
+      "blob": "ff8ec3ce6d2190684ebb663e0fd177c63b94f794"
+    },
+    {
+      "path": "2i/2i-assets/language/dict-e.js",
+      "branch": "2i",
+      "blob": "c478b998f5096283336730d11b7f329f52baa277"
+    },
+    {
+      "path": "2i/2i-assets/language/dict-f.js",
+      "branch": "2i",
+      "blob": "27009560dc790db6b223004516c77151b7f9affa"
+    },
+    {
+      "path": "2i/2i-assets/language/dict-g.js",
+      "branch": "2i",
+      "blob": "3b803f05bbbb89e890952763a176e2413852ae6a"
+    },
+    {
+      "path": "2i/2i-assets/language/dict-h.js",
+      "branch": "2i",
+      "blob": "a045aa09c957f79000294e48be34e8420774c7f0"
+    },
+    {
+      "path": "2i/2i-assets/language/dict-i.js",
+      "branch": "2i",
+      "blob": "6c82bdade7ae6a2d727685e8036e273a03d7b71c"
+    },
+    {
+      "path": "2i/2i-assets/language/dict-j.js",
+      "branch": "2i",
+      "blob": "5dedfb918101710d12ec74b41429330a5472b037"
+    },
+    {
+      "path": "2i/2i-assets/language/dict-k.js",
+      "branch": "2i",
+      "blob": "da4e0299e73575563b4f1f5902340cfc78be0750"
+    },
+    {
+      "path": "2i/2i-assets/language/dict-l.js",
+      "branch": "2i",
+      "blob": "f2e4c6860e9328db281ee96bf54ba6c45f85890a"
+    },
+    {
+      "path": "2i/2i-assets/language/dict-m.js",
+      "branch": "2i",
+      "blob": "0e0300d941864d15b85159decd0b25ce4b65ffd1"
+    },
+    {
+      "path": "2i/2i-assets/language/dict-n.js",
+      "branch": "2i",
+      "blob": "0495d7e7ae832b5e961d1e3a3108495a673fdfc9"
+    },
+    {
+      "path": "2i/2i-assets/language/dict-o.js",
+      "branch": "2i",
+      "blob": "c27dac41059b5a15e43db1021b06f7bf71092817"
+    },
+    {
+      "path": "2i/2i-assets/language/dict-other.js",
+      "branch": "2i",
+      "blob": "317d06408846e951248cbaa0d86825b268cb8e38"
+    },
+    {
+      "path": "2i/2i-assets/language/dict-p.js",
+      "branch": "2i",
+      "blob": "e9856cd3010ba4be2b9a5d91fc886d8d06c9702f"
+    },
+    {
+      "path": "2i/2i-assets/language/dict-q.js",
+      "branch": "2i",
+      "blob": "103f93d8d3bd8a639f11d291628e04e6c369a6a7"
+    },
+    {
+      "path": "2i/2i-assets/language/dict-r.js",
+      "branch": "2i",
+      "blob": "84b85eca6891fdd44ffe41fba52bad3006e088ea"
+    },
+    {
+      "path": "2i/2i-assets/language/dict-s.js",
+      "branch": "2i",
+      "blob": "22fa6094d5bf870705f2c5604a156d15786fc08f"
+    },
+    {
+      "path": "2i/2i-assets/language/dict-t.js",
+      "branch": "2i",
+      "blob": "2c5b14e280ef655a67ec6bc16c2b4abbd6a33838"
+    },
+    {
+      "path": "2i/2i-assets/language/dict-u.js",
+      "branch": "2i",
+      "blob": "6bf1084a983a74b9164236d79e128e18af7ec765"
+    },
+    {
+      "path": "2i/2i-assets/language/dict-v.js",
+      "branch": "2i",
+      "blob": "bf5cbc2950d326614cfbce2c40c5631ad15f2b47"
+    },
+    {
+      "path": "2i/2i-assets/language/dict-w.js",
+      "branch": "2i",
+      "blob": "bf4c09533ed4cba1f9b283dc969f7488d9fc25a7"
+    },
+    {
+      "path": "2i/2i-assets/language/dict-x.js",
+      "branch": "2i",
+      "blob": "55e10e6f22556fc4c2b281493379339df6af7f01"
+    },
+    {
+      "path": "2i/2i-assets/language/dict-y.js",
+      "branch": "2i",
+      "blob": "addc88e7cb69e8d7238e912977fc8bb6be3cc6ab"
+    },
+    {
+      "path": "2i/2i-assets/language/dict-z.js",
+      "branch": "2i",
+      "blob": "cf06a55e8b4788cc95f236c0529d8a7e84ee72b5"
+    },
+    {
+      "path": "2i/2i-assets/language/index.json",
+      "branch": "2i",
+      "blob": "869060fad7561200d5b8723c2788e83b2370df5b"
+    },
+    {
+      "path": "2i/2i-assets/narrative-core.js",
+      "branch": "2i",
+      "blob": "af3fedd9fe4e4f42d47f7e4b5c26c1df13d959aa"
+    },
+    {
+      "path": "2i/2i-assets/narrative-room.js",
+      "branch": "2i",
+      "blob": "81476326f6b4b52476bb7a6a2fcdd0af0f87e7cb"
+    },
+    {
+      "path": "2i/2i-assets/phone.css",
+      "branch": "2i",
+      "blob": "5fca42edd4f9b3ef37eac216d3234232bd32837d"
+    },
+    {
+      "path": "2i/2i-assets/phone.js",
+      "branch": "2i",
+      "blob": "646269c452cf22d9fe3fd117498432775348a3af"
+    },
+    {
+      "path": "2i/2i-assets/reach.css",
+      "branch": "2i",
+      "blob": "b92ac5fc4d5c9aaa9c7933b0712a2beab6f34a62"
+    },
+    {
+      "path": "2i/2i-assets/reach.js",
+      "branch": "2i",
+      "blob": "0d8f95d1a51e4c392e311163b805e34d574d9f9c"
+    },
+    {
+      "path": "2i/2i-assets/reader.css",
+      "branch": "2i",
+      "blob": "aa0096813f141dc00c6400813087985daff30e14"
+    },
+    {
+      "path": "2i/2i-assets/reader.js",
+      "branch": "2i",
+      "blob": "250e3fa11fe331e8a8ca998d1a735bb4ae6dc203"
+    },
+    {
+      "path": "2i/2i-assets/rich-editor.js",
+      "branch": "2i",
+      "blob": "6c78360b2b54bfc52b5c1f5ad6e12676ba3d157d"
+    },
+    {
+      "path": "2i/2i-assets/rich-surface.css",
+      "branch": "2i",
+      "blob": "76b9b58ff71a24708a8e4af97750afd0fc9ca51e"
+    },
+    {
+      "path": "2i/2i-assets/rich-surface.js",
+      "branch": "2i",
+      "blob": "65b16075920ee9f8b885bd77b6ad736da29f4926"
+    },
+    {
+      "path": "2i/2i-assets/spell-ui.js",
+      "branch": "2i",
+      "blob": "21c6e1cbd02cb8e8925a47eda90dd1df095006ac"
+    },
+    {
+      "path": "2i/2i-assets/spell.js",
+      "branch": "2i",
+      "blob": "fa9dc372f0728305a5c6c267e5a82a050176b0b0"
+    },
+    {
+      "path": "2i/2i-assets/spell/LICENSES.txt",
+      "branch": "2i",
+      "blob": "5b2fa79652ee4526b28998fdc17cd6424dcf4700"
+    },
+    {
+      "path": "2i/2i-assets/spell/spell-data.js",
+      "branch": "2i",
+      "blob": "2052a4e97771dbecf4804a990b1fc04517b37907"
+    },
+    {
+      "path": "2i/2i-assets/spell/spell-engine.js",
+      "branch": "2i",
+      "blob": "da9125c910e6b5c682375b4081e81c37503f3901"
+    },
+    {
+      "path": "2i/2i-assets/studio-desk.css",
+      "branch": "2i",
+      "blob": "7b4867b9705f41d921caa66bd60d3e2632dffa28"
+    },
+    {
+      "path": "2i/2i-assets/studio-desk.js",
+      "branch": "2i",
+      "blob": "680c61451523ec8e0987b6ede006716a7f0603c6"
+    },
+    {
+      "path": "2i/2i-assets/typewriter-input.js",
+      "branch": "2i",
+      "blob": "421eb2d182b392b5f5769df409ea0a397d83241d"
+    },
+    {
+      "path": "2i/2i-assets/typewriter-key-bridge.js",
+      "branch": "2i",
+      "blob": "9bc131d276c1b936bfa0ed88705acc5c8e0a0ba4"
+    },
+    {
+      "path": "2i/2i-assets/vendor/docx/PROVENANCE.json",
+      "branch": "2i",
+      "blob": "7a0dc65637956cfca7931d561180dde829957749"
+    },
+    {
+      "path": "2i/2i-assets/vendor/docx/THIRD_PARTY_NOTICES.md",
+      "branch": "2i",
+      "blob": "b32507e19913bc3c32de785a18e956f0d021a2e4"
+    },
+    {
+      "path": "2i/2i-assets/vendor/docx/editor.css",
+      "branch": "2i",
+      "blob": "d8ec637d3fff6dc1eb6b56b5f92ea5d3b70acbd5"
+    },
+    {
+      "path": "2i/2i-assets/vendor/docx/engine.js",
+      "branch": "2i",
+      "blob": "15479257392410e04cd0d45045e0fa344effe397"
+    },
+    {
+      "path": "2i/2i-assets/vendor/docx/fonts/Carlito-Bold.ttf",
+      "branch": "2i",
+      "blob": "67543b5a1efe4b910317116b02e8e9e01659692e"
+    },
+    {
+      "path": "2i/2i-assets/vendor/docx/fonts/Carlito-BoldItalic.ttf",
+      "branch": "2i",
+      "blob": "e2c5d8803828d9a3373459d71cf18ec06753cef5"
+    },
+    {
+      "path": "2i/2i-assets/vendor/docx/fonts/Carlito-Italic.ttf",
+      "branch": "2i",
+      "blob": "8dc3c84edfc8f0b6c6acdbd112abfda827b484ac"
+    },
+    {
+      "path": "2i/2i-assets/vendor/docx/fonts/Carlito-Regular.ttf",
+      "branch": "2i",
+      "blob": "427b95989fee609ab683d800ad00e22a4b14ecad"
+    },
+    {
+      "path": "2i/2i-assets/vendor/docx/fonts/LiberationMono-Bold.ttf",
+      "branch": "2i",
+      "blob": "2e46737ac7ab3b2d31671d5a705bc3b1b47b38eb"
+    },
+    {
+      "path": "2i/2i-assets/vendor/docx/fonts/LiberationMono-BoldItalic.ttf",
+      "branch": "2i",
+      "blob": "d1f46d7cd8bf3e007c909686d32e3a18ee98e27a"
+    },
+    {
+      "path": "2i/2i-assets/vendor/docx/fonts/LiberationMono-Italic.ttf",
+      "branch": "2i",
+      "blob": "954c39436ff264fb7865b61c0d3c6d6c934bb1a7"
+    },
+    {
+      "path": "2i/2i-assets/vendor/docx/fonts/LiberationMono-Regular.ttf",
+      "branch": "2i",
+      "blob": "e774859cba4b973ea0742bab4bc18df5ef5442a7"
+    },
+    {
+      "path": "2i/2i-assets/vendor/docx/fonts/LiberationSerif-Bold.ttf",
+      "branch": "2i",
+      "blob": "3c7c55b575c6b6c6eae756b3e7f079209f4de084"
+    },
+    {
+      "path": "2i/2i-assets/vendor/docx/fonts/LiberationSerif-BoldItalic.ttf",
+      "branch": "2i",
+      "blob": "6b35d9f7c1d3d0b98f086797f99804f51ded7cf0"
+    },
+    {
+      "path": "2i/2i-assets/vendor/docx/fonts/LiberationSerif-Italic.ttf",
+      "branch": "2i",
+      "blob": "54d516481c5b44a8a2bfefe02acd5956aed9484c"
+    },
+    {
+      "path": "2i/2i-assets/vendor/docx/fonts/LiberationSerif-Regular.ttf",
+      "branch": "2i",
+      "blob": "5e5550c0afcf7b4a4c4227dbecf76284f5523064"
+    },
+    {
+      "path": "2i/2i-assets/vendor/docx/harfbuzz.wasm",
+      "branch": "2i",
+      "blob": "4711faa4fae5b2c9d6c540bc17746056efd73648"
+    },
+    {
+      "path": "2i/2i-assets/vendor/language/cmu-pronouncing-dictionary/license",
+      "branch": "2i",
+      "blob": "eaa333696f19126d802ba3657028f2e28878970c"
+    },
+    {
+      "path": "2i/2i-assets/vendor/language/cmu-pronouncing-dictionary/package.json",
+      "branch": "2i",
+      "blob": "a03b34113a5f6d1ed6a64a8739772ad9fbbfc8f7"
+    },
+    {
+      "path": "2i/2i-assets/vendor/language/cmu-pronouncing-dictionary/readme.md",
+      "branch": "2i",
+      "blob": "392b3aaa7acda9f8e1ff515436746c201e979099"
+    },
+    {
+      "path": "2i/2i-assets/vendor/language/wordnet-db/.travis.yml",
+      "branch": "2i",
+      "blob": "6998e32444725be8d995a29de258758ea92af638"
+    },
+    {
+      "path": "2i/2i-assets/vendor/language/wordnet-db/LICENSE",
+      "branch": "2i",
+      "blob": "a77f7a8f6725ee36794787dd868134903e37f459"
+    },
+    {
+      "path": "2i/2i-assets/vendor/language/wordnet-db/README.md",
+      "branch": "2i",
+      "blob": "06544bfed14cc4b382bf25b1e0b8f109514dbc32"
+    },
+    {
+      "path": "2i/2i-assets/vendor/language/wordnet-db/package.json",
+      "branch": "2i",
+      "blob": "943eedff36f1b48cefb1329289599fedbdb01840"
+    },
+    {
+      "path": "2i/2i-assets/version-identity.js",
+      "branch": "2i",
+      "blob": "0a5fe6051bacd6f161f123d8c64f3287d64825b7"
+    },
+    {
+      "path": "2i/2i-assets/writers-room-art.webp",
+      "branch": "2i",
+      "blob": "e452c87a46661480e97cebc94b9b24524308a2a4"
+    },
     {
       "path": "companion_support/__init__.py",
       "branch": "main-assembly",
@@ -573,6 +1012,11 @@
       "path": "static/vendor/three-0.160.0/examples/jsm/utils/TextureUtils.js",
       "branch": "main-assembly",
       "blob": "5954a246158fdc5af0adc321ae518e0e99de9bc5"
+    },
+    {
+      "path": "static/world/test_avatars/Xbot.glb",
+      "branch": "main-assembly",
+      "blob": "3805d73e7c9cecef16f69dd0b0f1ce649f69c653"
     },
     {
       "path": "static/world_chat.css",
