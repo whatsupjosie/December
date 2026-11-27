@@ -1,6 +1,6 @@
 # December source sweep
 
-Baseline assembly 06c69eb, parts 94ef55b, main 38787ec. Current verified installation ab559b423729041381866c1581a539e6a76e61a5. No repository has reached full accounting yet.
+Baseline assembly 06c69eb, parts 94ef55b, main 38787ec. Current verified installation 670661daede3d4be89fd3811bef758480c41c86c. No repository has reached full accounting yet.
 
 ## Repository queue
 
@@ -19,6 +19,7 @@ Baseline assembly 06c69eb, parts 94ef55b, main 38787ec. Current verified install
 13. Just-The-Pubcast
 14. Storage
 15. Pubcast-Phase-2-
+16. dreams — voxel engine parent remote in CODEX_RESUME_VOXEL_ENGINE_2026-05-02.md.
 
 Older repository references come from December's AGENTS.md and docs/missions/pubcast-lead-engineer-2026-10-31/SOURCE_RECONCILIATION.md. Extend the queue when donor manifests identify additional repositories. When inspecting each repository check Foresight's UI, renderer and main engines, Bubble Stack, cartridge continuity, studio/admission, Sir Purfluous and offline 2i. Preserve the three recording modes, clocks, and IndexedDB v3 across overlapping changes.
 
@@ -44,9 +45,22 @@ Older repository references come from December's AGENTS.md and docs/missions/pub
 - Studio long-take verification (884c1cd). Exact harness preserved in parts at tools/acceptance/studio_long_take.py. See PARTS.md item 15 for its dependency and production-proof assumptions.
 - Foresight front door, governance admission persistence, Bubble route checks, clacker recording and 2i polish together ran 47 passing tests with six expected failures, all in 2i polish. The two chat zoom cases subsequently passed. These checks do not close the wider Foresight, Bubble Stack or admission inventories.
 
+## Further December installations and checks
+
+| Beyond-October branch or candidate | December outcome |
+|---|---|
+| 2i-beta-polish and backup/claude-2i-beta-polish-2026-11-17 (same df737ca tip) | 5671372 reconciles the notebook desktop grid, lantern resize observer and lock indication with current measured paragraph numbers. The previous layout could reduce the notebook to 14 pixels when the sidebar closed. All 59 polish, notebook and single-page tests passed in Chromium, including offline file tests. Current standard presentation keeps the wide single writing page. |
+| console-touch-typewriter-keys and its backup alias | December retains the painted hotspot volumes and angles, keyboard sounds and remembered mute. Current channel 1 controls the dialogue bus. f5602bc fixed the stale test selector and checked that a drag actually addressed dialogue. In the combined console, camera config, embedded typewriter and admitted-guest suite, 49 passed before the selector fix; the one failed case passed on rerun. The interactive typewriter restores paper and caret after reload. |
+| codex/main-debug-20261119, 95399f5 renderer | 75b2e33 installs the donor rust_crate/src/ws_renderer.rs, rebuilt against **December's** rust_crate/src/camera_control.rs to preserve focus. The old donor binary lacks the newer focus validation. Built using parts-assembly rust_crate/vendor with Cargo 1.100.0, locked/offline, target x86_64-unknown-linux-musl; stripped executable bin/ws_renderer has Git blob df4556efe76c29c45332c1e121cc00b81c6812f7 and mode 100755. Port selection in modules/voxel_webrtc_bridge.py uses the existing December audit branch correction. Eleven Rust tests passed. Twelve packaged bridge and Doctor tests passed. The real process accepted motion on the selected port, refused a third avatar at capacity two, kept the existing performer active and accepted/rejected camera focus correctly. CLI port and FPS options exercised separately. WebSocket ACK describes control/motion acceptance, not delivery of a rendered picture. |
+| codex/main-debug-20261119, e7f2473 and bf8cc63 | modules/recording.py already commits before publishing and preserves same-name external tracks across restart. Exact donor tests restored at 5430471. All 18 portable bundle tests passed, including unplugged storage, duplicate legacy track and failed metadata write cases. |
+| codex/main-debug-20261119, 0a13d68, 11deaae, 461ee0b and 62ad072 | 24 destination tests passed across timeline play/pause/seek, live timeline recording, camera settings restart, portable bundles and both pending-stop PANIC browser checks. The production router supplies one begin_take/end_take pair for the timeline. |
+| codex/main-debug-20261119, b2b7d23, e225c19, 7a0745a and browser recovery | 31 destination checks passed across capture engine safety, recording modes, console actions and the Chromium renderer crash/recovery test. Current FFmpegCaptureEngine reserves output names, runs with -n and tracks paused pieces; failures name the source and surviving tracks remain available. The production router releases audio and cues black ahead of concurrent capture finalization. |
+| codex/main-debug-20261119, 0b70045 and 8a30942 | ce38f35 integrates final-pose hold in static/camera_try.html and ordered save/restart for static/world_walk.html and static/world_walk_live.js. Twelve checks passed, including real camera playback and a signed-in /walk user reopening a saved library avatar, hologram, position and scale after an actual host restart. |
+| codex/main-debug-20261119, b4a966b, cb21ec1 and d637bb3 | 670661d installs the omitted-identity fix in the optional 2i Node bridge, type imports in Switchblade and mocap, and the cold-route fixtures. Seven bridge tests passed, including signed-in HTTP against Reach's actual Pete offline reply. Forty-seven route, Evo and cast checks plus two mocap runtime checks passed. Kept December's stronger assertion for both canonical ID purfluous and display name Sir Purfluous. NUDGE_MINIMAL.py is a copy-into-main example, outside the runtime path; no second nudge orchestrator installed. |
+
 ## Resume point
 
-Beyond-October, 2i-beta-polish, notebook layout and protected-line indications in the current offline Writer’s Room. Chat entry zoom restored. Compare the remaining donor visual contracts with December’s measured paragraph numbering and notebook presentation. The branch inventory below pins sources only. Rows without a disposition above still require behavioral reconciliation.
+Beyond-October, codex/main-debug-20261119 at d3b9db81fc4a35d05db82de1d0de24dacf17e973, commit 13ebae6: coalesced edits, clipboard and durable readback in 2i/2i-assets/file-workspace.js and tests/test_foresight_file_workspace.py. Compare and exercise through Foresight’s current file desk. Continue with the Control Room per-source warning changes at 9e872cb and 310c858. The branch inventory below pins sources only. Rows without a disposition above still require behavioral reconciliation.
 - `11-12-merge` — `d70952e52c81f89178f4ab557206fcde109bf970`
 - `2i-beta-polish` — `df737caaeff206e4128932532663776af74ec0e8`
 - `audit/standard-first-2026-11-19` — `6cccfd7a5b2b74f3c29829ed723c0e85128ee322`
