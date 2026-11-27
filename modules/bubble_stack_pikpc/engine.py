@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from itertools import product
+from heapq import heappop, heappush
+from math import isfinite
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from .core import (
@@ -130,7 +132,22 @@ class BubbleStackEngine:
         self.semantic_graph.connect(a, b, weight, bidirectional)
 
     def step(self, frame_objects: Iterable[FrameObject], dt: Optional[float] = None) -> StepResult:
-        dt = self.config.target_frame_seconds if dt is None else max(1e-9, dt)
+        dt = self.config.target_frame_seconds if dt is None else dt
+        if not isfinite(dt) or dt <= 0:
+            raise ValueError("frame dt must be positive and finite")
+        dt = max(1e-9, dt)
+        incoming = {}
+        roots = set()
+        for fo in frame_objects:
+            if fo.object_id in incoming:
+                raise ValueError("duplicate frame object id")
+            if not all(isfinite(v) for v in (*fo.bounds.min.as_tuple(), *fo.bounds.max.as_tuple())):
+                raise ValueError("frame object bounds must be finite")
+            roots.update(self.stack.root_indices_for_bounds(fo.bounds))
+            if len(roots) > self.config.max_active_bubbles:
+                raise RuntimeError("frame occupancy exceeds active bubble budget")
+            incoming[fo.object_id] = fo
+        # Validate the whole frame before changing clock, occupancy or history.
         self.time_seconds += dt
         events: List[OrderEvent] = []
         transfers: List[TransferPulse] = []
@@ -138,19 +155,18 @@ class BubbleStackEngine:
         refined: List[str] = []
         collapsed: List[str] = []
 
-        incoming = {fo.object_id: fo for fo in frame_objects}
         previous_ids = set(self.objects.keys())
         current_ids = set(incoming.keys())
 
         # Remove vanished objects first. Coarse roots remain observed; occupancy changes become order events.
         for oid in sorted(previous_ids - current_ids):
             obj = self.objects.pop(oid)
-            self._clear_occupancy(oid)
             events.append(OrderEvent(OrderEventType.OBJECT_EXIT, obj.center, 0.8, source_id=oid))
 
-        # Clear current occupants before rebuilding the frame's order state.
-        for oid in current_ids:
-            self._clear_occupancy(oid)
+        # The frame is a complete snapshot: one pass clears occupancy while
+        # preserving the prior order signatures for event comparison.
+        for bubble in self.stack.all_bubbles():
+            bubble.occupancy.clear()
 
         reports: Dict[str, ObjectReport] = {}
         for oid, fo in incoming.items():
@@ -496,28 +512,40 @@ class BubbleStackEngine:
                 child.state = BubbleState.COOLING
 
     def _enforce_budget(self, collapsed: List[str]) -> None:
-        while self.stack.active_count() > self.config.max_active_bubbles:
-            leaves: List[Tuple[float, Bubble, Tuple[int, int, int]]] = []
-            for parent in self.stack.all_bubbles():
-                for idx, child in parent.children.items():
-                    if not child.children:
-                        leaves.append((child.joule_load, parent, idx))
-            if leaves:
-                _, parent, idx = min(leaves, key=lambda x: x[0])
-                collapsed.append(str(parent.children[idx].address)); del parent.children[idx]
-                continue
+        # Each prune used to scan the entire hierarchy twice. Maintain a leaf
+        # heap instead, preserving the original traversal-order tie breaker.
+        nodes = list(self.stack.all_bubbles())
+        count = len(nodes)
+        budget = self.config.max_active_bubbles
+        if count <= budget:
+            return
+        heap = []
+        parents = {}
+        for rank, parent in enumerate(nodes):
+            for child_rank, (idx, child) in enumerate(parent.children.items()):
+                entry = (child.joule_load, rank, child_rank, parent, idx)
+                parents[id(child)] = entry
+                if not child.children:
+                    heappush(heap, entry)
+        while count > budget and heap:
+            _, _, _, parent, idx = heappop(heap)
+            child = parent.children.pop(idx)
+            collapsed.append(str(child.address))
+            count -= 1
+            if not parent.children and id(parent) in parents:
+                heappush(heap, parents[id(parent)])
 
-            # Last-resort root pruning. The persistent coarse layer means roots
-            # are not removed during ordinary refinement/collapse, but a hard
-            # budget is still a hard budget. Only empty, childless, cold roots
-            # can be discarded, preserving any root that currently contains
-            # tracked matter or active detail.
-            root_candidates = [
-                (root.joule_load, idx) for idx, root in self.stack.roots.items()
+        # As before, preserve occupied roots and prune unoccupied roots only
+        # after all fine detail is exhausted. Sort once, rather than rescanning.
+        if count > budget:
+            candidates = sorted(
+                (root.joule_load, rank, idx)
+                for rank, (idx, root) in enumerate(self.stack.roots.items())
                 if not root.children and not root.occupancy
-            ]
-            if not root_candidates:
-                break
-            _, idx = min(root_candidates, key=lambda x: x[0])
-            collapsed.append(str(self.stack.roots[idx].address)); del self.stack.roots[idx]
-
+            )
+            for _, _, idx in candidates:
+                if count <= budget:
+                    break
+                collapsed.append(str(self.stack.roots[idx].address))
+                del self.stack.roots[idx]
+                count -= 1

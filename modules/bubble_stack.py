@@ -12,12 +12,16 @@ recording, or camera systems.
 """
 from __future__ import annotations
 
+from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field, asdict, is_dataclass
+from functools import wraps
+from itertools import product
+from threading import RLock
 from enum import Enum
 import logging
 import os
 from enum import Enum as _EnumBase
-from math import ceil, dist, isfinite
+from math import ceil, dist, isfinite, nextafter, inf, ulp
 from time import time
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
@@ -29,6 +33,7 @@ logger = logging.getLogger("pubcast.bubble_stack")
 # scans the full grid for each ingested bone. Keep the default bounded, and let
 # deployments with a faster spatial backend raise it explicitly.
 DEFAULT_MAX_BUBBLES = 20_000
+MAX_PENDING_EVENTS = 512
 BUBBLE_MAX_CELLS_ENV = "PUBCAST_BUBBLE_MAX_CELLS"
 
 def _runtime_bubble_limit() -> int:
@@ -112,6 +117,9 @@ class BubbleGridConfig:
             raise ValueError("radius and spacing must be positive")
         if any(v <= 0 for v in self.dimensions):
             raise ValueError("dimensions must be positive")
+        if any(not isfinite(o + d) or o + self.spacing <= o or o + d + self.spacing <= o + d
+               for o, d in zip(self.origin, self.dimensions)):
+            raise ValueError("grid spacing must advance at both ends of each axis")
 
     def estimated_bubble_count_upper_bound(self) -> int:
         """Conservative cell-count preflight for the eager v0.1 grid.
@@ -224,6 +232,14 @@ def serialize_bubble_stat(stat: Any) -> Dict[str, Any]:
     return _json_safe(defaults)
 
 
+def _room_locked(method):
+    @wraps(method)
+    def locked(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+    return locked
+
+
 class BubbleStack:
     """Room-local PubCast Bubble Stack with optional PIKPC v1.6 promotion.
 
@@ -239,6 +255,10 @@ class BubbleStack:
     """
 
     def __init__(self, config: Optional[BubbleGridConfig] = None):
+        self._lock = RLock()
+        self._axes = ((), (), ())
+        self._grid_index = {}
+        self._object_bubbles = {}
         self.config = config
         self.state = BubbleStackState.UNCONFIGURED
         self.bubbles: Dict[str, Bubble] = {}
@@ -246,6 +266,7 @@ class BubbleStack:
         self.actor_postures: Dict[str, str] = {}
         self._last_actor_bubbles: Dict[str, set[str]] = {}
         self._events: List[Dict[str, Any]] = []
+        self._dropped_events = 0
         self._pikpc_engine: Optional[Any] = None
         self._pikpc_frame_objects: Dict[str, Any] = {}
         self._pikpc_last_summary: Dict[str, Any] = {}
@@ -265,6 +286,7 @@ class BubbleStack:
     def engine_version(self) -> str:
         return "v1.6-pikpc" if self.pikpc_active else "v0.1-safe"
 
+    @_room_locked
     def configure(self, config: BubbleGridConfig) -> None:
         config.validate()
         estimated_cells = config.estimated_bubble_count_upper_bound()
@@ -275,12 +297,23 @@ class BubbleStack:
                 f"estimated <= {estimated_cells:,} cells, limit={max_cells:,}; "
                 f"raise {BUBBLE_MAX_CELLS_ENV} only after validating runtime capacity"
             )
+        grid = self._generate_grid(config)
         self.config = config
-        self.bubbles = self._generate_grid(config)
+        self.bubbles = grid
+        self._axes = tuple(tuple(sorted({b.center[axis] for b in grid.values()})) for axis in range(3))
+        axis_index = [{value: i for i, value in enumerate(axis)} for axis in self._axes]
+        self._grid_index = {tuple(axis_index[i][b.center[i]] for i in range(3)): b for b in grid.values()}
+        self._last_actor_bubbles.clear()
+        self._object_bubbles.clear()
+        self.actor_postures.clear()
+        self.ai_actor_ids.clear()
+        self._events.clear()
+        self._dropped_events = 0
         self.state = BubbleStackState.CONFIGURED
-        self._events.append({"type": "bubble_stack_configured", "room_id": config.room_id, "at": time()})
+        self._append_event({"type": "bubble_stack_configured", "room_id": config.room_id, "at": time()})
         self._init_pikpc_engine(config)
 
+    @_room_locked
     def set_ai_presence(self, actor_ids: Iterable[str]) -> None:
         self.ai_actor_ids = set(actor_ids)
         if self.state == BubbleStackState.UNCONFIGURED:
@@ -289,19 +322,23 @@ class BubbleStack:
         if self.state == BubbleStackState.ACTIVE:
             self._step_pikpc_if_active(reason="ai_presence_active")
 
+    @_room_locked
     def ingest_skeleton_frame(self, actor_id: str, bones: Iterable[BonePresence], posture: Optional[str] = None) -> None:
         if self.state == BubbleStackState.UNCONFIGURED:
-            self._events.append({"type": "ai_blind_or_room_unconfigured", "actor_id": actor_id, "at": time()})
+            self._append_event({"type": "ai_blind_or_room_unconfigured", "actor_id": actor_id, "at": time()})
             return
+        bone_list = list(bones)
+        if any(b.actor_id != actor_id or not all(isfinite(v) for v in b.position) for b in bone_list):
+            raise ValueError("skeleton frame contains mismatched actor or non-finite position")
         if posture:
             self.actor_postures[actor_id] = posture
-        # Remove actor's old bone entries before placing current frame.
-        for bubble in self.bubbles.values():
+        # Remove only the cells occupied by the actor's previous frame.
+        for bubble_id in self._last_actor_bubbles.get(actor_id, ()):
+            bubble = self.bubbles[bubble_id]
             for key in list(bubble.bones.keys()):
                 if key.startswith(f"{actor_id}:"):
                     del bubble.bones[key]
         actor_bubbles: set[str] = set()
-        bone_list = list(bones)
         for bone in bone_list:
             for bubble in self._candidate_bubbles(bone.position):
                 if bubble.contains(bone.position):
@@ -311,7 +348,7 @@ class BubbleStack:
         entered = actor_bubbles - previous
         exited = previous - actor_bubbles
         if entered or exited:
-            self._events.append({
+            self._append_event({
                 "type": "actor_bubble_transition",
                 "actor_id": actor_id,
                 "entered": sorted(entered),
@@ -322,17 +359,24 @@ class BubbleStack:
         self._update_pikpc_actor_bones(actor_id, bone_list)
         self._step_pikpc_if_active(reason="skeleton_frame")
 
+    @_room_locked
     def ingest_object(self, obj: ObjectPresence) -> None:
         if self.state == BubbleStackState.UNCONFIGURED:
             return
-        for bubble in self.bubbles.values():
-            bubble.objects.pop(obj.object_id, None)
+        if not all(isfinite(v) for v in obj.position):
+            raise ValueError("object position must be finite")
+        for bubble_id in self._object_bubbles.get(obj.object_id, ()):
+            self.bubbles[bubble_id].objects.pop(obj.object_id, None)
+        occupied = set()
         for bubble in self._candidate_bubbles(obj.position):
             if bubble.contains(obj.position):
                 bubble.add_object(obj)
+                occupied.add(bubble.bubble_id)
+        self._object_bubbles[obj.object_id] = occupied
         self._update_pikpc_object(obj)
         self._step_pikpc_if_active(reason="object_frame")
 
+    @_room_locked
     def build_stat(self) -> BubbleStat:
         if self.state == BubbleStackState.UNCONFIGURED:
             return BubbleStat(
@@ -379,6 +423,7 @@ class BubbleStack:
             "jeremy": jeremy_prompt or "",
         }
 
+    @_room_locked
     def get_engine_summary(self) -> Dict[str, Any]:
         if not self._pikpc_engine:
             return {"engine": "v0.1-safe", "active": False}
@@ -396,12 +441,14 @@ class BubbleStack:
         except Exception as exc:
             self._pikpc_error = str(exc)
             logger.warning("Bubble Stack PIKPC summary failed; retaining safe v0.1 path: %s", exc)
-        return self._pikpc_last_summary or {"engine": "v1.6-pikpc", "active": False, "error": self._pikpc_error}
+        # Never present a cached healthy summary as current after a failure.
+        return {"engine": "v1.6-pikpc", "active": False, "error": self._pikpc_error}
 
     def _generate_grid(self, config: BubbleGridConfig) -> Dict[str, Bubble]:
         ox, oy, oz = config.origin
         sx, sy, sz = config.dimensions
         bubbles: Dict[str, Bubble] = {}
+        max_cells = _runtime_bubble_limit()
         xi = 0
         x = ox
         while x <= ox + sx:
@@ -412,6 +459,8 @@ class BubbleStack:
                 z = oz
                 while z <= oz + sz:
                     bubble_id = f"{config.room_id}:b:{xi}:{yi}:{zi}"
+                    if len(bubbles) >= max_cells:
+                        raise ValueError("bubble grid exceeds safe eager-grid limit during allocation")
                     bubbles[bubble_id] = Bubble(bubble_id=bubble_id, center=(x, y, z), radius=config.radius)
                     zi += 1
                     z += config.spacing
@@ -422,9 +471,20 @@ class BubbleStack:
         return bubbles
 
     def _candidate_bubbles(self, position: Vector3) -> Iterable[Bubble]:
-        # v0.1 correctness first: scan all bubbles. PIKPC v1.6 handles its own
-        # adaptive spatial hierarchy behind the adapter.
-        return self.bubbles.values()
+        # Broad phase uses the actual generated coordinates, not rounded
+        # grid arithmetic. The existing exact sphere test remains the narrow phase.
+        if not self.config or not all(isfinite(v) for v in position):
+            return ()
+        radius = self.config.radius
+        ranges = []
+        for axis, value in zip(self._axes, position):
+            # Widen for cancellation when value and radius nearly cancel.
+            # The narrow sphere test removes all extra candidates.
+            margin = 4 * max(ulp(value), ulp(radius))
+            lo = bisect_left(axis, nextafter(value - radius - margin, -inf))
+            hi = bisect_right(axis, nextafter(value + radius + margin, inf))
+            ranges.append(range(lo, hi))
+        return (self._grid_index[index] for index in product(*ranges))
 
     def _build_nearby(self, active_bubbles: List[Bubble]) -> Dict[str, List[str]]:
         relationships: Dict[str, set[str]] = {}
@@ -434,9 +494,21 @@ class BubbleStack:
                 relationships.setdefault(actor, set()).update(a for a in actors if a != actor)
         return {actor: sorted(peers) for actor, peers in relationships.items()}
 
+    def _append_event(self, event: Dict[str, Any]) -> None:
+        if len(self._events) >= MAX_PENDING_EVENTS:
+            self._events.pop(0)
+            self._dropped_events += 1
+        self._events.append(event)
+
     def _drain_events(self) -> List[Dict[str, Any]]:
-        events = self._events[:50]
-        self._events = self._events[50:]
+        # A long rehearsal without a reader must not grow memory forever.
+        prefix = []
+        if self._dropped_events:
+            prefix.append({"type": "bubble_event_backlog_dropped", "count": self._dropped_events})
+            self._dropped_events = 0
+        count = 50 - len(prefix)
+        events = prefix + self._events[:count]
+        self._events = self._events[count:]
         return events
 
     # ──────────────────────────────────────────────────────────────────────
@@ -454,7 +526,7 @@ class BubbleStack:
         try:
             root_size = max(float(config.spacing), float(config.radius) * 2.0, 0.01)
             self._pikpc_engine = PIKPCBubbleStackEngine(PIKPCBubbleConfig(root_bubble_size=root_size))  # type: ignore[misc,operator]
-            self._events.append({"type": "pikpc_v1_6_promoted", "room_id": config.room_id, "at": time()})
+            self._append_event({"type": "pikpc_v1_6_promoted", "room_id": config.room_id, "at": time()})
         except Exception as exc:
             self._pikpc_error = str(exc)
             self._pikpc_engine = None
@@ -470,7 +542,7 @@ class BubbleStack:
         try:
             result = self._pikpc_engine.step(list(self._pikpc_frame_objects.values()))
             self._pikpc_last_summary = self._pikpc_engine.jeremy_room_summary()
-            self._events.append({
+            self._append_event({
                 "type": "pikpc_v1_6_step",
                 "reason": reason,
                 "active_bubbles": getattr(result, "active_bubbles", None),
@@ -480,7 +552,7 @@ class BubbleStack:
         except Exception as exc:
             self._pikpc_error = str(exc)
             logger.warning("Bubble Stack PIKPC v1.6 step failed; falling back to v0.1 summaries: %s", exc)
-            self._events.append({"type": "pikpc_v1_6_disabled", "error": str(exc), "at": time()})
+            self._append_event({"type": "pikpc_v1_6_disabled", "error": str(exc), "at": time()})
 
     def _update_pikpc_actor_bones(self, actor_id: str, bones: List[BonePresence]) -> None:
         if not self._pikpc_engine or self._pikpc_error:
