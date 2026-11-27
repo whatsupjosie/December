@@ -104,15 +104,30 @@ def build_shell(cut: Cutout, labels: np.ndarray, fit: Fit, depth: Optional[Dict[
     node_active = nb[0] | nb[1] | nb[2] | nb[3]
     edge = node_active & ~(nb[0] & nb[1] & nb[2] & nb[3])
     ii, jj = np.nonzero(node_active)
-    nx = np.clip(cx0 + jj * step, 0, w - 1)
-    ny = np.clip(cy0 + ii * step, 0, h - 1)
+    # Legs: below the crotch the shell is cut down the midline so each leg is its own closed piece and can stride on its own
+    # (baggy trousers and long coats are drawn as one mass). Where the picture already separates the legs this changes nothing.
+    jm = int(round((fit.cx - cx0) / step))
+    crotch_px = fit.floor_y - fit.drawn["Pelvis"][1] / fit.scale_m_per_px + 0.04 * fit.height_m / fit.scale_m_per_px
+    i_cut = int(np.ceil((crotch_px - cy0) / step))
+    cut = np.zeros_like(node_active)
+    if 0 < jm < gw and 0 <= i_cut <= gh:
+        cut[i_cut:, jm] = node_active[i_cut:, jm]
+    edge = edge | cut                                               # cut nodes close the surface (front meets back) like the rim
+    zero_at = edge[ii, jj]
+    dup_i, dup_j = np.nonzero(cut)
+    ii2, jj2 = np.concatenate([ii, dup_i]), np.concatenate([jj, dup_j])
+    nx = np.clip(cx0 + jj2 * step, 0, w - 1)
+    ny = np.clip(cy0 + ii2 * step, 0, h - 1)
     zf = front_px[ny, nx].astype(np.float32)
     zb = back_px[ny, nx].astype(np.float32)
-    rim = edge[ii, jj]
+    rim = np.concatenate([zero_at, np.ones(len(dup_i), bool)])
     zf[rim] = 0.0
     zb[rim] = 0.0
     nid = -np.ones((gh + 1, gw + 1), np.int64)
     nid[ii, jj] = np.arange(len(ii))
+    nid_right = nid.copy()                                          # the right-hand copy of each cut node
+    nid_right[dup_i, dup_j] = len(ii) + np.arange(len(dup_i))
+    ii, jj = ii2, jj2
     n = len(ii)
     s, cx, fy = fit.scale_m_per_px, fit.cx, fit.floor_y
     X = (cx0 + jj * step - cx) * s
@@ -124,7 +139,11 @@ def build_shell(cut: Cutout, labels: np.ndarray, fit: Fit, depth: Optional[Dict[
     v = (pxy[:, 1] - cy0) / crop[3]
     uv = np.concatenate([np.stack([0.5 * u, v], 1), np.stack([0.5 + 0.5 * (1.0 - u), v], 1)]).astype(np.float32)
     ci, cj = np.nonzero(active)
-    a, b, c, d = nid[ci, cj], nid[ci, cj + 1], nid[ci + 1, cj + 1], nid[ci + 1, cj]
+    # cells just right of the midline cut take the right-hand copies of the cut column for their left corners
+    on_cut = cj == jm
+    a = np.where(on_cut, nid_right[ci, cj], nid[ci, cj])
+    d = np.where(on_cut, nid_right[ci + 1, cj], nid[ci + 1, cj])
+    b, c = nid[ci, cj + 1], nid[ci + 1, cj + 1]
     front = np.concatenate([np.stack([a, d, c], 1), np.stack([a, c, b], 1)])
     back = n + np.concatenate([np.stack([a, c, d], 1), np.stack([a, b, c], 1)])
     faces = np.concatenate([front, back]).astype(np.uint32)

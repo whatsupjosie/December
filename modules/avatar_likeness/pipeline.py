@@ -134,7 +134,7 @@ def build(image: bytes, settings: Settings, *, matte_path: Optional[str] = None,
           data_dir: Optional[str] = None, custom_back: Optional[np.ndarray] = None, prefer_matte: bool = False) -> Built:
     validate(settings)
     matte = matte_mod.load(matte_path, data_dir)
-    cut = intake.prepare(image, matte=matte, prefer_matte=prefer_matte)
+    cut = intake.limit_resolution(intake.prepare(image, matte=matte, prefer_matte=prefer_matte), texture.MAX_HALF)
     source = {"sha256": cut.report.sha256, "source_size": list(cut.report.source_size)}
     return _assemble(cut, settings, source, custom_back, pose_model, data_dir)
 
@@ -161,8 +161,11 @@ def rebuild(glb: bytes, edits: Optional[Dict[str, Any]] = None, *, pose_model: O
     wh = tuple(recipe["intake"]["working_size"])
     x0, y0, w, h = crop
     cv2 = deps.require("cv2", "opencv-python-headless")
+    if front.shape[1] != w or front.shape[0] != h:
+        raise intake.IntakeError("the texture in this file no longer matches its recipe (it was resized outside the builder); "
+                                 "keep the texture at its original size, or import the file as a plain avatar")
     canvas = np.zeros((wh[1], wh[0], 4), np.uint8)
-    canvas[y0:y0 + h, x0:x0 + w] = cv2.resize(front, (w, h), interpolation=cv2.INTER_LINEAR if front.shape[1] < w else cv2.INTER_AREA)
+    canvas[y0:y0 + h, x0:x0 + w] = front
     ri = recipe["intake"]
     report = intake.IntakeReport(sha256=ri["sha256"], source_size=tuple(ri["source_size"]), working_size=wh, background=ri["background"],
                                  bg_rgb=tuple(ri["bg_rgb"]), method=ri["method"], foreground_fraction=ri["foreground_fraction"],
@@ -184,6 +187,15 @@ def rebuild(glb: bytes, edits: Optional[Dict[str, Any]] = None, *, pose_model: O
                                       motion.default_clips(built.rigged.rest, built.rigged.local, list(NAMES), drawn_base),
                                       built.recipe, s.name, s.unlit)
     return built
+
+
+def add_clips(built: Built, extra: List[motion.Clip]) -> bytes:
+    """The built avatar's GLB with more clips (for example retargeted recordings) after the default Idle and Walk."""
+    drawn_base = None if built.landmarks.pose_kind == "tpose" else rig.drawn_pose_rotations(built.fit)
+    clips = motion.default_clips(built.rigged.rest, built.rigged.local, list(NAMES), drawn_base) + list(extra)
+    s = Settings.from_dict(built.recipe["settings"])
+    return gltf_io.write_glb(built.rigged.pos, built.shell.uv, built.shell.faces, built.rigged.joints, built.rigged.weights,
+                             built.rigged.local, built.rigged.ibm, built.atlas, clips, built.recipe, s.name, s.unlit)
 
 
 def fingerprint(glb: bytes) -> str:

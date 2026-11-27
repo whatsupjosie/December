@@ -23,6 +23,7 @@ import numpy as np
 from . import deps
 
 MAX_SIDE = 2048
+SEED = 20261127            # the same picture must give the same avatar, byte for byte; OpenCV's clustering and GrabCut use a global RNG
 MIN_SIDE = 128
 
 
@@ -130,6 +131,7 @@ def _to_lab(rgb: np.ndarray) -> np.ndarray:
 def _background_kind(rgb: np.ndarray) -> Tuple[str, Tuple[int, int, int], float]:
     """Classify the border ring: (kind, median rgb, spread). Spread is the mean Lab distance to the nearest of 3 clusters."""
     cv2 = deps.require("cv2", "opencv-python-headless")
+    cv2.setRNGSeed(SEED)
     h, w = rgb.shape[:2]
     ring = _border_ring(h, w, max(4, int(0.02 * min(h, w))))
     bg_rgb = tuple(int(v) for v in np.median(rgb[ring], axis=0))
@@ -166,6 +168,7 @@ def segment(rgb: np.ndarray, alpha_in: Optional[np.ndarray] = None,
             matte: Optional[Callable[[np.ndarray], np.ndarray]] = None) -> Tuple[np.ndarray, str, str, Tuple[int, int, int]]:
     """Return (alpha, method, background_kind, bg_rgb)."""
     cv2 = deps.require("cv2", "opencv-python-headless")
+    cv2.setRNGSeed(SEED)
     h, w = rgb.shape[:2]
     t = max(4, int(0.02 * min(h, w)))
     ring = _border_ring(h, w, t)
@@ -233,6 +236,38 @@ def _fill_holes(mask: np.ndarray) -> np.ndarray:
 def _dark_backdrop(kind: str, bg_rgb: Tuple[int, int, int]) -> bool:
     """A dark or mid-tone backdrop is where classical cut-outs eat dark hair, hat bands, trousers and shoes."""
     return kind in ("plain-dark", "plain-colour", "textured") and float(np.mean(bg_rgb)) < 110
+
+
+def measure(alpha: np.ndarray) -> Tuple[Tuple[int, int, int, int], Dict[str, bool]]:
+    h, w = alpha.shape
+    ys, xs = np.where(alpha > 0.5)
+    bbox = (int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1)
+    margin = max(3, int(0.006 * max(h, w)))
+    return bbox, {"left": bbox[0] <= margin, "right": bbox[2] >= w - margin, "top": bbox[1] <= margin, "bottom": bbox[3] >= h - margin}
+
+
+def limit_resolution(cut: "Cutout", max_crop_side: int) -> "Cutout":
+    """Shrink the cut-out once, up front, so the figure's padded box is at most ``max_crop_side`` pixels on its long side.
+
+    The texture atlas is built at that size, so the atlas then holds the cut-out exactly and a later rebuild from the file
+    needs no resampling (repeated edits cannot blur the artwork or shift the mesh).
+    """
+    cv2 = deps.require("cv2", "opencv-python-headless")
+    x0, y0, x1, y1 = cut.report.bbox
+    pad = max(2, int(0.02 * max(x1 - x0, y1 - y0)))
+    side = max(min(cut.alpha.shape[1], x1 + pad) - max(0, x0 - pad), min(cut.alpha.shape[0], y1 + pad) - max(0, y0 - pad))
+    if side <= max_crop_side:
+        return cut
+    f = max_crop_side / side
+    h, w = cut.alpha.shape
+    size = (max(8, int(round(w * f))), max(8, int(round(h * f))))
+    rgb = cv2.resize(cut.rgb, size, interpolation=cv2.INTER_AREA)
+    alpha = np.clip(cv2.resize(cut.alpha, size, interpolation=cv2.INTER_AREA), 0, 1).astype(np.float32)
+    bbox, touches = measure(alpha)
+    rep = cut.report
+    new = IntakeReport(sha256=rep.sha256, source_size=rep.source_size, working_size=size, background=rep.background, bg_rgb=rep.bg_rgb,
+                       method=rep.method, foreground_fraction=float((alpha > 0.5).mean()), touches=touches, bbox=bbox, warnings=list(rep.warnings))
+    return Cutout(rgb=rgb, alpha=alpha, report=new)
 
 
 def prepare(data: bytes, matte: Optional[Callable[[np.ndarray], np.ndarray]] = None, prefer_matte: bool = False) -> Cutout:
