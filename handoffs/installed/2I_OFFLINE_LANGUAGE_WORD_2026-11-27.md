@@ -1,0 +1,3 @@
+# 2i offline editor integration — 2026-11-27
+
+Source pre-dec ec7895a3c08cde769d2d3997c8bc8fe3d042e637; destination parent ff9e6189b38004fab956e66f8d650a82e0f5f382. Existing changed paths all matched the Nov 20 unified baseline c514284da2f31929827e42fa7ca194dafa0d6594. Exact blob transfer of 72 editor, dictionary/WordNet, spellcheck, rich-surface, DOCX workspace, tests and language build-tool files. Existing DOCX vendor files and typewriter assets match source. No user data, workflows, or Control Room files changed. Source is the newer studio assembly; standalone launcher already installed. Runtime and browser tests pending in destination.

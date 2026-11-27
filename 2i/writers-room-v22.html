@@ -3,11 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pubcast 2i — Writer's Room</title>
+<title>Pubcast 2i</title>
 <script src="/static/reach_auth.js"></script>
 <link rel="stylesheet" href="2i-assets/reach.css">
 <link rel="stylesheet" href="2i-assets/studio-desk.css">
 <link rel="stylesheet" href="2i-assets/format-menu.css">
+<link rel="stylesheet" href="2i-assets/rich-surface.css">
 <script src="2i-assets/format-core.js"></script>
 <style>
 
@@ -121,6 +122,8 @@ html, body {
   box-shadow:none;
 }
 .top-icon-btn:hover { border-color:var(--gold); color:var(--gold-bright); background:rgba(205,163,73,0.12); }
+
+.top-right .chat-mode-link { width:auto; padding:0 10px; border-radius:5px; text-decoration:none; }
 
 /* --- MAIN AREA --- */
 .main-area {
@@ -1135,7 +1138,7 @@ body[data-twoi-desk="standard"] .solo-textarea { border-radius:0 0 3px 0; }
 <div class="app-shell">
   <!-- TOP BAR -->
   <div class="top-bar">
-    <div class="top-logo">Writer's Room<small>Pubcast 2i</small></div>
+    <div class="top-logo">2i<small>Pubcast</small></div>
     <!-- The document's own line: what it is called, how long it is, whether it is saved. The status word shows
          only while something is happening (reading, generating); "idle" is not shown. -->
     <div class="top-doc">
@@ -1153,6 +1156,7 @@ body[data-twoi-desk="standard"] .solo-textarea { border-radius:0 0 3px 0; }
       </div>
       <button class="save-btn" id="saveBtn">Save</button>
       <button class="mode-badge write" id="modeBadge" title="Toggle between Write (solo) and Collab (co-writing) mode">Write</button>
+      <a class="top-icon-btn chat-mode-link" href="/2i/chat">Chat</a>
       <button class="top-icon-btn" id="shelfBtn" title="My manuscripts">My manuscripts</button>
       <button class="top-icon-btn" id="sidebarToggle" title="Toggle sidebar">☰</button>
       <button class="top-icon-btn" id="menuToggle" title="Menu">⚙</button>
@@ -1277,7 +1281,7 @@ body[data-twoi-desk="standard"] .solo-textarea { border-radius:0 0 3px 0; }
             <div class="manuscript-lines" id="manuscriptLines"></div>
             <div class="solo-editor" id="soloEditor">
               <div class="line-numbers" id="lineNumbers"></div>
-              <textarea class="solo-textarea" id="soloTextarea" placeholder="Begin writing your manuscript…" spellcheck="true"></textarea>
+              <textarea class="solo-textarea" id="soloTextarea" placeholder="Begin writing your manuscript…" spellcheck="false"></textarea>
             </div>
           </div>
 
@@ -1287,7 +1291,7 @@ body[data-twoi-desk="standard"] .solo-textarea { border-radius:0 0 3px 0; }
           <!-- Draft zone (buffer in co-writing) -->
           <div class="draft-zone" id="draftZone">
             <div id="readingIndicator"></div>
-            <textarea class="draft-area" id="draftArea" placeholder="Keep writing…" spellcheck="true"></textarea>
+            <textarea class="draft-area" id="draftArea" placeholder="Keep writing…" spellcheck="false"></textarea>
           </div>
         </div>
       </div>
@@ -1965,6 +1969,10 @@ function updateModeUI() {
     $('playbackControls').classList.add('hidden');
     $('zoneLabel').textContent = 'Manuscript';
   }
+  // Write/Collab is a change other parts of 2i need to follow (the live
+  // formatting surface steps aside for Collab's two-page spread and its own
+  // line editor, then comes back with Write mode).
+  document.dispatchEvent(new CustomEvent('twoi:mode-change',{detail:{coWriting}}));
 }
 function toggleMode() {
   if (coWriting && buffer.length) approveBuffer();
@@ -2878,7 +2886,11 @@ function manuscriptShortcut(event,context) {
   return null;
 }
 document.addEventListener('keydown',e=>{
-  const target=e.target,editor=target===soloTextarea||target===draftArea||!!target?.closest?.('.m-line-edit textarea');
+  // #twoiRichSurface is the live formatting surface (rich-surface.js). It is a
+  // contenteditable, so without naming it here the check below would class it as
+  // another text field and Ctrl+S / Ctrl+F / Ctrl+Z would stop reaching the
+  // manuscript while the caret was in it.
+  const target=e.target,editor=target===soloTextarea||target===draftArea||!!target?.closest?.('.m-line-edit textarea')||!!target?.closest?.('#twoiRichSurface');
   const otherTextField=!editor&&!!target?.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"])');
   const nativeTextField=(editor||otherTextField)&&!target?.closest?.('.m-line-edit');
   const action=manuscriptShortcut(e,{nativeDialog:!!document.querySelector('dialog[open]'),legacyModal:!!document.querySelector('.modal-backdrop.open'),otherTextField,nativeTextField,collab:coWriting});
@@ -3438,7 +3450,13 @@ function ppForgetGenerated(t) { PP_GEN.delete(ppKey(t)); }
 <script src="../static/2i_studio_bridge.js"></script>
 <script src="2i-assets/typewriter-input.js"></script>
 <script src="2i-assets/studio-desk.js"></script>
+<script src="2i-assets/docx-workspace.js"></script>
 <script src="2i-assets/format-menu.js"></script>
+<script src="2i-assets/rich-surface.js"></script>
+<script src="2i-assets/language.js"></script>
+<script src="2i-assets/language-panel.js"></script>
+<script src="2i-assets/spell.js"></script>
+<script src="2i-assets/spell-ui.js"></script>
 <script src="/static/foresight_files.js"></script>
 <script src="2i-assets/file-workspace.js"></script>
 </body>

@@ -31,6 +31,21 @@ def editor():
         browser.close()
 
 
+def _tools(page):
+    """Reveal the sidebar controls the way a writer does.
+
+    In the single-page notebook look -- Josie's Nov-16 design and 2i's default --
+    #sidebar is display:none and its controls (lock, unlock, new chapter) are
+    reached by opening the Tools drawer from the small tab under the menu. These
+    tests predate that look and clicked the buttons while they were hidden, so
+    they timed out against a page that was working as designed.
+    """
+    if page.locator("#sidebar").is_visible():
+        return
+    page.locator("#twoiDrawerTabTools").click()
+    page.locator("#sidebar").wait_for(state="visible", timeout=5000)
+
+
 def _write(page, text):
     page.locator("#soloTextarea").click()
     page.keyboard.press("Control+a")
@@ -41,20 +56,25 @@ def _click_manuscript_tool(page, selector):
     """Use the visible drawer UI, so tests exercise the current single-page design."""
     tab = page.locator("#twoiDrawerTabTools")
     assert tab.is_visible(), "The manuscript-tools drawer tab must be accessible"
-    assert tab.get_attribute("aria-expanded") == "false"
-    tab.click()
+    # The drawer may already be open (the _tools() helper opens it) or closed; the
+    # control has to be reachable either way, and it is left as it was found.
+    was_open = tab.get_attribute("aria-expanded") == "true"
+    if not was_open:
+        tab.click()
     assert tab.get_attribute("aria-expanded") == "true"
     control = page.locator(selector)
     assert control.is_visible(), f"{selector} was not exposed when the drawer opened"
     control.click()
-    tab.click()
-    assert tab.get_attribute("aria-expanded") == "false"
+    if not was_open:
+        tab.click()
+        assert tab.get_attribute("aria-expanded") == "false"
 
 
 def test_unlock_by_write_caret_without_selected_collab_line(editor):
     page = editor
     _write(page, "A\nB\nC")
-    _click_manuscript_tool(page, "#lockAllBtn")
+    _tools(page)
+    page.locator("#lockAllBtn").click()
     page.evaluate("""() => {
       const t = document.getElementById('soloTextarea');
       t.focus(); t.setSelectionRange(3,3);
@@ -67,7 +87,8 @@ def test_unlock_by_write_caret_without_selected_collab_line(editor):
 def test_undo_lock_preserves_later_text_then_redo_relocks(editor):
     page = editor
     _write(page, "First.")
-    _click_manuscript_tool(page, "#lockSceneBtn")
+    _tools(page)
+    page.locator("#lockSceneBtn").click()
     assert page.evaluate("[...lockedLines]") == [0]
     page.evaluate("""() => {
       const t = document.getElementById('soloTextarea');
@@ -89,7 +110,8 @@ def test_undo_lock_preserves_later_text_then_redo_relocks(editor):
 def test_undo_in_find_or_rename_does_not_rewind_manuscript(editor, field):
     page = editor
     _write(page, "Before.")
-    _click_manuscript_tool(page, "#lockAllBtn")
+    _tools(page)
+    page.locator("#lockAllBtn").click()
     page.evaluate("""() => {
       const t = document.getElementById('soloTextarea');
       t.focus();t.setSelectionRange(t.value.length,t.value.length);
@@ -125,5 +147,6 @@ def test_cancel_chapter_does_not_add_an_undo_point(editor):
     page = editor
     before = page.evaluate("undoStack.length")
     page.on("dialog", lambda d: d.dismiss())
-    _click_manuscript_tool(page, "#newChapterBtn")
+    _tools(page)
+    page.locator("#newChapterBtn").click()
     assert page.evaluate("undoStack.length") == before
