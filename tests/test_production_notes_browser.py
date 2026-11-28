@@ -200,6 +200,19 @@ def test_place_sticky_note_picks_a_room_then_a_place_and_opens_the_writer_with_i
             page.wait_for_function("PubCastWalk.S.key === 'control_room/main'")
 
             page.evaluate("PubCastNotes.open()")
+            # Closing the overlay during an inbox request must keep it closed.
+            pending = []
+            inbox = "**/api/notes?box=inbox"
+            page.route(inbox, lambda route: pending.append(route))
+            with page.expect_request(lambda req: req.url.endswith("/api/notes?box=inbox")):
+                page.evaluate("() => { window.pendingMenu = PubCastNotes.open(); }")
+            page.keyboard.press("Escape")
+            page.locator("#pnLayer").wait_for(state="hidden")
+            pending[0].continue_()
+            page.unroute(inbox)
+            page.evaluate("window.pendingMenu")
+            assert page.locator("#pnLayer").is_hidden()
+            page.evaluate("PubCastNotes.open()")
             page.get_by_role("button", name="Place sticky note").click()
             page.wait_for_selector("#pnLayer [data-room]", timeout=10000)
             rooms = page.locator("#pnLayer [data-room]").all_inner_texts()

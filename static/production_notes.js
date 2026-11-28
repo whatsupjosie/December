@@ -428,9 +428,12 @@
     return d.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
   };
 
+  let menuRequest = 0;
   async function openMenu() {
+    const request = ++menuRequest;
     N.mode = "menu"; N.openId = null;
     const r = await api("/api/notes?box=" + N.box);
+    if (request !== menuRequest || N.mode !== "menu") return;
     if (N.box === "inbox" && r.ok) { N.notes = r.data.notes; N.unread = r.data.unread; }
     const wrap = el("div", "pn-menu");
     const tabs = el("div", "pn-tabs");
