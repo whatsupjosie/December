@@ -45,3 +45,34 @@ PubCast already has an avatar store, `modules/avatar_imports.py`. Each GLB in it
 ## Next step
 
 Owner reviews and decides whether to merge `claude/primp-to-main-assembly-2026-11-27` into `main-assembly`.
+
+---
+
+# Addendum, same evening: side button between the boudoir and the mirror and stage
+
+The owner asked for a clearly labeled button on the side of the screen, so an avatar can be adjusted at the mirror and stage and made up in the boudoir, switching back and forth while designing it. Her words: "you need to be able to switch between the two, so you can adjust your avatar or do your avatar's makeup as you're designing them." Icons are her choice: "a makeup brush and a tailor's mannequin." She then said: "If the maker process difficult, try lipstick." Both the brush and a lipstick icon are drawn. The brush is in use until she picks one. Switching is one word: `icon: 'brush'` → `icon: 'lipstick'` in the `mount` call at the end of `static/avatar_foundry.html`.
+
+## What is where
+
+- `static/js/dressing_switch.js` (new): the button. The icons are drawn in it (makeup brush, lipstick, tailor's dress form), so there are no image files. The page keeps a clear strip on the right edge (`body.dsw-reserve`), so the button never covers a control. The button is vertically centered at every size, clear of the bottom corners where the production-slate button sits. It opens the other page in the same window, so a Counter tray stays a tray.
+- Primp (`static/primp.html`, `static/primp/app.mjs`): the mannequin button, labeled "Mirror and Stage", goes to `/static/avatar_foundry.html`. Before leaving, the open look is written to Primp's local recovery. Coming back through the button restores it automatically, still marked unsaved if it was unsaved. If recovery fails and the look is unsaved, Primp asks before leaving.
+- Avatar Foundry (`static/avatar_foundry.html`): the brush button, labeled "Boudoir", goes to `/static/primp.html`. Before leaving, it waits for the page to finish loading the saved profile, then keeps the form (form, name, glow, energy, hologram mode, visibility) as a draft in this browser tab, and puts it back on return. Leaving does not save to the server; Save Avatar still does that. Edits sit at the end of the file and merge with zero conflicts with `claude/avatar-from-image-2026-11-27` (checked with `git merge-file`).
+- Which Foundry: `avatar_foundry.html`, the page Primp already linked to and the one the avatar-from-picture session extended today. Other Foundry pages exist and were not changed: `dressing_foundry.html` (not served directly), `avatar_studio_demo.html` (what the classic world's pop-up opens), and the walkable world's "Avatar Foundry" exit (`world.json` room `avatar_foundry`, no views yet).
+- Labels "Mirror and Stage" and "Boudoir" and the hover titles are Claude's wording, the owner's to change.
+
+## Problems found in the Foundry page, NOT fixed (owner decision; another session is working on this page)
+
+1. It does not load `/static/reach_auth.js`, so with sign-in enforced its profile load and save go out without a token.
+2. Picking a form never saves: the page sends `preset`, and `POST /api/avatars/me` reads only `preset_id`. Also `loadMe` merges `preset_id` but the page reads `preset`, so the highlighted form after load is always Manny.
+3. `POST /api/avatars/me` does not store energy, hologram mode or visibility.
+4. "✓ Saved" shows even when the save request fails (`saveAvatar` never checks the response).
+
+## Tested (executed)
+
+- `tests/primp_chromium/test_dressing_switch.py`, 8 passed: a painted Primp look goes to the Foundry and back pixel for pixel and still counts as unsaved; Foundry choices (name, energy, mode, glow, visibility, form) go to Primp and back; the button covers no control on Primp or the Foundry at 1440×900, 1280×720 and 390×844.
+- Full set after the change: Node 43/43; `tests/primp_chromium` 27/27 (14 original + 5 store + 8 switch); `test_primp_host_integration`, `test_avatar_imports`, `test_saves_survive_restart` 39/39; `test_avatar_import_browser` 8/8; `git diff --check` clean.
+
+## Not tested
+
+- The button inside a Foresight Counter tray (same-window navigation is the design; the tray was not run).
+- The two Foundry pages still do not share one avatar (Primp paints a stored GLB; the Foundry edits the preset profile). Open question to the owner, unanswered: should both work on the stored 3D avatar?
