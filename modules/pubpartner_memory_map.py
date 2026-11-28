@@ -295,6 +295,30 @@ def _archive(data_dir: Path, ctx: Dict[str, Any]) -> Dict[str, Any]:
     return e
 
 
+def _stones(data_dir: Path, ctx: Dict[str, Any]) -> Dict[str, Any]:
+    root = data_dir / "pubpartner" / "stones"
+    e = _entry("stones", "Stepping stones (sentence memories)",
+               "Each sentence you said in private chat, with who, what, where, when, why and how filled in only from your exact words "
+               "(unknown otherwise), plus whether it was said as a fact, a question or a guess, and whether it is lasting or about one day.",
+               "Recalled by overlap of words, names, roles and places, rarest overlaps first; each one comes back with a short reason. "
+               "Merged with Jeremy's list. Private chats only. Rebuilt from your exact words if this folder is deleted.", root, data_dir)
+    if not root.is_dir():
+        e["ok"] = None
+        return e
+    files = sorted(root.glob("*/*.sqlite3"))
+    _fill_scan(e, *_scan(root))
+    totals: Dict[str, Any] = {"stores": len(files), "sources": 0, "stones": 0, "names": 0}
+    for path in files:
+        counts = _table_counts(path, ("sources", "stones", "names"), e["problems"])
+        for key in ("sources", "stones", "names"):
+            totals[key] += counts.get(key) or 0
+    sync = ctx["runtime"].get("stones_sync")
+    if isinstance(sync, dict):
+        totals["start_sync"] = {k: sync[k] for k in ("status", "complete", "ingested", "unverified", "not_private") if k in sync}
+    e["counts"] = totals
+    return e
+
+
 def _work_notes(data_dir: Path, ctx: Dict[str, Any]) -> Dict[str, Any]:
     root = data_dir / "pubpartner" / "work_notes"
     e = _entry("work_notes", "Work notes", "Decisions and to-dos caught from conversation. Drafts autosave for a week; saved notes stay.",
@@ -348,7 +372,7 @@ def _backups(data_dir: Path, ctx: Dict[str, Any]) -> Dict[str, Any]:
 
 
 COLLECTORS: Tuple[Callable[[Path, Dict[str, Any]], Dict[str, Any]], ...] = (
-    _exact_words, _turn_log, _receipts, _relationship, _vessel, _jeremy, _alex_core, _archive, _work_notes, _cartridges, _backups,
+    _exact_words, _turn_log, _receipts, _relationship, _vessel, _jeremy, _stones, _alex_core, _archive, _work_notes, _cartridges, _backups,
 )
 
 NOTES = (
@@ -356,6 +380,8 @@ NOTES = (
     "tagged with the project id and your user id, so a question that names your project gets no help from that word; ordinary words "
     "(port, database, its) then decide, and busy memories get a use-count boost. In one test an early fact came back after 90 later "
     "similar messages but not after 110. The fact itself is still saved exactly (exact_words, conversation log, archive).",
+    "Since 2026-11-28 a second recall path runs beside Jeremy: stepping stones (sentence memories, recalled by rarity-weighted overlap, "
+    "with a reason per memory). Both lists are merged for the reply. Jeremy is unchanged; its limit above still applies to Jeremy's own list.",
 )
 
 

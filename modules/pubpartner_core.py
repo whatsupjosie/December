@@ -55,6 +55,7 @@ from .pubpartner_identity_checkpoint import checkpoint as identity_checkpoint
 from .pubpartner_relationship import RelationshipEngine
 from .pubpartner_knowledge import PubPartnerKnowledgeBroker
 from .pubpartner_work_notes import WorkNotesStore
+from .pubpartner_stones import FusionItem, StoneLibrary, explain as explain_stone, fuse as fuse_memories, sync_from_vault
 from .companion_advisory import CompanionAdvisor
 from .eq_observation import ObservationLayer
 
@@ -62,6 +63,7 @@ FCP_VERSION = "FCP1"
 DEFAULT_LANGUAGE = "en-US"
 MAX_COMPACT_MESSAGE_CHARS = 900
 MAX_MEMORY_SUMMARY_CHARS = 220
+MAX_MEMORY_WHY_CHARS = 260
 MAX_RULES = 24
 MAX_FULL_PROMPT_TEXT_CHARS = 2400
 
@@ -526,15 +528,21 @@ class MemoryRef:
     text: str
     importance: int = 5
     source: str = "memory"
+    # Why this memory came back, in plain words. Emitted only when present, so packets that carry no
+    # explanation (everything before stepping stones) are byte-for-byte what they were.
+    why: str = ""
 
     def compact(self) -> Dict[str, Any]:
-        return {
+        packed = {
             "id": self.id,
             "k": self.kind,
             "imp": self.importance,
             "src": self.source,
             "txt": _clip(self.text, MAX_MEMORY_SUMMARY_CHARS),
         }
+        if self.why:
+            packed["why"] = _clip(self.why, MAX_MEMORY_WHY_CHARS)
+        return packed
 
 
 @dataclass
@@ -676,6 +684,7 @@ class PubPartnerSpine:
         companion_advisory_enabled: bool = True,
         docking_node: Any = None,
         eq_observation_enabled: bool = True,
+        stones_enabled: bool = True,
     ) -> None:
         self.data_dir = Path(data_dir)
         self.vault = VerbatimVault(self.data_dir)
@@ -702,6 +711,11 @@ class PubPartnerSpine:
         # User-owned project notes: shared by every friend and model the user
         # talks to, never stored inside a character cartridge or vessel.
         self.work_notes = WorkNotesStore(self.data_dir)
+        # Stepping stones: sentence-sized memories recalled by overlap (modules/pubpartner_stones.py). Derived from
+        # the verbatim vault and rebuildable from it; private-audience messages only. Off switch: stones_enabled=False.
+        # PUBPARTNER_STONES=off (or 0, false, no) turns them off for the whole app without editing code.
+        self.stones_enabled = bool(stones_enabled) and os.environ.get("PUBPARTNER_STONES", "").strip().lower() not in {"0", "off", "false", "no"}
+        self.stones = StoneLibrary(self.data_dir)
         # Shared EQ observation layer, SHADOW mode: observes and records numbers per person,
         # never changes a reply. See modules/eq_observation/layer.py.
         self.eq_observation = ObservationLayer(self.data_dir) if eq_observation_enabled else None
@@ -934,7 +948,8 @@ class PubPartnerSpine:
             text=message,
             kind=content_kind,
             language=language or primer.language,
-            metadata={"project_id": project_id, "room_id": room_id, "friend_id": profile.friend_id},
+            metadata={"project_id": project_id, "room_id": room_id, "friend_id": profile.friend_id,
+                      "audience": turn_audience},
         )
         companion = None
         if self.companion_advisory_enabled:
@@ -979,6 +994,12 @@ class PubPartnerSpine:
         memories = await self._jeremy_memories(
             self.memory_scope(user_id, profile.friend_id, project_id, room_id),
             message, history or [], max_memories=max_memories, problems=jeremy_problems,
+            exclude_source_ids=(source.source_id,),
+        )
+        memories, stones_status = self._stone_turn(
+            user_id=user_id, friend_id=profile.friend_id, source=source, message=message,
+            project_id=project_id, room_id=room_id, audience=turn_audience, history=history or [],
+            max_memories=max_memories, jeremy_refs=memories,
         )
         alex_packet = None
         whisper = ""
@@ -1149,6 +1170,7 @@ class PubPartnerSpine:
             "vessel_recorded_event_id": vessel_event_id,
             "work_notes_context": work_notes_status,
             "jeremy_status": {"configured": self.cricket_keeper is not None, "problems": list(jeremy_problems)},
+            "stones_status": stones_status,
         }
         if eq_observation is not None:
             result["eq_observation"] = eq_observation
@@ -1935,6 +1957,129 @@ class PubPartnerSpine:
         rough = max(1, int(len(text) / 4))
         return {"provider": "rough_local", "estimated_tokens": rough, "chars": len(text), "bytes": len(utf8)}
 
+    def _stone_turn(
+        self,
+        *,
+        user_id: str,
+        friend_id: str,
+        source: SourceRecord,
+        message: str,
+        project_id: str,
+        room_id: str,
+        audience: str,
+        history: Sequence[Dict[str, Any]],
+        max_memories: int,
+        jeremy_refs: List[MemoryRef],
+    ) -> Any:
+        """Recall stones for this message, merge them with Jeremy's list, then read this message into stones.
+
+        Returns ``(memories, status)``. Stones are private: they are recalled and written only for a private
+        audience and only for ordinary messages (not code, lyrics or pasted documents). Hosts that isolate
+        memory by project and room (``scoped_memory``) get the same isolation here. A failure never blocks the
+        turn; it is named in ``status["problems"]``.
+        """
+        status: Dict[str, Any] = {"status": "disabled", "recalled": 0, "ring2": 0, "ingested": 0, "problems": []}
+        if not self.stones_enabled:
+            return jeremy_refs, status
+        if audience != "private" or source.kind != "message":
+            status["status"] = "not_private" if audience != "private" else "not_message"
+            return jeremy_refs, status
+        status["status"] = "ok"
+        try:
+            store = self.stones.store(user_id, friend_id)
+        except Exception as exc:
+            logging.getLogger(__name__).exception("PubPartner stones could not open (%s)", friend_id)
+            status["status"] = "unavailable"
+            status["problems"].append(f"open: {type(exc).__name__}: {exc}"[:300])
+            return jeremy_refs, status
+        memories = jeremy_refs
+        try:
+            scope = {"project_id": project_id, "room_id": room_id} if self.scoped_memory else {}
+            history_text = [str(row.get("content") or "") for row in history if isinstance(row, dict)]
+            recalled = store.recall(message, limit=max(0, max_memories), skip_if_in=history_text, **scope)
+            if recalled:
+                stone_items = [
+                    FusionItem(key=item.excerpt, source_id=item.source_id, payload=MemoryRef(
+                        id=f"stone:{item.stone_id}", kind="said", text=item.excerpt, importance=item.importance,
+                        source="pubpartner_stones", why=explain_stone(item)))
+                    for item in recalled
+                ]
+                jeremy_items = [FusionItem(key=ref.text, source_id="", payload=ref) for ref in jeremy_refs]
+                memories = fuse_memories(stone_items, jeremy_items, limit=max_memories,
+                                         exclude_source_ids=(source.source_id,))
+                used = {int(ref.id.split(":", 1)[1]) for ref in memories if ref.id.startswith("stone:")}
+                status["recalled"] = len(used)
+                status["ring2"] = sum(1 for item in recalled if item.ring == 2 and item.stone_id in used)
+                if used:
+                    store.mark_surfaced(used)
+        except Exception as exc:
+            logging.getLogger(__name__).exception("PubPartner stones could not recall (%s)", friend_id)
+            status["problems"].append(f"recall: {type(exc).__name__}: {exc}"[:300])
+            memories = jeremy_refs
+        try:
+            result = store.ingest(
+                source_id=source.source_id, session_id=source.session_id, text=source.text,
+                created_at=source.created_at, language=source.language, project_id=project_id, room_id=room_id,
+                sha256=source.sha256, kind=source.kind,
+            )
+            status["ingested"] = int(result.get("stones") or 0)
+            if result.get("dropped_ungrounded"):
+                status["problems"].append("ungrounded answers dropped: " + "; ".join(result["dropped_ungrounded"][:3]))
+        except Exception as exc:
+            logging.getLogger(__name__).exception("PubPartner stones could not save (%s)", friend_id)
+            status["problems"].append(f"ingest: {type(exc).__name__}: {exc}"[:300])
+        return memories, status
+
+    def _turn_log_audiences(self, user_id: str, session_id: str) -> Dict[str, str]:
+        """What audience each logged turn of one session had, by source id. Unreadable lines are skipped."""
+        path = self.session_dir / f"{_safe_slug(user_id)}_{_safe_slug(session_id)}_turns.jsonl"
+        found: Dict[str, str] = {}
+        if not path.exists():
+            return found
+        try:
+            with path.open("r", encoding="utf-8") as handle:
+                for line in handle:
+                    try:
+                        row = json.loads(line)
+                        fcp1 = row.get("fcp1") or {}
+                        source_id = str((row.get("source") or {}).get("id") or "")
+                        if source_id and isinstance(fcp1, dict):
+                            room = str((fcp1.get("proj") or {}).get("room") or "")
+                            found[source_id] = _turn_audience(fcp1.get("task"), room)
+                    except (ValueError, AttributeError):
+                        continue
+        except OSError:
+            return found
+        return found
+
+    def sync_stones(self, *, time_budget_s: float = 5.0, retry_unverified: bool = False) -> Dict[str, Any]:
+        """Read past vault messages into stones (first run, or after stones were turned on late).
+
+        A message is admitted only when its audience can be shown to be private: the vault record says so, or
+        the session's turn log does. Anything else is counted as ``unverified`` and left out. Safe to call
+        often; each call stops at the time budget and the next one carries on.
+        """
+        if not self.stones_enabled:
+            return {"status": "disabled"}
+        cache: Dict[Any, Dict[str, str]] = {}
+
+        def audience_of(record: Any) -> Optional[str]:
+            stated = (record.metadata or {}).get("audience")
+            if isinstance(stated, str) and stated:
+                return stated
+            key = (record.user_id, record.session_id)
+            if key not in cache:
+                cache[key] = self._turn_log_audiences(*key)
+            return cache[key].get(record.source_id)
+
+        try:
+            return {"status": "ok", **sync_from_vault(
+                self.stones, self.vault, audience_of=audience_of, time_budget_s=time_budget_s,
+                retry_unverified=retry_unverified)}
+        except Exception as exc:
+            logging.getLogger(__name__).exception("PubPartner stones could not sync from the vault")
+            return {"status": "failed", "error": f"{type(exc).__name__}: {exc}"[:300]}
+
     def memory_scope(self, user_id: str, friend_id: str, project_id: str, room_id: str) -> str:
         if not self.scoped_memory:
             return friend_id
@@ -1975,14 +2120,23 @@ class PubPartnerSpine:
         *,
         max_memories: int,
         problems: Optional[List[str]] = None,
+        exclude_source_ids: Sequence[str] = (),
     ) -> List[MemoryRef]:
         if self.cricket_keeper is None:
             return []
         try:
             cricket = await self.cricket_keeper.get(friend_id or "friend")
-            recalled = await cricket.recall(prompt, max_results=max_memories, min_importance=3)
+            # The message being answered was stored as a pointer a moment ago (so its exact text is safe before
+            # anything else runs), which makes it the best match for itself. Ask for one extra and leave it out,
+            # so a slot is not spent echoing the message back at the model.
+            spare = 1 if exclude_source_ids else 0
+            recalled = await cricket.recall(prompt, max_results=max_memories + spare, min_importance=3)
             refs: List[MemoryRef] = []
             for mem in recalled:
+                if len(refs) >= max_memories:
+                    break
+                if any(sid and sid in str(mem.content) for sid in exclude_source_ids):
+                    continue
                 refs.append(MemoryRef(
                     id=f"jeremy:{mem.id}",
                     kind=getattr(mem.memory_type, "value", str(mem.memory_type)),

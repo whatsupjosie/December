@@ -5,3 +5,6 @@ __pycache__/
 # Never commit these (see docs/PUBPARTNER_MEMORY_TUNEUP_2026-11-27.md).
 data/pubpartner/backups/vessel/
 data/pubpartner/memory_status.json
+
+# PubPartner stepping stones (2026-11-28): rebuildable from the verbatim vault; private, never commit.
+data/pubpartner/stones/

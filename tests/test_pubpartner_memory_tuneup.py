@@ -2,8 +2,10 @@
 
 Deterministic mock provider, temporary storage, no network, no CI service.
 Covers: the reply surviving a failed save, the read-only memory map, the automatic
-vessel backup, the standalone start-up fixes, and one known recall problem that is
-waiting for the owner's decision (marked xfail so it cannot be forgotten).
+vessel backup, the standalone start-up fixes, and the recall scenario that failed on
+2026-11-27 (an early specific fact lost after many similar messages). That scenario was a
+strict xfail until stepping stones (2026-11-28, modules/pubpartner_stones.py) fixed it; it is
+now an ordinary test.
 """
 from __future__ import annotations
 
@@ -24,7 +26,7 @@ from modules.pubpartner_vessel_backup import backup_vessel_if_changed
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = dict(user_id="u", friend="alex", provider={"provider": "mock"}, project_id="p", room_id="phone")
-STORE_IDS = ["exact_words", "turn_log", "receipts", "relationship", "vessel", "jeremy",
+STORE_IDS = ["exact_words", "turn_log", "receipts", "relationship", "vessel", "jeremy", "stones",
              "alex_core", "archive", "work_notes", "cartridges", "backups"]
 
 
@@ -232,12 +234,6 @@ def test_app_starts_without_2i_writes_memory_status_and_backs_up_once(tmp_path, 
 
 # ── known problem waiting for the owner's decision ──────────────────────────────
 
-@pytest.mark.xfail(strict=True, reason=(
-    "Owner decision pending. Jeremy scores a memory by how many words of the question appear in its text AND its tags, and every memory "
-    "is tagged with the project id and user id, so a question that names the project (here 'orchid') gets no help from that word. "
-    "Words like port/database/its then decide, and use-count boosts the busy memories. Measured 2026-11-27 through the real spine: "
-    "recalled after 90 later similar messages, NOT after 110 or 200; with the project named 'p' it was still recalled at 200. "
-    "Remove this marker when recall is changed."))
 @pytest.mark.asyncio
 async def test_early_specific_fact_is_still_recalled_after_many_similar_messages(tmp_path):
     from modules.jeremy_cricket import CricketKeeper

@@ -66,7 +66,7 @@ To restore a vessel: stop the app, keep the current file aside, then copy a back
 - `modules/pubpartner_core.py`: a failed receipt, encounter or turn-log write no longer throws away the reply; it is returned
   in `save_errors` and logged. The turn log tolerates a value JSON cannot encode.
 - `modules/pubpartner_memory_map.py` (new), `modules/pubpartner_vessel_backup.py` (new), route `GET /api/pubpartner/memory`.
-- `tests/test_pubpartner_memory_tuneup.py` (17 tests, one deliberate xfail), `scripts/pubpartner_memory_probe.py`.
+- `tests/test_pubpartner_memory_tuneup.py` (17 tests; the one deliberate xfail became an ordinary passing test on 2026-11-28, see the stones document), `scripts/pubpartner_memory_probe.py`.
 - `.gitignore`: two lines (private vessel backups and the memory status file).
 
 ## 5. Findings NOT changed, for her decision (both sides)
@@ -77,6 +77,8 @@ To restore a vessel: stop the app, keep the current file aside, then copy a back
    Run through the real spine with 1-second timer off: fact recalled after 90 later similar messages, NOT after 110 or 200;
    with the project named `p` it was still recalled at 200. My filler messages were deliberately similar, so real chats
    will degrade slower; the mechanism is real. The words are still saved exactly. Pinned as an xfail test.
+   **Update 2026-11-28: addressed by stepping stones, a second recall channel beside Jeremy (Jeremy itself is unchanged). The test is now an
+   ordinary passing test. See `docs/PUBPARTNER_RECALL_STONES_2026-11-28.md`.**
    *For changing it:* the question that matters most to her ("what did we decide about X") is the one that fails.
    *Against:* Jeremy's scoring is her written design ("popular memories surface more"), is a shared file used by Alex Core,
    and ranking changes alter every reply. Options: (A) fix scoring (whole words, rarity weighting, ignore tags/boilerplate,
@@ -84,7 +86,8 @@ To restore a vessel: stop the app, keep the current file aside, then copy a back
    second recall channel; (C) leave it. Jeremy lives on another branch, so (A) is a change there, not here.
 2. The vessel learns only from explicit lessons; ordinary facts reach Jeremy and the exact-words store, not the vessel.
 3. A new session starts with no chat history (by design: history is per session).
-4. The current message is stored in Jeremy before recall, so it is recalled as its own memory and uses one of the six slots.
+4. The current message is stored in Jeremy before recall, so it is recalled as its own memory and uses one of the six slots. **Fixed 2026-11-28** in `PubPartnerSpine._jeremy_memories`: the message being
+   answered is left out, and Jeremy is asked for one extra so no slot is lost.
 5. `save_errors` is returned and logged but the page does not show it. A banner would need a change to `static/pubpartner.js`.
 6. Starting the app on the canonical vessel adds search-index pages (36 to 47) and changes its Git blob; contents unchanged
    (identity 10, events 0, claims 0, audit 11 before and after). The ORIGINAL code does this too (checked), so the commit
@@ -137,6 +140,6 @@ NOT fixed, need Josie's decision (both sides in the chat report):
 A. Two app processes on one data folder fork the verbatim audit chain (1 of 3 runs) and race on Alex Core's _affect_state.tmp (modules/alex_core.py line 754, a pinned file on another branch, not touched). One process stayed clean through 330 concurrent turns. Option: a data-folder lock that refuses a second start (needs Windows testing).
 B. A torn last receipt row makes every later turn in that session raise "receipt chain invalid" (fail-closed identity checkpoint). Option: treat an unterminated last row as a torn tail, warn, and continue from the last good row.
 C. Files are named user_session, so user "a_b"+session "c" and user "a"+session "b_c" share receipts and turn log (reproduced); ids over 120 characters and "/" vs "_" also merge. Fixing needs a naming change plus migration.
-D. The recall defect from section 5 is still open.
+D. The recall defect from section 5: addressed on 2026-11-28 (see `docs/PUBPARTNER_RECALL_STONES_2026-11-28.md`); her decisions about it are listed there.
 
 Verification state: full suite on a fresh build 258 passed, 4 skipped, 1 xfailed, 1 failed (the same PubCast main.py test as before); federation 14 passed with PYTHONPATH=pubpartner. Run after the last code change. NOT re-run on the final code (interrupted): scripts/pubpartner_memory_probe.py and pubpartner_restart_probe.py (both passed before this pass's changes), and the two-instance stress. The SIGKILL-under-load test passed (0 acknowledged messages lost) after the flush changes but before the tail-read change. Nothing was run on Windows.

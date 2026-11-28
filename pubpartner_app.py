@@ -176,6 +176,15 @@ async def lifespan(app: FastAPI):
     # already saved (this also catches a crash, which skips the shutdown copy), then
     # write where every memory lives and whether it is healthy. Neither can stop startup.
     app.state.memory_runtime = {"jeremy_open": cricket is not None, "vessel_mounted": True}
+    # Stepping stones: read any saved private messages that have no stones yet (first start after stones were
+    # added, or messages saved while they were off). Bounded to a few seconds; the next start carries on.
+    stones_sync = spine.sync_stones(time_budget_s=5.0)
+    app.state.memory_runtime["stones_sync"] = stones_sync
+    if stones_sync.get("status") == "failed":
+        logger.error("PubPartner stones could not be rebuilt from saved messages: %s", stones_sync.get("error"))
+    elif stones_sync.get("ingested"):
+        logger.info("PubPartner stones: read %s saved message(s) into %s stone(s)%s", stones_sync["ingested"],
+                    stones_sync.get("stones"), "" if stones_sync.get("complete") else " (more on the next start)")
     app.state.memory_status = _publish_memory_status(
         app,
         vessel_backup=backup_vessel_if_changed(vessel.store, backup_dir_for(DATA_DIR), reason="startup"),
