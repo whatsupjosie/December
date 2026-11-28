@@ -124,6 +124,7 @@
   function button(text,parent,fn){const e=make("button",text,parent);e.type="button";e.className="mc-btn";e.onclick=fn;return e;}
   function field(label,key,rows=2,kind="textarea"){const labelEl=make("label",label,panelBody);const input=make(kind,undefined,labelEl);input.id="narrative_"+key;if(kind==="textarea")input.rows=rows;else if(kind==="input")input.type=key==="start"||key==="end"?"number":"text";form[key]=input;return input;}
   let panelBody;
+  let displayedValues = {};
   const names={purpose:"Dramatic purpose",cast:"Cast / character identities",motivation:"Character objectives and obstacles",information:"Information distribution (recipient | fact | current state | intended state)",subtext:"Subtext",ambiguity:"Ambiguity / planned reveal",choreography:"Blocking, objects and physical continuity",emotionalProgression:"Emotional progression",dramaticProgression:"Dramatic progression / change",audienceImpact:"Intended audience impact",dependencies:"Dependencies / preceding and later scenes",editorialAttention:"Particular attention / punch-up targets",executionAssessment:"Author's assessment"};
   function makePanel(){
     const style=make("style",`#narrativeDialog{width:min(720px,94vw);max-height:90dvh;overflow:auto;background:#f7efe0;color:#29231b;border:1px solid #8b7250;border-radius:12px;padding:18px;font:14px/1.4 system-ui}#narrativeDialog::backdrop{background:#0008}#narrativeDialog label{display:block;margin:10px 0;color:inherit;font-weight:600}#narrativeDialog input,#narrativeDialog select,#narrativeDialog textarea{display:block;width:100%;box-sizing:border-box;margin:4px 0 0;padding:7px;background:#fffaf0;color:#29231b;border:1px solid #ad9b83;border-radius:5px;font:inherit}#narrativeDialog textarea{resize:vertical}#narrativeDialog .narrative-actions{display:flex;gap:7px;flex-wrap:wrap;margin:9px 0}#narrativeDialog pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:35vh;overflow:auto;font:inherit;background:#fffaf0;padding:10px;border:1px solid #ad9b83}#narrativeDialog .mc-btn{min-height:34px;flex:0 1 auto}`,document.head);
@@ -169,6 +170,7 @@
     form.title.value=s?.title||"Scene "+(state.scenes.length+1);form.start.value=(s?.start??defaultStart)+1;form.end.value=s?.end??"";
     form.medium.value=s?.medium||"prose";for(const f of C.fields)form[f].value=s?.[f]||"";
     form.decisions.value=s?.decisions||"";form.confirmedOutcomes.value=s?.confirmedOutcomes||"";
+    displayedValues = Object.fromEntries(Object.entries(form).map(([key, input]) => [key, input.value]));
     if(s?.confirmedOutcomes&&!verifiedOutcomes(s))say("Confirmed outcomes are from older or unverified text. Review and explicitly reconfirm them before treating them as established.");
     refreshReport();
     refreshArchive();
@@ -192,9 +194,7 @@
     return {id:s.id,title:s.title,start:s.start,end:s.end,reason};
   });
   function formChanged(){
-    if(!panel?.open)return false;const s=current();
-    if(!s)return C.fields.some(f=>form[f].value.trim())||!!form.decisions.value.trim()||!!form.confirmedOutcomes.value.trim();
-    return form.title.value.trim()!==s.title||Number(form.start.value)-1!==s.start||(form.end.value.trim()===""?null:Number(form.end.value))!==s.end||form.medium.value!==(s.medium||"prose")||form.decisions.value!==(s.decisions||"")||form.confirmedOutcomes.value!==(s.confirmedOutcomes||"")||C.fields.some(f=>form[f].value!==s[f]);
+    return panel?.open && Object.entries(form).some(([key, input]) => input.value !== displayedValues[key]);
   }
   function apply(){
     try{

@@ -448,3 +448,25 @@ def test_an_edit_that_never_happened_cannot_bring_back_old_words(served):
     page.keyboard.press("Enter")
     assert page.input_value("#soloTextarea") == "\nNew document."
     page.context.close()
+
+
+def test_first_scene_title_survives_cancelled_close(served):
+    page = served(1366, 768)
+    try:
+        if not page.locator("#narrativeOpen").is_visible():
+            page.click("#sidebarToggle")
+        page.click("#narrativeOpen")
+        dialog = page.locator("#narrativeDialog")
+        title = dialog.locator("#narrative_title")
+        title.fill("The guest arrives")
+        page.once("dialog", lambda prompt: prompt.dismiss())
+        dialog.get_by_role("button", name="Close", exact=True).click()
+        assert dialog.is_visible()
+        assert title.input_value() == "The guest arrives"
+        dialog.get_by_role("button", name="Save dossier").click()
+        dialog.get_by_role("button", name="Close", exact=True).click()
+        assert not dialog.is_visible()
+        page.click("#narrativeOpen")
+        assert title.input_value() == "The guest arrives"
+    finally:
+        page.context.close()
