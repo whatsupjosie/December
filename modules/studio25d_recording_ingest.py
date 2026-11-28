@@ -358,6 +358,8 @@ class EncodedTakeIngest:
             session = self._load(take, owner)
             if session.ingest["state"] == "complete":
                 raise HTTPException(409, "Completed originals are immutable")
+            if session.ingest["state"] == "abandoned":
+                return self._status(session)
             session.ingest["state"] = "abandoned"; self._commit(session)
             self.recording._blackbox_event('recording.upload_abandoned', actor=owner, data={
                 'session_id':take, 'received_bytes':session.ingest['received_bytes']})

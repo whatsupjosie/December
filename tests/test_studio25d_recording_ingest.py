@@ -324,3 +324,32 @@ def test_video_bytes_cannot_be_accepted_as_independent_voice(tmp_path,encoded_vi
     take=begin(client,encoded_video,mime='audio/webm',width=0,height=0)
     for index in range((len(encoded_video)+CHUNK_BYTES-1)//CHUNK_BYTES):assert put(client,take,encoded_video,index).status_code==200
     assert client.post(f'/api/studio25d/recordings/{take}/complete',headers=auth()).status_code==422
+
+
+def test_retry_abandon_keeps_one_blackbox_receipt_across_workers(tmp_path, encoded_video):
+    from blackbox_event_language.schema import decode_record
+    from modules.blackbox_runtime import create_blackbox_witness
+
+    witness = create_blackbox_witness(tmp_path)
+    try:
+        first, first_service = app_at(tmp_path)
+        second, second_service = app_at(tmp_path)
+        with first, second:
+            first_service.blackbox_witness = second_service.blackbox_witness = witness
+            take = begin(first, encoded_video)
+            put(first, take, encoded_video, 0).raise_for_status()
+            url = f"/api/studio25d/recordings/{take}/abandon"
+            receipt = first.post(url, headers=auth())
+            receipt.raise_for_status()
+            retry = second.post(url, headers=auth())
+            retry.raise_for_status()
+            piece = first_service.recordings_dir / take / "pieces" / "00000000.part"
+            assert piece.read_bytes() == encoded_video[:CHUNK_BYTES]
+    finally:
+        witness.close()
+    events = [decode_record(line)["payload"]["event_type"]
+              for path in (tmp_path / "blackbox").glob("*.bbx")
+              for line in path.read_text().splitlines()]
+    assert events.count("recording.upload_started") == 1
+    assert events.count("recording.upload_abandoned") == 1
+    assert retry.json() == receipt.json()

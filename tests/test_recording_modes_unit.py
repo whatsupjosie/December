@@ -421,11 +421,15 @@ def test_cut_following_never_leaves_a_camera_recording_it_should_not(tmp_path, m
                 cameras.set_preview_source(target)
             else:
                 cameras.take()
-            for _ in range(20):
-                await asyncio.sleep(0)            # let the cut follower catch up
-            while not take._queue.empty():
-                await asyncio.sleep(0.001)
-            await asyncio.sleep(0.005)
+            # The camera callback schedules its enqueue on the loop. An empty
+            # queue alone can mean the worker is still changing the active segment.
+            await asyncio.sleep(0)
+            async def wait_for_cut():
+                while not take._queue.empty():
+                    await asyncio.sleep(0)
+                async with take._busy:
+                    pass
+            await asyncio.wait_for(wait_for_cut(), timeout=5)
             picture = [k for k in engine.running_keys if "~pgm" in k]
             assert len(picture) <= (2 if armed else 1) + 1, f"too many cameras recording: {picture}"
             program_seg = take.segments.get(take._program) if take._program is not None else None
@@ -436,8 +440,7 @@ def test_cut_following_never_leaves_a_camera_recording_it_should_not(tmp_path, m
                 assert take.intervals[-1].source_id == program_cam and take.intervals[-1].segment is None
             if take._preview is not None:
                 assert armed and take.segments[take._preview].source_id == cameras.get_preview_source().source_id
-            # Settle: the overlap at a cut is temporary; once settled, only program (and armed preview) record.
-            await asyncio.sleep(0.01)
+            # Once the cut has finished, only program (and armed preview) record.
             running = {take.segments[i].source_id for i, s in take.segments.items() if s.state == "running"}
             allowed = {program_cam} | ({cameras.get_preview_source().source_id} if armed else set())
             assert running <= allowed, f"recording {running}, allowed {allowed}"
