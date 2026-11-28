@@ -160,3 +160,13 @@ def test_duplicate_document_members_are_rejected():
             z.writestr("word/document.xml", "<document/>")
     with pytest.raises(ValueError, match="duplicate member names"):
         convert("ambiguous.docx", out.getvalue())
+
+
+@pytest.mark.parametrize(("codepage", "words"), [(932, "日本語"), (936, "中文"), (949, "한글")])
+def test_rtf_multibyte_text_survives_conversion(codepage, words):
+    encoded = words.encode(f"cp{codepage}")
+    # First byte literal, then hex escapes, with a physical newline inside the run.
+    escapes = b"\r\n".join(b"\\'%02x" % byte for byte in encoded[1:])
+    raw = (br"{\rtf1\ansi\ansicpg1252 Before {\ansicpg" + str(codepage).encode()
+           + b" " + encoded[:1] + escapes + br"} \'e9 \uc2\u26085??!}")
+    assert convert("cue.rtf", raw)["text"] == f"Before {words} é 日!"

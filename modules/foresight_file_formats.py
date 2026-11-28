@@ -249,13 +249,28 @@ def rtf_text(raw: bytes) -> str:
         raise ValueError("This file is not an RTF document")
     token = re.compile(r"\\([a-z]{1,32})(-?\d{1,10})?[ ]?|\\'([0-9a-f]{2})|\\([^a-z])|([{}])|[\r\n]+|(.)", re.I | re.S)
     codepage, stack, ignorable, uc_skip, skip, out = "cp1252", [], False, 1, 0, []
-    for word, argument, hex_byte, symbol, brace, char in token.findall(source):
+    # RTF mixes literal bytes and hex escapes. Decode a run as a unit so a
+    # multibyte character can span either representation.
+    encoded = bytearray()
+    for match in token.finditer(source):
+        word, argument, hex_byte, symbol, brace, char = match.groups()
+        if hex_byte or char:
+            if skip > 0:
+                skip -= 1
+            elif not ignorable:
+                encoded.append(int(hex_byte, 16) if hex_byte else ord(char))
+            continue
+        if not (word or symbol or brace):
+            continue  # Physical line breaks do not interrupt an RTF text run.
+        if encoded:
+            out.append(encoded.decode(codepage, errors="replace"))
+            encoded.clear()
         if brace:
             skip = 0
             if brace == "{":
-                stack.append((uc_skip, ignorable))
+                stack.append((uc_skip, ignorable, codepage))
             elif stack:
-                uc_skip, ignorable = stack.pop()
+                uc_skip, ignorable, codepage = stack.pop()
         elif symbol:
             skip = 0
             if symbol == "*":
@@ -289,16 +304,8 @@ def rtf_text(raw: bytes) -> str:
                 skip = uc_skip
             elif word in RTF_CHARACTERS:
                 out.append(RTF_CHARACTERS[word])
-        elif hex_byte:
-            if skip > 0:
-                skip -= 1
-            elif not ignorable:
-                out.append(bytes([int(hex_byte, 16)]).decode(codepage, errors="replace"))
-        elif char:
-            if skip > 0:
-                skip -= 1
-            elif not ignorable:
-                out.append(char)
+    if encoded:
+        out.append(encoded.decode(codepage, errors="replace"))
     text = "".join(out).encode("utf-16", "surrogatepass").decode("utf-16", errors="replace")
     return "\n".join(line.rstrip() for line in text.strip("\n").split("\n"))
 
