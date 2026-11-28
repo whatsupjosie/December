@@ -508,3 +508,20 @@ def test_undo_goes_to_the_newest_thing_done_typing_or_formatting(page):
     page.keyboard.press("Control+z")
     assert _runs(page) == []
     assert page.evaluate("committed[0]") == "one two"
+
+
+def test_paragraph_dialog_preserves_mixed_lists(page):
+    _type(page, "Bread\nMethod\nNotes")
+    for index, label in enumerate(["Bulleted list", "Numbered list"]):
+        _select(page, index, 0, 1)
+        page.get_by_role("button", name=label, exact=True).click()
+    page.locator("#twoiRichToggle").click()
+    page.locator("#soloTextarea").press("Control+a")
+    page.get_by_label("Format", exact=True).select_option(label="Paragraph style, alignment, indent…")
+    page.get_by_label("Alignment", exact=True).select_option("center")
+    page.get_by_role("button", name="Apply", exact=True).click()
+
+    rows = _styles(page)
+    assert [row["align"] for row in rows] == ["center"] * 3
+    assert [row.get("list") or "none" for row in rows] == ["bullet", "number", "none"]
+    assert page.input_value("#soloTextarea") == "Bread\nMethod\nNotes"

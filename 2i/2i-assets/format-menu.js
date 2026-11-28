@@ -63,7 +63,7 @@
   function paragraph(){
     ready();const indices=stableSelection(),source=documentId,basis=committed.slice(),d=dialog("Paragraph and text appearance"),st=syncManuscriptFormat(),p=C.profiles[st.profile],existing=st.rows.find(r=>r.index===indices[0])?.style;
     const initial=existing&&p.roles.includes(existing.role)?existing:C.defaultStyle(p.roles[0]);
-    el("p","Editing "+indices.length+" committed paragraph(s). Whole-paragraph styling only. For character-range formatting, use the future rich-document editor integration.",d);
+    el("p","Editing "+indices.length+" committed paragraph(s). Whole-paragraph styling only. To format individual words in Write mode, use the formatting toolbar.",d);
     const role=field(d,"Paragraph role",select(null,"Paragraph role",p.roles.map(k=>[k,C.names[k]]),initial.role));
     const align=field(d,"Alignment",select(null,"Alignment",["default","left","center","right","justify"].map(k=>[k,k]),initial.align));
     const font=field(d,"Font family",select(null,"Font family",["default","serif","sans","mono"].map(k=>[k,k]),initial.font));
@@ -73,7 +73,24 @@
     const flags={};for(const key of ["bold","italic","underline"]){const i=el("input",null);i.type="checkbox";i.checked=initial[key];flags[key]=field(d,key,i);}
     const status=textStatus(d);
     function verify(){ready();if(source!==documentId||basis.length!==committed.length||basis.some((x,i)=>x!==committed[i]))throw Error("Manuscript text changed. Select the intended paragraph again.");}
-    button(d,"Apply",()=>{try{verify();const next=C.clone(syncManuscriptFormat());C.apply(next,committed,indices,{role:role.value,align:align.value,font:font.value,indent:Number(indent.value),size:Number(size.value),spacing:Number(spacing.value),...Object.fromEntries(Object.entries(flags).map(([k,v])=>[k,v.checked]))},lockedLines);snapshot();manuscriptFormat=next;update();d.close();}catch(e){status.textContent=e.message;}});
+    button(d,"Apply",()=>{
+      try{
+        verify();
+        const next=C.clone(syncManuscriptFormat());
+        const style={role:role.value,align:align.value,font:font.value,indent:Number(indent.value),
+          size:Number(size.value),spacing:Number(spacing.value),...Object.fromEntries(Object.entries(flags).map(([k,v])=>[k,v.checked]))};
+        // List membership is set on the formatting toolbar. A selection can mix list kinds.
+        const listByIndex=new Map(next.rows.map(row=>[row.index,C.listKind(row.style)]));
+        for(const list of C.lists){
+          const group=indices.filter(index=>(listByIndex.get(index)||"none")===list);
+          if(group.length)C.apply(next,committed,group,{...style,list},lockedLines);
+        }
+        snapshot();
+        manuscriptFormat=next;
+        update();
+        d.close();
+      }catch(e){status.textContent=e.message;}
+    });
     button(d,"Clear selected formatting",()=>{try{verify();const next=C.clone(syncManuscriptFormat());C.clear(next,indices,lockedLines);snapshot();manuscriptFormat=next;update();d.close();}catch(e){status.textContent=e.message;}});
     button(d,"Cancel",()=>d.close());d.showModal();
   }
