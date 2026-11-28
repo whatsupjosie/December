@@ -1,6 +1,6 @@
 # December source sweep
 
-Baseline assembly 06c69eb, parts 94ef55b, main 38787ec. Current verified installation 0b3f845db96c9b9e084698f7ccefb98bd6ef89db. No repository has reached full accounting yet.
+Baseline assembly 06c69eb, parts 94ef55b, main 38787ec. Current verified installation 2cede61dc7ed74da6fe08ce186bb7fe22dde5500. No repository has reached full accounting yet.
 
 Sir Purfluous recovery archive follow-up (PARTS.md item 10): the `sir_purfluous_bot(1).zip` member `sir_purfluous_bot/director.py` supplied the slow, underplay and stress transformations. December's existing `modules/sir_purfluous_runtime.py` applies these to explicit quoted-line demonstrations after existing intents. The offline BotManager path returned the actor's line with the rehearsal beat. All 17 focused responder checks passed. The full original director remains in the parts archive. Other archive behaviors and the repository-wide archive audit remain open.
 
@@ -137,9 +137,17 @@ Both refs resolve to `df737caaeff206e4128932532663776af74ec0e8`. The five distin
 - `c5501c2` and `d413e98`. Commands uses the same menu bindings. In the authenticated writer the search box and Enter switched among notebook, typewriter and standard views. The edited manuscript text survived each switch. December already allows the author to choose all three from the editor. Six focused Node checks also passed for formatting, palette ranking, presentation selection and imported references.
 - `169d770` and `a6cb826` document the historical execution plan and checks. The expanded handoff is already at `handoffs/2I_PROFESSIONAL_COMPLETION_LEDGER_2026-11-15.md`. No new parts required.
 
+### Beyond-October · audit/standard-first-2026-11-19 · reference archive, review, navigation and rich DOCX
+
+- `b813c34`, `2452490`: December's native reference controls in `2i/writers-room-v22.html` and `2i/2i-assets/format-menu.js` use the selected record. From an authenticated local `run_reach.py` Writers’ Room, downloaded a native copy, imported it with duplicate reference IDs, searched by contents, opened the second record and checked its exact text. File → Export committed text only produced the original manuscript, without either reference. Shortcut and record-identity regressions passed.
+- `22f6616`, `35a9551`, `3e40393`: Review → Creative contribution records reached `narrative-room.js` and `narrative-core.js`. Downloaded both reports; the aggregate omitted the private archive and the confirmed private export contained it. File → Print committed manuscript opened the preview; the downloaded HTML matched the iframe source exactly. Review → Revision history compared a real saved revision with the opened snapshot. Ten Node checks passed across references, reports, command availability, shortcuts, navigation and revision comparisons. Physical printing was outside this check.
+- `077e18e`: the inherited navigator selected a hidden textarea in rich Write mode. Both authenticated and disk-open Chromium reproduced an empty visible selection. Installed `2cede61dc7ed74da6fe08ce186bb7fe22dde5500` on main-assembly. `goToParagraph` in `2i/2i-assets/format-menu.js` now selects and scrolls the rendered paragraph using the rich surface’s existing caret API. The offline regression selects the whole paragraph across bold and plain spans and an emoji, checks editor focus and verifies the manuscript text. All 35 offline rich-surface browser tests and the launcher probe passed. The three changed remote file blobs matched the tested files.
+- `962f83a`: historical branch-specific GitHub Actions configuration. It launches Node tests already in December. No program behavior to install; tests run locally.
+- `16e30e4`, `dc89bca`, `cbcf817`: existing Foresight file tray → `static/foresight_files.js` → `2i/2i-assets/rich-editor.js` → local DOCX engine. Chromium opened a real DOCX, created a rich .2i from its original, reopened it, mounted the engine, and exported the untouched archive byte-for-byte. Unpacking the first download yielded exact original and working DOCX bytes. Three real-engine browser checks passed for autosave, leaving with unsaved edits and flushing when hidden; the deterministic container round trip passed. Desktop and phone-sized adapter fixtures passed against their labeled mock. Corrected the Node contract test’s storage double to keep the exit journal separate and support deletion; all four no-op/contract checks passed. No new parts.
+
 ## Resume point
 
-Beyond-October, `audit/standard-first-2026-11-19` at `6cccfd7a5b2b74f3c29829ed723c0e85128ee322`. Next candidate: `b813c3438574ca7928d073f98b36f0b26f7f3017`, manuscript shortcut isolation, imported references, committed-text export and native menus. Exercise reference search, open and export through the launcher. The branch inventory follows.
+Beyond-October, `audit/standard-first-2026-11-19` at `6cccfd7a5b2b74f3c29829ed723c0e85128ee322`. Next candidate: `365a72e2bfe5135381b884ef1c9b2d8a700b2c35`, recoverable bookmarks and editorial comments. Exercise creation, detachment/recovery after edits, and navigation from the current editor. The branch inventory follows.
 - `11-12-merge` — `d70952e52c81f89178f4ab557206fcde109bf970`
 - `2i-beta-polish` — `df737caaeff206e4128932532663776af74ec0e8`
 - `audit/standard-first-2026-11-19` — `6cccfd7a5b2b74f3c29829ed723c0e85128ee322`
