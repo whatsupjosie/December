@@ -1,6 +1,6 @@
 # December source sweep
 
-Baseline assembly 06c69eb, parts 94ef55b, main 38787ec. Current verified installation 910511b8f78a8988a9a74e8a5cba18ec52f9d49e. No repository has reached full accounting yet.
+Baseline assembly 06c69eb, parts 94ef55b, main 38787ec. Current verified installation 0b3f845db96c9b9e084698f7ccefb98bd6ef89db. No repository has reached full accounting yet.
 
 Sir Purfluous recovery archive follow-up (PARTS.md item 10): the `sir_purfluous_bot(1).zip` member `sir_purfluous_bot/director.py` supplied the slow, underplay and stress transformations. December's existing `modules/sir_purfluous_runtime.py` applies these to explicit quoted-line demonstrations after existing intents. The offline BotManager path returned the actor's line with the rehearsal beat. All 17 focused responder checks passed. The full original director remains in the parts archive. Other archive behaviors and the repository-wide archive audit remain open.
 
@@ -130,9 +130,16 @@ Both refs resolve to `df737caaeff206e4128932532663776af74ec0e8`. The five distin
 - `4d16628`, `e08af3e`, `9b8b9f3`. Existing `static/world_walk.html` and `static/2i_studio_bridge.js` launch the native writer. `2i/2i-assets/studio-desk.js` opens the shared notes UI and subscribes to its unread count. `reach.js` retains the manuscript on return. On a disposable authenticated `run_reach.py` host, Chromium selected the Writers’ Room seat, edited a manuscript, opened the Control Room audio-console note composer, stood up and reopened the notebook. Both the manuscript ID and its edited text survived. The three-user notes suite verified placement, delivery and unread behavior. Nine focused Node checks passed for the studio bridge, writing surface, handoff and format core.
 - Installed `910511b8f78a8988a9a74e8a5cba18ec52f9d49e` on main-assembly. A delayed inbox response could reopen a dismissed dialog and block the return to the room. `static/production_notes.js` now checks that its request still owns the open menu before rendering. `tests/test_production_notes_browser.py` holds an inbox response until after Escape, then checks the overlay stays closed. Both notes browser tests passed. Read back both remote blobs and matched the tested files. No new parts copy.
 
+### Beyond-October · audit/standard-first-2026-11-19 · manuscript formats and editor views
+
+- `8ab7945` and `84d9e27`. The destination writer loads `2i/2i-assets/format-core.js` and `format-menu.js` from `2i/writers-room-v22.html`. An authenticated local `run_reach.py` session opened `/writers-room`, chose the feature-film template, checked its writing guidance, applied Dialogue to the second paragraph, changed its alignment and opened the committed-text preview. The preview contained the edited text.
+- Installed `0b3f845db96c9b9e084698f7ccefb98bd6ef89db` on main-assembly. The inherited paragraph dialog dropped newer rich-editor list membership when changing alignment. A disk-open Chromium test selected a bulleted line, a numbered line and a plain line together. Applying center alignment removed both list types before the fix. All three lines now retain their respective types and exact words. All 34 offline rich-surface browser checks passed. Read back both changed files on the remote branch and matched the tested blobs.
+- `c5501c2` and `d413e98`. Commands uses the same menu bindings. In the authenticated writer the search box and Enter switched among notebook, typewriter and standard views. The edited manuscript text survived each switch. December already allows the author to choose all three from the editor. Six focused Node checks also passed for formatting, palette ranking, presentation selection and imported references.
+- `169d770` and `a6cb826` document the historical execution plan and checks. The expanded handoff is already at `handoffs/2I_PROFESSIONAL_COMPLETION_LEDGER_2026-11-15.md`. No new parts required.
+
 ## Resume point
 
-Beyond-October, `audit/standard-first-2026-11-19` at `6cccfd7a5b2b74f3c29829ed723c0e85128ee322`. Next candidate: `8ab7945b562a0bc3b86a93a6cf50ad14919ad516`, authoring menus, document templates and native paragraph formats. Exercise template and contextual paragraph commands from the current editor, followed by `84d9e27` quick elements. The branch inventory follows.
+Beyond-October, `audit/standard-first-2026-11-19` at `6cccfd7a5b2b74f3c29829ed723c0e85128ee322`. Next candidate: `b813c3438574ca7928d073f98b36f0b26f7f3017`, manuscript shortcut isolation, imported references, committed-text export and native menus. Exercise reference search, open and export through the launcher. The branch inventory follows.
 - `11-12-merge` — `d70952e52c81f89178f4ab557206fcde109bf970`
 - `2i-beta-polish` — `df737caaeff206e4128932532663776af74ec0e8`
 - `audit/standard-first-2026-11-19` — `6cccfd7a5b2b74f3c29829ed723c0e85128ee322`
