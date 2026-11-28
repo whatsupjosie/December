@@ -168,6 +168,13 @@
     if(coWriting){
       selectedIdx=index;render();const target=manuscriptLines.querySelector('[data-paragraph-index="'+index+'"]');
       if(!target)throw Error("The selected paragraph is not visible.");target.focus({preventScroll:true});target.scrollIntoView({block:"center",inline:"nearest"});
+    }else if(window.twoiRichSurface?.active()){
+      const rich=window.twoiRichSurface;
+      const target=rich.node.querySelector('p[data-index="'+index+'"]');
+      if(!target)throw Error("The selected paragraph is not visible.");
+      rich.node.focus({preventScroll:true});
+      rich.caret(index,0,committed[index].length);
+      target.scrollIntoView({block:"center",inline:"nearest"});
     }else{
       if(soloTextarea.value!==committed.join("\n"))throw Error("The writing surface is not synchronized.");
       soloTextarea.focus({preventScroll:true});soloTextarea.setSelectionRange(range.start,range.end);

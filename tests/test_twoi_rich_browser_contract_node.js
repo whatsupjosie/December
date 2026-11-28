@@ -33,13 +33,16 @@ async function run({corrupt=false,legacy=false}={}) {
   const body=new Element('body');
   const document={body,createElement:tag=>new Element(tag)};
   const origin='https://127.0.0.1:8000';
+  const journal=new Map();
   const indexedDB={open(){
     const req={result:{
       createObjectStore(){},
-      transaction(_name,mode){
+      transaction(name,mode){
+        const rows=name==='exit'?journal:records;
         const tx={objectStore(){return {
-          get(id){const request={};queueMicrotask(()=>{request.result=records.get(id);request.onsuccess?.();queueMicrotask(()=>tx.oncomplete?.())});return request},
-          put(value){const request={};queueMicrotask(()=>{records.set(value.id,value);request.onsuccess?.();queueMicrotask(()=>tx.oncomplete?.())});return request}
+          get(id){const request={};queueMicrotask(()=>{request.result=rows.get(id);request.onsuccess?.();queueMicrotask(()=>tx.oncomplete?.())});return request},
+          delete(id){queueMicrotask(()=>{rows.delete(id);tx.oncomplete?.()})},
+          put(value){const request={};queueMicrotask(()=>{rows.set(value.id,value);request.onsuccess?.();queueMicrotask(()=>tx.oncomplete?.())});return request}
         }}};return tx},
       close(){}
     }};

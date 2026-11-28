@@ -525,3 +525,19 @@ def test_paragraph_dialog_preserves_mixed_lists(page):
     assert [row["align"] for row in rows] == ["center"] * 3
     assert [row.get("list") or "none" for row in rows] == ["bullet", "number", "none"]
     assert page.input_value("#soloTextarea") == "Bread\nMethod\nNotes"
+
+
+def test_navigator_selects_visible_formatted_paragraph(page):
+    target = "Retake 🎬 after the cue."
+    _type(page, "First take\n" + target)
+    _select(page, 1, 0, 6)
+    page.locator("#twoiFormatBar button[aria-label^='Bold']").click()
+    menu = page.get_by_label("Manuscript", exact=True)
+    menu.focus()
+    menu.select_option(label="Chapter and scene navigator")
+    page.get_by_label("Paragraph number").fill("2")
+    page.get_by_role("button", name="Go to paragraph").click()
+
+    assert page.evaluate("document.getSelection().toString()") == target
+    assert page.evaluate("document.activeElement === twoiRichSurface.node")
+    assert page.evaluate("committed") == ["First take", target]
