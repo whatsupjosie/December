@@ -1,6 +1,6 @@
 # December source sweep
 
-Baseline assembly 06c69eb, parts 94ef55b, main 38787ec. Current verified installation b43dc869acc1b8e0006f0d8bee77f3a4be229d07. No repository has reached full accounting yet.
+Baseline assembly 06c69eb, parts 94ef55b, main 38787ec. Current verified installation 910511b8f78a8988a9a74e8a5cba18ec52f9d49e. No repository has reached full accounting yet.
 
 Sir Purfluous recovery archive follow-up (PARTS.md item 10): the `sir_purfluous_bot(1).zip` member `sir_purfluous_bot/director.py` supplied the slow, underplay and stress transformations. December's existing `modules/sir_purfluous_runtime.py` applies these to explicit quoted-line demonstrations after existing intents. The offline BotManager path returned the actor's line with the rehearsal beat. All 17 focused responder checks passed. The full original director remains in the parts archive. Other archive behaviors and the repository-wide archive audit remain open.
 
@@ -125,9 +125,14 @@ Both refs resolve to `df737caaeff206e4128932532663776af74ec0e8`. The five distin
 - `8b32d63`, `e61d7cf`, `44ed7f1`, `520fe41`, `8623c80`, `646c6f9`, `ea9137d`, `172bffa`, `71e92ad`, `2e9e5f1`: verified narrative drafting, confirmed outcomes tied to source text, archive/undo, protected lines, independent version state, parallel recovery, revision history and comparison in the current writer. Both Python modules match the donor snapshot; December extends the handoff. 23 focused Node tests and three backend revision/version tests passed.
 - Installed `b43dc869acc1b8e0006f0d8bee77f3a4be229d07` on main-assembly. A first-scene title edit was silently discarded by Close. The original dirty check omitted title, medium and range on a new dossier. The current narrative dialog now compares every field with the values actually displayed on opening or saving. Regression failed before the fix; all 37 writer polish Chromium checks passed after. On an authenticated launcher, opened `/writers-room`, edited the first title, declined discard, saved the dossier and manuscript, and verified the title in the server's stored revision. No new parts copy.
 
+### Beyond-October · audit/standard-first-2026-11-19 · studio desk and shared notes
+
+- `4d16628`, `e08af3e`, `9b8b9f3`. Existing `static/world_walk.html` and `static/2i_studio_bridge.js` launch the native writer. `2i/2i-assets/studio-desk.js` opens the shared notes UI and subscribes to its unread count. `reach.js` retains the manuscript on return. On a disposable authenticated `run_reach.py` host, Chromium selected the Writers’ Room seat, edited a manuscript, opened the Control Room audio-console note composer, stood up and reopened the notebook. Both the manuscript ID and its edited text survived. The three-user notes suite verified placement, delivery and unread behavior. Nine focused Node checks passed for the studio bridge, writing surface, handoff and format core.
+- Installed `910511b8f78a8988a9a74e8a5cba18ec52f9d49e` on main-assembly. A delayed inbox response could reopen a dismissed dialog and block the return to the room. `static/production_notes.js` now checks that its request still owns the open menu before rendering. `tests/test_production_notes_browser.py` holds an inbox response until after Escape, then checks the overlay stays closed. Both notes browser tests passed. Read back both remote blobs and matched the tested files. No new parts copy.
+
 ## Resume point
 
-Beyond-October, `audit/standard-first-2026-11-19` at `6cccfd7a5b2b74f3c29829ed723c0e85128ee322`. Next candidate: `4d16628cf86bd231dfcf6a8d121050eef31883e0`, Bella Faux Pas notebook, seated typewriter and production notes. Trace the walker and Writers’ Room entry points into the current offline writer and check note composition and return navigation. The branch inventory follows.
+Beyond-October, `audit/standard-first-2026-11-19` at `6cccfd7a5b2b74f3c29829ed723c0e85128ee322`. Next candidate: `8ab7945b562a0bc3b86a93a6cf50ad14919ad516`, authoring menus, document templates and native paragraph formats. Exercise template and contextual paragraph commands from the current editor, followed by `84d9e27` quick elements. The branch inventory follows.
 - `11-12-merge` — `d70952e52c81f89178f4ab557206fcde109bf970`
 - `2i-beta-polish` — `df737caaeff206e4128932532663776af74ec0e8`
 - `audit/standard-first-2026-11-19` — `6cccfd7a5b2b74f3c29829ed723c0e85128ee322`
