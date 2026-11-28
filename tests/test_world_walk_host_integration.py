@@ -331,9 +331,10 @@ def test_bella_faux_pas_studio_opens_from_the_foresight_counter_in_the_dressing_
     entry = page.get_by_text("Bella Faux Pas Studio", exact=True)
     entry.first.wait_for(timeout=10000)
     assert entry.count() == 1
-    entry.first.evaluate("el => (el.closest('button,[role=button],li') || el).click()")
-    page.wait_for_function("() => [...document.querySelectorAll('iframe')].some(f => /\\/walk(\\?|$)/.test(f.getAttribute('src') || ''))", timeout=20000)
-    frame = next(f for f in page.frames if "/walk" in f.url)
+    with page.expect_event("framenavigated", predicate=lambda frame: frame.url.split("?", 1)[0] == host + "/walk",
+                           timeout=20000) as navigation:
+        entry.first.evaluate("el => (el.closest('button,[role=button],li') || el).click()")
+    frame = navigation.value
     frame.wait_for_function("document.documentElement.dataset.ready === '1' && !!window.PubCastLive", timeout=30000)
     frame.wait_for_function("window.PubCastLive.state.online === true", timeout=15000)
     assert frame.evaluate("window.PubCastWalk.S.view.zones.length") > 0
