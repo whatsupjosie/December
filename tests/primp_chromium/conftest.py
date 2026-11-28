@@ -69,7 +69,7 @@ def live_host(tmp_path_factory):
             with urllib.request.urlopen(request) as response:
                 assert response.status == 201
                 account = json.load(response)
-            yield {'url':url, 'account':account, 'restart':restart}
+            yield {'url':url, 'account':account, 'restart':restart, 'data_dir':directory/'data'}
         finally:
             stop()
 

@@ -31,6 +31,7 @@
   #legend { position:absolute; left:12px; bottom:12px; font:12px "DM Mono", ui-monospace, monospace; color:var(--muted); background:#0b0a09cc; padding:8px 10px; border-radius:6px; }
   #library { list-style:none; margin:0; padding:0; }
   #library li { display:flex; justify-content:space-between; gap:8px; padding:5px 0; border-bottom:1px solid var(--line); font-size:13px; }
+  a.primp { color:var(--gold); }
 </style>
 <script type="importmap">
 { "imports": { "three": "/static/vendor/three-0.160.0/build/three.module.js" } }
@@ -224,16 +225,18 @@ $('save').addEventListener('click', async () => {
     const avatar = await AI.uploadGLB(glb, { name: $('name').value.trim() || 'Avatar', heightIn: heightIn(),
       sourceFormat: loaded.format, sourceName: loaded.modelName, token: token() });
     state.saved = avatar;
-    report(`<span class="good">Saved</span> “${avatar.name}” · server measured ${avatar.measured.height_m.toFixed(3)} m`);
+    report(`<span class="good">Saved</span> “${esc(avatar.name)}” · server measured ${avatar.measured.height_m.toFixed(3)} m · ${primpLink(avatar)}`);
     await refreshLibrary();
   } catch (err) { fail(err); }
   $('save').disabled = false;
 });
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const primpLink = (a) => `<a class="primp" href="/static/primp.html?avatar=${encodeURIComponent(a.id)}">Open in Primp</a>`;
 async function refreshLibrary() {
   const r = await fetch('/api/avatars/imports');
   const { avatars } = await r.json();
   $('library').innerHTML = avatars.length ? avatars.map((a) =>
-    `<li><span>${a.name}</span><span>${fmt(a.canonical_height_in)} · ${a.measured.skinned ? a.measured.joints + ' bones' : 'static'}</span></li>`).join('')
+    `<li><span>${esc(a.name)}</span><span>${fmt(a.canonical_height_in)} · ${a.measured.skinned ? a.measured.joints + ' bones' : 'static'} · ${primpLink(a)}</span></li>`).join('')
     : '<li><span style="color:var(--muted)">None yet</span></li>';
 }
 

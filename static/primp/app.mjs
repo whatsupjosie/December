@@ -7,6 +7,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {parseAvatar, dispose, prepareSurface, composeSurface, decodeLayer, surfacePoint} from './model.mjs';
 import {GLTFExporter} from 'three/addons/exporters/GLTFExporter.js';
 import {TEXTURE_SIZE, LAYERS, LIMITS, History, TileEdit, allowPaintAllocation, strokePoints, softenPixels, checkProjectSize, validateProject, bytesToBase64, base64ToBytes} from './core.mjs';
+import {listAvatars, fetchAvatar, sendAvatar, originOf, readOrigin, requestedAvatarId, standingHeightIn} from './pubcast.mjs';
 
 const $ = id => document.getElementById(id);
 const history = new History();
@@ -14,6 +15,7 @@ let renderer, scene, camera, controls, avatar, animations = [], source, source64
 let tool = 'lipstick', edit = null, previous = null, pointer = null, busy = false, dirty = false, comparing = false;
 let db = null, recoveryTimer, pendingRecovery = 0, generation = 0, recoveryWrites = Promise.resolve();
 let graphicsReady = false, pendingFrame = null, recoveryRevision = 0, recoveryScope;
+let origin = null, pubcastAvatars = [];   // origin: the PubCast avatar this look started from, if any
 const ndc = new THREE.Vector2();
 const viewport = $('viewport');
 
@@ -30,6 +32,8 @@ function updateControls() {
   const loaded = !!avatar && graphicsReady;
   for (const id of ['export', 'frame', 'face', 'compare', 'snapshot']) $(id).disabled = busy || !loaded;
   $('save').disabled = busy || !avatar;
+  $('send').disabled = busy || !loaded;
+  $('pubcast-avatar').disabled = busy || !graphicsReady || !pubcastAvatars.length;
   const paintable = loaded && targets.length > 0 && !busy && !comparing;
   for (const id of ['surface', 'detail', 'layer', 'layer-opacity', 'visible', 'brushes', 'clear']) $(id).disabled = !paintable;
   $('detail').disabled = !paintable || !!targets[active]?.base;
@@ -94,9 +98,9 @@ function frame(close = false) {
   camera.updateProjectionMatrix(); controls.update(); render();
 }
 
-function install(parsed, bytes, name) {
+function install(parsed, bytes, name, from = null) {
   if (avatar) { scene.remove(avatar); dispose(avatar, targets); }
-  avatar = parsed.root; animations = parsed.animations; targets = parsed.targets; source = bytes; source64 = null; active = 0;
+  avatar = parsed.root; animations = parsed.animations; targets = parsed.targets; source = bytes; source64 = null; active = 0; origin = from;
   generation++; clearTimeout(recoveryTimer); history.clear(); comparing = false;
   $('compare').setAttribute('aria-pressed', 'false');
   scene.add(avatar); $('welcome').hidden = true; $('avatar-name').textContent = name;
@@ -104,12 +108,12 @@ function install(parsed, bytes, name) {
   $('layer').replaceChildren(...LAYERS.map((name, i) => new Option(name, i)));
   $('layer').value = String(layerIndex); syncLayerControls(); frame(); dirty = false; updateControls(); render();
 }
-async function openAvatar(file) {
+async function openAvatar(file, from = null) {
   if (!file) return;
   if (dirty && !confirm('Replace this look? Save it first if you want to keep it.')) return;
   if (file.size > LIMITS.source) throw new Error('Choose a GLB smaller than 30 MiB.');
   status('Opening avatar…'); const bytes = await file.arrayBuffer(); const parsed = await parseAvatar(bytes);
-  install(parsed, bytes, file.name.replace(/\.glb$/i, ''));
+  install(parsed, bytes, file.name.replace(/\.glb$/i, ''), from);
   status(targets.length ? 'Avatar ready. Choose a surface and paint layer.' : 'This avatar has no paintable UV surfaces. You can still inspect and export it.', !targets.length);
   scheduleRecovery();
 }
@@ -218,7 +222,7 @@ function setupPointers() {
 function project() {
   source64 ||= bytesToBase64(new Uint8Array(source));
   const version = targets.some(t => t.base && t.size === 2048) ? 2 : 1;
-  const value = {format: 'primp', version, name: safeName(), source: source64, targets: []};
+  const value = {format: 'primp', version, name: safeName(), source: source64, targets: [], ...(origin ? {origin} : {})};
   checkProjectSize(value);
   for (const target of targets) if (target.base) {
     const saved = {id: target.id, ...(version === 2 ? {size: target.size || 1024} : {}), layers: []}; value.targets.push(saved);
@@ -246,18 +250,76 @@ async function restoreProject(value) {
       }
     }
   } catch (e) { dispose(parsed.root, parsed.targets); throw e; }
-  install(parsed, bytes, value.name); for (const t of targets) composite(t);
+  install(parsed, bytes, value.name, readOrigin(value)); for (const t of targets) composite(t);
   status('Editable look reopened.'); scheduleRecovery(); return true;
 }
 async function openProject(file) {
   if (!file) return; if (file.size > LIMITS.project) throw new Error('This project exceeds the 70 MiB limit.');
   status('Opening look…'); await restoreProject(JSON.parse(await file.text()));
 }
-async function exportAvatar() {
+// The finished surface (after-state, even while Before / after shows the before-state).
+async function buildGLB() {
   const wasComparing = comparing; comparing = false; for (const t of targets) composite(t);
+  try { return await new GLTFExporter().parseAsync(avatar, {binary: true, animations, onlyVisible: false}); }
+  finally { comparing = wasComparing; for (const t of targets) composite(t); }
+}
+async function exportAvatar() {
   status('Preparing avatar export…');
-  let result; try { result = await new GLTFExporter().parseAsync(avatar, {binary: true, animations, onlyVisible: false}); } finally { comparing = wasComparing; for (const t of targets) composite(t); }
+  const result = await buildGLB();
   download(new Blob([result], {type: 'model/gltf-binary'}), `${safeName()}.glb`); status('Avatar export download prepared.');
+}
+
+// ── PubCast avatar store ─────────────────────────────────────────────────
+// Signed-in requests without the shared adapter's redirect-to-login on 401,
+// so an expired session can never navigate away from unsaved paint.
+function hostFetch(input, init = {}) {
+  const auth = window.ReachAuth;
+  if (!auth) return fetch(input, init);
+  const headers = new Headers(init.headers || {}), token = auth.getToken();
+  if (token && !headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`);
+  return auth.nativeFetch(input, {...init, headers});
+}
+function feetInches(inches) { const ft = Math.floor(inches / 12), rest = inches - ft * 12; return `${ft}′${Number.isInteger(rest) ? rest : rest.toFixed(1)}″`; }
+async function loadPubcastAvatars() {
+  const select = $('pubcast-avatar');
+  try { pubcastAvatars = await listAvatars(hostFetch); }
+  catch (error) { pubcastAvatars = []; select.hidden = true; updateControls(); throw error; }
+  select.replaceChildren(new Option(pubcastAvatars.length ? 'PubCast avatars…' : 'No PubCast avatars yet', ''),
+    ...pubcastAvatars.map(a => new Option(`${a.name} · ${feetInches(a.canonical_height_in)}`, a.id)));
+  select.hidden = false; updateControls();
+}
+async function openPubcastAvatar(id) {
+  const entry = pubcastAvatars.find(a => a.id === id);
+  if (!entry) throw new Error('That PubCast avatar is no longer in the avatar list.');
+  status(`Opening “${entry.name}” from PubCast…`);
+  const bytes = await fetchAvatar(entry, hostFetch);
+  await openAvatar(new File([bytes], `${entry.name}.glb`, {type: 'model/gltf-binary'}), originOf(entry));
+}
+function askToSend() {
+  const dialog = $('send-dialog'), height = $('send-height');
+  $('send-name').value = `${safeName()} (Primp)`.slice(0, 80);
+  if (origin) {
+    height.value = String(origin.canonical_height_in); height.readOnly = true;
+    $('send-note').textContent = `Same canonical height and character as “${origin.name}”.`;
+  } else {
+    const standing = standingHeightIn(new THREE.Box3().setFromObject(avatar).getSize(new THREE.Vector3()).y);
+    height.value = String(standing); height.readOnly = false;
+    $('send-note').textContent = `This avatar stands about ${feetInches(standing)}. Primp does not resize avatars; PubCast checks the height when it saves. To give it a different height, use Import Avatar first.`;
+  }
+  dialog.returnValue = '';
+  return new Promise(resolve => {
+    dialog.addEventListener('close', () => resolve(dialog.returnValue === 'send'), {once: true});
+    dialog.showModal(); $('send-name').select();
+  });
+}
+async function sendToPubcast() {
+  if (!(await askToSend())) { status('Send to PubCast cancelled. Your work is still open.'); return; }
+  const name = $('send-name').value.trim(), heightIn = Number($('send-height').value);
+  status('Sending to PubCast…');
+  const glb = await buildGLB();
+  const saved = await sendAvatar(glb, {name, heightIn, origin, sourceName: safeName()}, hostFetch);
+  status(`Sent to PubCast as “${saved.name}”. It is now in Imported Avatars.`);
+  loadPubcastAvatars().catch(() => {});
 }
 async function checkRecoverySession() {
   if (await verifiedRecoveryScope() !== recoveryScope) throw new Error('The signed-in account changed. Save this look to a file and reload Primp before using recovery.');
@@ -327,6 +389,8 @@ $('save').onclick = run(async () => {
   else status('Look download requested. Unsaved-work protection stays on because the browser cannot confirm completion.');
 }, false);
 $('export').onclick = run(exportAvatar);
+$('send').onclick = run(sendToPubcast);
+$('pubcast-avatar').onchange = run(async () => { const id = $('pubcast-avatar').value; $('pubcast-avatar').value = ''; if (id) await openPubcastAvatar(id); });
 $('recover').onclick = run(async () => {
   if (!db) throw new Error('Local recovery is unavailable.');
   clearTimeout(recoveryTimer);
@@ -366,3 +430,7 @@ window.addEventListener('blur', () => finishStroke());
 window.addEventListener('beforeunload', event => { if (dirty) { event.preventDefault(); event.returnValue = ''; } });
 try { initRenderer(); } catch (error) { busy = true; for (const id of ['light', 'exposure', 'backdrop']) $(id).disabled = true; status(`The digital mirror could not start: ${error.message}. WebGL is required.`, true); updateControls(); }
 openDatabase().then(() => { if (avatar) scheduleRecovery(); }).catch(error => { $('storage-status').textContent = error.message; });
+// ?avatar=<id> (from Import Avatar's library) opens that PubCast avatar straight away.
+const wanted = requestedAvatarId(location.search);
+loadPubcastAvatars().then(() => { if (wanted) return run(() => openPubcastAvatar(wanted))(); })
+  .catch(error => { if (wanted) status(error.message, true); });
