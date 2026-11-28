@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -178,7 +179,24 @@ _PRESET_REGISTRY: Dict[str, Dict[str, Any]] = {
         "emoji":        "👻",
         "silhouette":   "spectral",
     },
+    # The owner's October 2025 design: a floating head of woven light, "approximately
+    # one-third the height of an adult", with a spinning mood ring. Drawn live by
+    # static/js/energy_sphere.js.
+    "SPHERE": {
+        "id":           "SPHERE",
+        "name":         "Energy Sphere",
+        "description":  "Floating head of woven light with a spinning mood ring",
+        "glow_color":   "#9CCF2A",
+        "body_type":    "sphere",
+        "height":       0.34,
+        "emoji":        "🟡",
+        "silhouette":   "sphere",
+        "renderer":     "energy_sphere",
+    },
 }
+
+HOLOGRAM_MODES = ("energy", "ghost", "solid")
+DEFAULT_CORE_COLOR = "#FFC42E"
 
 
 class AvatarPresetInfo(BaseModel):
@@ -272,7 +290,98 @@ def save_avatar(data_dir: Path, user_id: str, state: AvatarState) -> AvatarState
     return state
 
 
+# ── Profile API helpers (/api/avatars/me) ─────────────────────────────────────
+
+_MOOD_RE = re.compile(r"^[a-z][a-z_-]{0,31}$")
+
+
+class AvatarProfileError(ValueError):
+    """A profile update the server refuses, with a reason the page can show."""
+
+
+def profile_view(avatar: AvatarState) -> Dict[str, Any]:
+    """Everything the Avatar Foundry reads back, so what it saves is what it sees."""
+    meta = dict(getattr(avatar, "metadata", {}) or {})
+    return {
+        "display_name": avatar.display_name,
+        "preset_id": avatar.preset,
+        "glow_color": avatar.glow_color,
+        "color": avatar.glow_color,
+        "core_color": _normalize_hex_color(meta.get("core_color", DEFAULT_CORE_COLOR), DEFAULT_CORE_COLOR),
+        "energy_level": avatar.energy_level,
+        "hologram_mode": avatar.hologram_mode if avatar.hologram_mode in HOLOGRAM_MODES else "energy",
+        "visible": avatar.visible,
+        "mood": meta.get("mood", "neutral"),
+        "gesture": meta.get("gesture", "none"),
+        "badge": meta.get("badge", ""),
+    }
+
+
+def _strict_hex(value: Any, field: str) -> str:
+    text = str(value or "").strip()
+    if not re.fullmatch(r"#?[0-9a-fA-F]{6}|#?[0-9a-fA-F]{3}", text):
+        raise AvatarProfileError(f"{field} must be a colour like #FFC42E")
+    return _normalize_hex_color(text)
+
+
+def apply_profile_update(existing: AvatarState, body: Dict[str, Any]) -> AvatarState:
+    """Return a new AvatarState with the fields present in `body` applied.
+
+    Only fields that are present change; an invalid value is refused with
+    AvatarProfileError rather than silently dropped or saved half-formed.
+    """
+    merged = existing.model_dump()
+    metadata = dict(merged.get("metadata") or {})
+
+    if "display_name" in body:
+        name = str(body.get("display_name") or "").strip()
+        if len(name) > 40:
+            raise AvatarProfileError("display name is limited to 40 characters")
+        merged["display_name"] = name or existing.display_name
+    if "glow_color" in body or "color" in body:
+        merged["glow_color"] = _strict_hex(body.get("glow_color", body.get("color")), "glow colour")
+    preset = body.get("preset_id", body.get("preset"))
+    if preset is not None:
+        if get_preset(str(preset)) is None:
+            raise AvatarProfileError(f"unknown avatar form: {str(preset)[:40]}")
+        merged["preset"] = str(preset).upper()
+    if "energy_level" in body:
+        try:
+            energy = float(body["energy_level"])
+        except (TypeError, ValueError):
+            raise AvatarProfileError("energy level must be a number from 0 to 2") from None
+        if not 0.0 <= energy <= 2.0:
+            raise AvatarProfileError("energy level must be a number from 0 to 2")
+        merged["energy_level"] = energy
+    if "hologram_mode" in body:
+        mode = str(body["hologram_mode"])
+        if mode not in HOLOGRAM_MODES:
+            raise AvatarProfileError("hologram mode must be energy, ghost or solid")
+        merged["hologram_mode"] = mode
+    if "visible" in body:
+        if not isinstance(body["visible"], bool):
+            raise AvatarProfileError("visible must be true or false")
+        merged["visible"] = body["visible"]
+    if "core_color" in body:
+        metadata["core_color"] = _strict_hex(body["core_color"], "core colour")
+    if "mood" in body:
+        mood = str(body.get("mood") or "").strip().lower()   # dressing.js sends e.g. "ELEVATED"
+        if not _MOOD_RE.match(mood):
+            raise AvatarProfileError("mood must be a short lowercase word")
+        metadata["mood"] = mood
+    if "badge" in body:
+        metadata["badge"] = str(body.get("badge") or "")[:40]
+    if "gesture" in body:
+        metadata["gesture"] = str(body.get("gesture") or "")[:40]
+    merged["metadata"] = metadata
+    return AvatarState(**merged)
+
+
 __all__ = [
+    "AvatarProfileError",
+    "apply_profile_update",
+    "profile_view",
+    "HOLOGRAM_MODES",
     "AvatarState",
     "list_presets",
     "get_preset",

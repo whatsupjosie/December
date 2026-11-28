@@ -72,6 +72,7 @@ from modules.pubworld_private import PubWorldPrivate
 from modules.avatar_studio_bridge import AvatarStudioBridge, create_avatar_studio_router
 from modules.pubworld_hotspots import create_hotspot_router
 from modules.avatar import load_avatar, save_avatar, list_presets as list_avatar_presets
+from modules.avatar import AvatarProfileError, apply_profile_update as apply_avatar_profile_update, profile_view as avatar_profile_view
 from modules.character_cast import list_cast_characters, get_cast_character
 from modules.feature_flags import alex_little_one_enabled
 from modules.persistence import read_json, write_json, sanitize_filename, storage_key, unique_child_path
@@ -4291,21 +4292,14 @@ async def get_my_avatar(request: Request, identity: Dict[str, Any] = Depends(cur
     """dressing.html / dressing.js — return the caller's persisted avatar profile."""
     client_id = bound_actor(request=request, identity=identity, explicit_value=request.headers.get("X-Client-Id"), field_name="X-Client-Id", allow_privileged_override=False)
     avatar = load_avatar(DATA_DIR, client_id)
-    response = {
-        "available": True,
-        "user_id": client_id,
-        "display_name": getattr(avatar, "display_name", client_id),
-        "glow_color": getattr(avatar, "glow_color", "#00FFFF"),
-        "badge": getattr(avatar, "metadata", {}).get("badge", ""),
-        "preset_id": getattr(avatar, "preset", "MANNY"),
-        "color": getattr(avatar, "glow_color", "#00FFFF"),
-        "mood": getattr(avatar, "metadata", {}).get("mood", "neutral"),
-        "gesture": getattr(avatar, "metadata", {}).get("gesture", "none"),
-    }
+    response = {"available": True, "user_id": client_id, **avatar_profile_view(avatar)}
+    saved_mood = "mood" in (getattr(avatar, "metadata", {}) or {})
     if ethereal_mgr is not None:
         try:
             skin = ethereal_mgr.get_or_create_skin(client_id)
-            response["mood"] = getattr(skin, "mood", response["mood"])
+            # A mood the user saved wins; the live skin only fills in when none was saved.
+            if not saved_mood:
+                response["mood"] = getattr(skin, "mood", response["mood"])
             response["gesture"] = getattr(skin, "current_gesture", response["gesture"])
         except Exception:
             pass
@@ -4318,31 +4312,20 @@ async def update_my_avatar(request: Request, identity: Dict[str, Any] = Depends(
     client_id = bound_actor(request=request, identity=identity, explicit_value=request.headers.get("X-Client-Id"), field_name="X-Client-Id", allow_privileged_override=False)
     body = await _json_dict(request)
     existing = load_avatar(DATA_DIR, client_id)
-    merged = existing.model_dump()
-    if "display_name" in body:
-        merged["display_name"] = body.get("display_name") or existing.display_name
-    if "glow_color" in body or "color" in body:
-        merged["glow_color"] = body.get("glow_color") or body.get("color") or existing.glow_color
-    if "preset_id" in body:
-        merged["preset"] = body.get("preset_id") or existing.preset
-    metadata = dict(getattr(existing, "metadata", {}) or {})
-    if "badge" in body:
-        metadata["badge"] = body.get("badge") or ""
-    if "mood" in body:
-        metadata["mood"] = body.get("mood")
-    if "gesture" in body:
-        metadata["gesture"] = body.get("gesture")
-    merged["metadata"] = metadata
-    avatar = save_avatar(DATA_DIR, client_id, existing.__class__(**merged))
+    try:
+        updated = apply_avatar_profile_update(existing, body)
+    except AvatarProfileError as exc:
+        raise HTTPException(422, str(exc)) from None
+    avatar = save_avatar(DATA_DIR, client_id, updated)
     if ethereal_mgr is not None:
         try:
             if "color" in body or "glow_color" in body:
-                ethereal_mgr.set_color(client_id, merged["glow_color"])
+                ethereal_mgr.set_color(client_id, avatar.glow_color)
             if "mood" in body:
-                ethereal_mgr.set_mood(client_id, body["mood"])
+                ethereal_mgr.set_mood(client_id, avatar.metadata.get("mood"))
         except Exception:
             pass
-    return {"ok": True, "user_id": client_id, "display_name": avatar.display_name, "glow_color": avatar.glow_color, "preset_id": avatar.preset, "badge": metadata.get("badge", "")}
+    return {"ok": True, "user_id": client_id, **avatar_profile_view(avatar)}
 
 
 @app.get("/api/avatars/presets")

@@ -20,6 +20,7 @@
 
     /* Preset grid */
     .preset-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:1rem}
+    @media(max-width:600px){.preset-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:0.6rem}.preset-card{padding:1rem 0.5rem 0.8rem}}
     .preset-card{
       background:var(--s);border:2px solid transparent;border-radius:var(--r);
       padding:1.5rem 1rem 1rem;cursor:pointer;text-align:center;
@@ -67,6 +68,23 @@
     .btn:hover{opacity:0.85}
     .save-status{font-size:0.68rem;color:var(--accent);text-align:center;min-height:1.2em;margin-top:0.4rem;opacity:0;transition:opacity 0.3s}
     .save-status.show{opacity:1}
+    .save-status.err{color:#ff7a7a}
+
+    /* Live stage: the Energy Sphere drawn in WebGL (static/js/energy_sphere.js) */
+    .stage{margin-bottom:2rem;background:#050403;border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+    .stage canvas{display:block;width:100%;aspect-ratio:16/10;max-height:460px;cursor:grab}
+    .stage canvas:active{cursor:grabbing}
+    @media(max-width:600px){.stage canvas{aspect-ratio:1/1}}
+    .stage-bar{display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center;padding:0.7rem 0.8rem;border-top:1px solid var(--border)}
+    .chip{font-family:inherit;font-size:0.7rem;color:var(--text);background:var(--s);border:1px solid var(--border);border-radius:100px;padding:0.35rem 0.75rem;min-height:32px;cursor:pointer}
+    .chip:hover{color:var(--bright)}
+    .chip[aria-pressed=true]{color:var(--bright);border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+    .stage-bar .spacer{flex:1}
+    .stage-note{font-size:0.65rem;color:var(--muted);padding:0 0.8rem 0.7rem}
+    .preset-orb canvas{width:96px;height:96px;display:block}
+    .preset-orb.live{width:96px;height:96px;margin-top:-12px;margin-bottom:0.6rem;background:none!important;box-shadow:none}
+    .hint{font-size:0.65rem;color:var(--muted);margin:0.35rem 0 0.2rem}
+    [hidden]{display:none!important}
   </style>
 </head>
 <body>
@@ -77,6 +95,15 @@
 <main>
   <!-- Preset picker -->
   <div>
+    <section class="stage" id="stage" hidden aria-label="Live avatar">
+      <canvas id="stageCanvas" aria-label="Live Energy Sphere. Drag to turn the head."></canvas>
+      <div class="stage-bar">
+        <div id="moodRow" role="group" aria-label="Mood" style="display:contents"></div>
+        <span class="spacer"></span>
+        <button type="button" class="chip" id="talkBtn" aria-pressed="false">Test talking</button>
+      </div>
+      <p class="stage-note" id="stageNote">Drag to turn the head. The mood you pick is saved with your avatar.</p>
+    </section>
     <h2>Choose Your Form</h2>
     <div class="preset-grid" id="presetGrid">
       <div style="color:var(--muted);font-size:0.75rem;padding:1rem;grid-column:1/-1">Loading presets…</div>
@@ -110,6 +137,21 @@
         <div class="cswatch" style="background:#e05599" data-c="#e05599" onclick="pickGlow(this)"></div>
         <div class="cswatch" style="background:#f97316" data-c="#f97316" onclick="pickGlow(this)"></div>
         <input type="color" id="glowCustom" value="#00e0ff" oninput="applyGlow(this.value)" title="Custom glow">
+      </div>
+      <p class="hint sphere-only" hidden>On the Energy Sphere, the glow colour is its mood ring.</p>
+
+      <div class="sphere-only" hidden style="margin-top:0.8rem">
+        <label>Core Colour</label>
+        <p class="hint">The woven light and the face.</p>
+        <div class="color-row" id="coreRow">
+          <div class="cswatch core" style="background:#ffc42e" data-c="#ffc42e"></div>
+          <div class="cswatch core" style="background:#ff3fa4" data-c="#ff3fa4"></div>
+          <div class="cswatch core" style="background:#9ccf2a" data-c="#9ccf2a"></div>
+          <div class="cswatch core" style="background:#00e0ff" data-c="#00e0ff"></div>
+          <div class="cswatch core" style="background:#ff5a1f" data-c="#ff5a1f"></div>
+          <div class="cswatch core" style="background:#b48cff" data-c="#b48cff"></div>
+          <input type="color" id="coreCustom" value="#ffc42e" title="Custom core colour">
+        </div>
       </div>
 
       <div style="margin:0.8rem 0 0.4rem">
@@ -150,11 +192,81 @@
   </div>
 </main>
 
+<script src="/static/reach_auth.js"></script>
+<script src="/static/js/energy_sphere.js"></script>
 <script>
-let _state = { preset: 'MANNY', glow_color: '#00e0ff', display_name: '', energy_level: 1.0, hologram_mode: 'energy', visible: true };
+let _state = { preset: 'MANNY', glow_color: '#00e0ff', core_color: '#ffc42e', display_name: '', energy_level: 1.0, hologram_mode: 'energy', visible: true, mood: 'calm' };
 let _presets = [];
 
 const PRESET_EMOJI = { MANNY:'🧑', FELICIA:'👩', TINY:'👶', KAI:'🧒', SPECTRAL:'👻', BISCUIT:'🐕', ROBO:'🤖', ANON:'🟦' };
+const SPHERE = 'SPHERE';
+// Moods from the owner's expression sheet; names are what the server stores.
+const MOOD_LABELS = { calm: 'Calm', happy: 'Happy', laughing: 'Laughing', excited: 'Excited', surprised: 'Surprised',
+  neutral: 'Neutral', sad: 'Sad', angry: 'Angry', mischief: 'Mischief' };
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const $ = id => document.getElementById(id);
+
+// Saving uses the sign-in token without the shared adapter's jump to the login page,
+// so an expired session can never throw away unsaved choices.
+function quietFetch(url, init = {}) {
+  const auth = window.ReachAuth;
+  if (!auth) return fetch(url, init);
+  const headers = new Headers(init.headers || {}), token = auth.getToken();
+  if (token && !headers.has('Authorization')) headers.set('Authorization', 'Bearer ' + token);
+  return auth.nativeFetch(url, { ...init, headers });
+}
+
+// ---- live Energy Sphere ----
+let stageSphere = null, cardSphere = null;
+const canDrawSphere = !!(window.PubCastEnergySphere && PubCastEnergySphere.supported());
+function sphereLook() {
+  return { core: _state.core_color, ring: _state.glow_color, mood: _state.mood,
+    energy: parseFloat($('energy').value), mode: $('hMode').value };
+}
+function syncSpheres() {
+  const look = sphereLook();
+  if (stageSphere) stageSphere.set(look);
+  if (cardSphere) cardSphere.set({ core: look.core, ring: look.ring, mode: look.mode, energy: look.energy });
+}
+function showStage(on) {
+  $('stage').hidden = !on;
+  document.querySelectorAll('.sphere-only').forEach(el => { el.hidden = !on; });
+  $('prevOrb').hidden = on && !!stageSphere;
+  if (on && !stageSphere && canDrawSphere) {
+    try {
+      stageSphere = PubCastEnergySphere.create($('stageCanvas'), { ...sphereLook(), background: '#050403', zoom: 5.4, lift: 0.04 });
+      $('prevOrb').hidden = true;
+    } catch (e) {
+      console.warn('foundry: live sphere unavailable', e);
+      $('stageNote').textContent = 'This device could not draw the live sphere (WebGL2). Your choices still save.';
+    }
+  }
+  if (on && !canDrawSphere) $('stageNote').textContent = 'This device could not draw the live sphere (WebGL2). Your choices still save.';
+}
+function renderMoods() {
+  $('moodRow').innerHTML = Object.entries(MOOD_LABELS).map(([id, label]) =>
+    `<button type="button" class="chip" data-mood="${id}" aria-pressed="${id === _state.mood}">${label}</button>`).join('');
+}
+$('moodRow').addEventListener('click', e => {
+  const b = e.target.closest('[data-mood]'); if (!b) return;
+  _state.mood = b.dataset.mood;
+  for (const c of $('moodRow').children) c.setAttribute('aria-pressed', String(c === b));
+  syncSpheres(); updatePreview();
+});
+$('talkBtn').addEventListener('click', () => {
+  const on = $('talkBtn').getAttribute('aria-pressed') !== 'true';
+  $('talkBtn').setAttribute('aria-pressed', String(on));
+  if (stageSphere) stageSphere.set({ talking: on });
+});
+$('coreRow').addEventListener('click', e => { const s = e.target.closest('.cswatch.core'); if (s) applyCore(s.dataset.c); });
+$('coreCustom').addEventListener('input', e => applyCore(e.target.value));
+function applyCore(hex) {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex || '')) return;
+  _state.core_color = hex.toLowerCase();
+  $('coreCustom').value = _state.core_color;
+  document.querySelectorAll('.cswatch.core').forEach(s => s.classList.toggle('active', s.dataset.c === _state.core_color));
+  syncSpheres();
+}
 
 async function loadPresets() {
   try {
@@ -171,49 +283,70 @@ async function loadMe() {
     const r = await fetch('/api/avatars/me');
     if (!r.ok) return;
     const d = await r.json();
-    _state = { ..._state, ...d };
-    document.getElementById('displayName').value = _state.display_name || '';
-    document.getElementById('energy').value = _state.energy_level ?? 1.0;
-    document.getElementById('energyVal').textContent = (_state.energy_level ?? 1.0).toFixed(1);
-    document.getElementById('hMode').value = _state.hologram_mode || 'energy';
-    const vis = document.getElementById('visToggle');
-    vis.classList.toggle('on', _state.visible !== false);
-    applyGlow(_state.glow_color || '#00e0ff');
-    renderPresets();
+    _state = { ..._state, ...d, preset: d.preset_id || _state.preset };
+    if (!MOOD_LABELS[_state.mood]) _state.mood = 'calm';
+    renderMoods();
+    $('displayName').value = _state.display_name || '';
+    $('energy').value = _state.energy_level ?? 1.0;
+    $('energyVal').textContent = Number(_state.energy_level ?? 1.0).toFixed(1);
+    $('hMode').value = _state.hologram_mode || 'energy';
+    $('visToggle').classList.toggle('on', _state.visible !== false);
+    applyGlow((_state.glow_color || '#00e0ff').toLowerCase());
+    applyCore((_state.core_color || '#ffc42e').toLowerCase());
+    markActivePreset();
     updatePreview();
   } catch(e) { console.warn('foundry: me load failed', e); }
 }
 
+// The form cards are built once; choosing a form only moves the highlight.
 function renderPresets() {
-  const grid = document.getElementById('presetGrid');
+  const grid = $('presetGrid');
   if (!_presets.length) { grid.innerHTML = '<div style="color:var(--muted);font-size:0.75rem;padding:1rem;grid-column:1/-1">No presets available</div>'; return; }
+  const color = _state.glow_color || '#00e0ff';
   grid.innerHTML = _presets.map(p => {
-    const emoji = PRESET_EMOJI[p.preset_id] || '🎭';
-    const color = _state.glow_color || '#00e0ff';
-    const active = p.preset_id === _state.preset ? 'active' : '';
-    return `<div class="preset-card ${active}" onclick="selectPreset('${p.preset_id}',this)">
-      <div class="preset-orb" style="color:${color};background:${color}22">${emoji}</div>
-      <div class="preset-name">${p.name || p.preset_id}</div>
-      <div class="preset-body">${p.body_type || 'humanoid'}</div>
-      <span class="preset-badge">${p.preset_id}</span>
+    const id = esc(p.preset_id);
+    const live = p.preset_id === SPHERE && canDrawSphere;
+    const orb = live ? `<div class="preset-orb live"><canvas id="sphereCard" aria-hidden="true"></canvas></div>`
+                     : `<div class="preset-orb" style="color:${esc(color)};background:${esc(color)}22">${PRESET_EMOJI[p.preset_id] || esc(p.emoji) || '🎭'}</div>`;
+    return `<div class="preset-card" data-preset="${id}" role="button" tabindex="0" aria-label="${esc(p.name || p.preset_id)}">
+      ${orb}
+      <div class="preset-name">${esc(p.name || p.preset_id)}</div>
+      <div class="preset-body">${esc(p.body_type || 'humanoid')}</div>
+      <span class="preset-badge">${id}</span>
     </div>`;
   }).join('');
+  if (cardSphere) { cardSphere.destroy(); cardSphere = null; }
+  const card = $('sphereCard');
+  if (card) {
+    try { cardSphere = PubCastEnergySphere.create(card, { ...sphereLook(), mood: 'calm', background: '#0f1219', interactive: false, floor: 0, zoom: 5.2, lift: 0, maxScale: 1.5 }); }
+    catch (e) { console.warn('foundry: card sphere unavailable', e); }
+  }
+  markActivePreset();
 }
-
-function selectPreset(id, el) {
+function markActivePreset() {
+  document.querySelectorAll('.preset-card').forEach(c => c.classList.toggle('active', c.dataset.preset === _state.preset));
+  // the mini sphere's backdrop matches its card: plain, or the selected card's faint tint
+  if (cardSphere) cardSphere.set({ background: _state.preset === SPHERE ? '#0f1b23' : '#0f1219' });
+  showStage(_state.preset === SPHERE);
+}
+$('presetGrid').addEventListener('click', e => { const c = e.target.closest('.preset-card'); if (c) selectPreset(c.dataset.preset); });
+$('presetGrid').addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const c = e.target.closest('.preset-card'); if (c) { e.preventDefault(); selectPreset(c.dataset.preset); }
+});
+function selectPreset(id) {
   _state.preset = id;
-  document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('active'));
-  el.classList.add('active');
+  markActivePreset();
   updatePreview();
 }
 
 function applyGlow(hex) {
   _state.glow_color = hex;
-  document.getElementById('glowCustom').value = hex;
-  document.querySelectorAll('.cswatch').forEach(s => s.classList.toggle('active', s.dataset.c === hex));
+  $('glowCustom').value = hex;
+  document.querySelectorAll('.cswatch:not(.core)').forEach(s => s.classList.toggle('active', s.dataset.c === hex));
+  document.querySelectorAll('.preset-orb:not(.live)').forEach(o => { o.style.color = hex; o.style.background = hex + '22'; });
+  syncSpheres();
   updatePreview();
-  // Re-render preset orbs with new glow
-  document.querySelectorAll('.preset-orb').forEach(o => { o.style.color = hex; o.style.background = hex + '22'; });
 }
 
 function pickGlow(el) { applyGlow(el.dataset.c); }
@@ -225,36 +358,51 @@ function toggleVis(el) {
 
 function updatePreview() {
   const preset = _presets.find(p => p.preset_id === _state.preset);
-  const emoji = PRESET_EMOJI[_state.preset] || '🎭';
   const glow = _state.glow_color || '#00e0ff';
-  const orb = document.getElementById('prevOrb');
-  orb.textContent = emoji;
+  const orb = $('prevOrb');
+  orb.textContent = PRESET_EMOJI[_state.preset] || preset?.emoji || '🎭';
   orb.style.background = glow + '22';
   orb.style.boxShadow = `0 0 24px ${glow}88`;
-  document.getElementById('prevName').textContent = document.getElementById('displayName').value || _state.display_name || 'Unnamed';
-  const energy = parseFloat(document.getElementById('energy').value);
-  const mode = document.getElementById('hMode').value;
-  document.getElementById('prevSub').textContent = `${preset?.name || _state.preset} · ${mode} · ⚡${energy.toFixed(1)}`;
+  $('prevName').textContent = $('displayName').value || _state.display_name || 'Unnamed';
+  const energy = parseFloat($('energy').value);
+  const mode = $('hMode').value;
+  const mood = _state.preset === SPHERE ? ` · ${MOOD_LABELS[_state.mood] || _state.mood}` : '';
+  $('prevSub').textContent = `${preset?.name || _state.preset} · ${mode} · ⚡${energy.toFixed(1)}${mood}`;
+  syncSpheres();
 }
 
-document.getElementById('displayName').addEventListener('input', updatePreview);
+$('displayName').addEventListener('input', updatePreview);
 
 async function saveAvatar() {
-  _state.display_name = document.getElementById('displayName').value;
-  _state.energy_level = parseFloat(document.getElementById('energy').value);
-  _state.hologram_mode = document.getElementById('hMode').value;
-  _state.visible = document.getElementById('visToggle').classList.contains('on');
+  const st = $('saveStatus');
+  const body = {
+    preset_id: _state.preset,
+    display_name: $('displayName').value.trim(),
+    glow_color: _state.glow_color,
+    core_color: _state.core_color,
+    energy_level: parseFloat($('energy').value),
+    hologram_mode: $('hMode').value,
+    visible: $('visToggle').classList.contains('on'),
+    mood: _state.mood,
+  };
+  let message = '✓ Saved', ok = false;
   try {
-    await fetch('/api/avatars/me', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify(_state),
-    });
-    const st = document.getElementById('saveStatus');
-    st.classList.add('show');
-    setTimeout(() => st.classList.remove('show'), 2000);
-  } catch(e) { console.error('foundry: save failed', e); }
+    const r = await quietFetch('/api/avatars/me', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok) { ok = true; _state = { ..._state, ...body }; }
+    else if (r.status === 401) message = 'Sign in to save. Your choices are still here.';
+    else message = 'Not saved: ' + (typeof d.detail === 'string' ? d.detail : 'the server refused it (' + r.status + ')');
+  } catch (e) { message = 'Not saved: the server could not be reached.'; }
+  st.textContent = message;
+  st.classList.toggle('err', !ok);
+  st.classList.add('show');
+  clearTimeout(saveAvatar.timer);
+  saveAvatar.timer = setTimeout(() => st.classList.remove('show'), ok ? 2000 : 6000);
 }
 
+renderMoods();
+$('energy').addEventListener('input', syncSpheres);
+$('hMode').addEventListener('change', syncSpheres);
 const foundryReady = loadPresets().then(loadMe);
 </script>
 <script src="/static/js/dressing_switch.js"></script>
@@ -266,7 +414,7 @@ const FOUNDRY_DRAFT_KEY = 'foundry:draft-after-switch';
 async function keepFoundryDraft() {
   await foundryReady;   // never keep the blank defaults over a profile still loading
   const draft = {
-    preset: _state.preset, glow_color: _state.glow_color,
+    preset: _state.preset, glow_color: _state.glow_color, core_color: _state.core_color, mood: _state.mood,
     display_name: document.getElementById('displayName').value,
     energy_level: parseFloat(document.getElementById('energy').value),
     hologram_mode: document.getElementById('hMode').value,
@@ -289,7 +437,9 @@ function restoreFoundryDraft() {
   }
   if (['energy', 'ghost', 'solid'].includes(d.hologram_mode)) document.getElementById('hMode').value = d.hologram_mode;
   if (typeof d.visible === 'boolean') { document.getElementById('visToggle').classList.toggle('on', d.visible); _state.visible = d.visible; }
-  renderPresets();
+  if (typeof d.mood === 'string' && MOOD_LABELS[d.mood]) { _state.mood = d.mood; renderMoods(); }
+  if (typeof d.core_color === 'string') applyCore(d.core_color);
+  markActivePreset();
   if (typeof d.glow_color === 'string' && /^#[0-9a-fA-F]{6}$/.test(d.glow_color)) applyGlow(d.glow_color); else updatePreview();
 }
 foundryReady.then(restoreFoundryDraft);

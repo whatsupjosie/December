@@ -69,7 +69,8 @@ def test_foundry_choices_survive_a_trip_to_the_boudoir(offline_fonts, mirror, li
     page.locator('#energy').fill('1.6')
     page.locator('#energy').dispatch_event('input')
     page.locator('#hMode').select_option('ghost')
-    page.locator('.cswatch[data-c="#e05599"]').click()
+    page.locator('.cswatch:not(.core)[data-c="#e05599"]').click()
+    was_visible = 'on' in (page.locator('#visToggle').get_attribute('class') or '').split()   # the host is shared between tests
     page.locator('#visToggle').click()
     cards = page.locator('.preset-card')
     chosen = cards.nth(cards.count()-1)
@@ -90,8 +91,11 @@ def test_foundry_choices_survive_a_trip_to_the_boudoir(offline_fonts, mirror, li
     expect(page.locator('#energy')).to_have_value('1.6')
     expect(page.locator('#energyVal')).to_have_text('1.6')
     expect(page.locator('#hMode')).to_have_value('ghost')
-    expect(page.locator('.cswatch.active')).to_have_attribute('data-c', '#e05599')
-    expect(page.locator('#visToggle')).not_to_have_class('toggle on')
+    expect(page.locator('.cswatch.active:not(.core)')).to_have_attribute('data-c', '#e05599')
+    if was_visible:
+        expect(page.locator('#visToggle')).not_to_have_class('toggle on')
+    else:
+        expect(page.locator('#visToggle')).to_have_class('toggle on')
     expect(page.locator('.preset-card.active .preset-badge')).to_have_text(chosen_id)
     expect(page.locator('#prevName')).to_have_text('Evening Sheila')
     assert page.evaluate('sessionStorage.getItem("foundry:draft-after-switch")') is None
