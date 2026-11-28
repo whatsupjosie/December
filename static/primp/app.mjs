@@ -429,8 +429,53 @@ window.addEventListener('keydown', event => {
 window.addEventListener('blur', () => finishStroke());
 window.addEventListener('beforeunload', event => { if (dirty) { event.preventDefault(); event.returnValue = ''; } });
 try { initRenderer(); } catch (error) { busy = true; for (const id of ['light', 'exposure', 'backdrop']) $(id).disabled = true; status(`The digital mirror could not start: ${error.message}. WebGL is required.`, true); updateControls(); }
-openDatabase().then(() => { if (avatar) scheduleRecovery(); }).catch(error => { $('storage-status').textContent = error.message; });
+const dbReady = openDatabase();
+dbReady.then(() => { if (avatar) scheduleRecovery(); }).catch(error => { $('storage-status').textContent = error.message; });
+// ── Switch to the mirror and stage (Avatar Foundry) and back ─────────────
+// Leaving writes the open look to this device's local recovery; coming back
+// through the switch restores it, still marked unsaved if it was unsaved.
+const RESUME_KEY = 'primp:resume-after-switch';
+const resuming = sessionStorage.getItem(RESUME_KEY);
+sessionStorage.removeItem(RESUME_KEY);
+async function leaveForFoundry() {
+  if (busy) { status('Wait for the current step to finish, then switch.'); return false; }
+  finishStroke();
+  if (!avatar) return true;
+  await dbReady.catch(() => {});   // local recovery may still be opening
+  try {
+    clearTimeout(recoveryTimer);
+    await recoveryWrites.catch(() => {});
+    if (!db) throw new Error('local recovery is unavailable');
+    await checkRecoverySession();
+    recoveryRevision = await writeRecoveryRecord(db, project(), recoveryRevision);
+    sessionStorage.setItem(RESUME_KEY, dirty ? 'unsaved' : 'saved');
+    dirty = false;   // kept in recovery; no leave-page warning
+    return true;
+  } catch (error) {
+    if (!dirty) return true;
+    if (!confirm(`Your look could not be kept for when you come back (${error.message}). Leave without it? Choose Cancel, then Save look to keep a file.`)) return false;
+    dirty = false; return true;
+  }
+}
+async function resumeAfterSwitch() {
+  if (!db) throw new Error('Local recovery is unavailable, so your look could not be brought back. Use Recover local look or open your saved look.');
+  await checkRecoverySession();
+  const record = await readRecoveryRecord(db);
+  if (!record.document) throw new Error('Your look was not found in local recovery.');
+  if (await restoreProject(record.document)) {
+    recoveryRevision = record.revision;
+    if (resuming === 'unsaved') markChanged();
+    status('Back from the mirror and stage. Your look is as you left it.');
+  }
+}
+window.PubCastDressingSwitch?.mount({icon: 'mannequin', label: 'Mirror and Stage', href: '/static/avatar_foundry.html',
+  title: 'Go to the mirror and stage (Avatar Foundry). Your look comes back with you.', beforeLeave: leaveForFoundry});
+if (resuming) {
+  dbReady.then(() => run(resumeAfterSwitch)())
+    .catch(error => status(`Your look could not be brought back: ${error.message}`, true));
+}
+
 // ?avatar=<id> (from Import Avatar's library) opens that PubCast avatar straight away.
-const wanted = requestedAvatarId(location.search);
+const wanted = resuming ? null : requestedAvatarId(location.search);
 loadPubcastAvatars().then(() => { if (wanted) return run(() => openPubcastAvatar(wanted))(); })
   .catch(error => { if (wanted) status(error.message, true); });
