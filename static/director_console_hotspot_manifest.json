@@ -14,7 +14,7 @@
     "light_blue": "push button",
     "light_green": "rotary knob",
     "grey_white": "slider handle/path",
-    "blue_stick": "hand-brake style lever, currently mapped to console lock",
+    "blue_stick": "hand-brake style lever that stops all program audio",
     "red_circle": "console dial/clock/status dial"
   },
   "hotspots": [
@@ -32,7 +32,7 @@
     {"id": "director.slider.bank_5", "kind": "slider", "label": "Director slider 5", "x": 0.508, "y": 0.465, "w": 0.015, "h": 0.053, "action_id": "audio.event", "payload": {"action": "set_volume", "bus": "room"}},
     {"id": "director.slider.bank_6", "kind": "slider", "label": "Director slider 6", "x": 0.523, "y": 0.464, "w": 0.025, "h": 0.057, "action_id": "audio.event", "payload": {"action": "set_volume", "bus": "vtr"}},
     {"id": "director.slider.bank_7", "kind": "slider", "label": "Director slider 7", "x": 0.555, "y": 0.465, "w": 0.009, "h": 0.056, "action_id": "audio.event", "payload": {"action": "set_volume", "bus": "dialogue"}},
-    {"id": "director.lever.console_lock", "kind": "lever", "label": "Console lock lever", "x": 0.315, "y": 0.744, "w": 0.030, "h": 0.108, "action_id": "audio.stop_all", "payload": {}, "notes": "User suggested this may lock the console when away. Temporarily mapped to a safe stop-all/lock behavior until final semantics are chosen."},
+    {"id": "director.lever.console_lock", "kind": "lever", "label": "Stop all program audio (lever)", "x": 0.315, "y": 0.744, "w": 0.030, "h": 0.108, "action_id": "audio.stop_all", "payload": {}},
     {"id": "director.button.cut", "kind": "button", "label": "Cut", "x": 0.568, "y": 0.475, "w": 0.015, "h": 0.021, "action_id": "camera.cut", "payload": {}},
     {"id": "director.button.preview_1", "kind": "button", "label": "Preview 1", "x": 0.405, "y": 0.496, "w": 0.014, "h": 0.017, "action_id": "camera.switch.preview", "payload": {"source_id": "wide_shot"}},
     {"id": "director.button.program_1", "kind": "button", "label": "Program 1", "x": 0.729, "y": 0.597, "w": 0.013, "h": 0.022, "action_id": "camera.switch.program", "payload": {"source_id": "wide_shot"}},
