@@ -1,6 +1,6 @@
 # December source sweep
 
-Baseline assembly 06c69eb, parts 94ef55b, main 38787ec. Current verified installation b70040c25e87ceb0a8600c926c68fda71b7298e7. No repository has reached full accounting yet.
+Baseline assembly 06c69eb, parts 94ef55b, main 38787ec. Current verified installation b43dc869acc1b8e0006f0d8bee77f3a4be229d07. No repository has reached full accounting yet.
 
 Sir Purfluous recovery archive follow-up (PARTS.md item 10): the `sir_purfluous_bot(1).zip` member `sir_purfluous_bot/director.py` supplied the slow, underplay and stress transformations. December's existing `modules/sir_purfluous_runtime.py` applies these to explicit quoted-line demonstrations after existing intents. The offline BotManager path returned the actor's line with the rehearsal beat. All 17 focused responder checks passed. The full original director remains in the parts archive. Other archive behaviors and the repository-wide archive audit remain open.
 
@@ -118,9 +118,16 @@ The branch `11-12-merge` at `d70952e52c81f89178f4ab557206fcde109bf970` is accoun
 
 Both refs resolve to `df737caaeff206e4128932532663776af74ec0e8`. The five distinct commits cover desk layout/zoom, native text undo, manuscript locks and replacement, and two handoff updates. Earlier assembly fixes `ab559b4` and `5671372` already installed the reconciled behavior. Foresight's file provider opens `/writers-room`, served by main.py from `2i/writers-room-v22.html`. The 36 current offline polish checks passed, as did both desktop and narrow-tray edit/save/export/reopen checks. The old layout test evolved into the polish suite. The final donor handoff is byte-identical in parts at `beyond-october-inventory/recovered/2I_BETA_POLISH_2026-11-17.md`. Both refs are accounted for.
 
+### Beyond-October · audit/standard-first-2026-11-19 · Alex, PANIC and 2i narrative editing
+
+- `082b622`, `6181a9a`: December already handles negated feelings and the comma before a contrasting subject. An authenticated disposable `run_reach.py` host accepted each correction at `POST /api/alex/message`. Reading back `GET /api/alex/memory/recent` found the exact "I'm not upset" correction tagged neutral and the exact "I'm not happy, I'm angry" message tagged negative. Alex routes and the Alex/Jeremy bridge match the donor. The destination keyword, bridge and memory-reach suites passed 48 checks, including keeping room urgency separate from the user's state.
+- `758c030`, `2c32669`, `e56eded`, `764874a`: cumulative checkpoint and three evidence scripts match December. `906594f`: Chromium drove the live production recorder's short stop, PANIC during an ordinary stop and immediate encoder stop. All three passed.
+- `8b32d63`, `e61d7cf`, `44ed7f1`, `520fe41`, `8623c80`, `646c6f9`, `ea9137d`, `172bffa`, `71e92ad`, `2e9e5f1`: verified narrative drafting, confirmed outcomes tied to source text, archive/undo, protected lines, independent version state, parallel recovery, revision history and comparison in the current writer. Both Python modules match the donor snapshot; December extends the handoff. 23 focused Node tests and three backend revision/version tests passed.
+- Installed `b43dc869acc1b8e0006f0d8bee77f3a4be229d07` on main-assembly. A first-scene title edit was silently discarded by Close. The original dirty check omitted title, medium and range on a new dossier. The current narrative dialog now compares every field with the values actually displayed on opening or saving. Regression failed before the fix; all 37 writer polish Chromium checks passed after. On an authenticated launcher, opened `/writers-room`, edited the first title, declined discard, saved the dossier and manuscript, and verified the title in the server's stored revision. No new parts copy.
+
 ## Resume point
 
-Beyond-October, `audit/standard-first-2026-11-19` at `6cccfd7a5b2b74f3c29829ed723c0e85128ee322`. Next candidate: `082b622b5d3556a82f5c5593e94dc156d5f39b22`, Alex correction handling in `modules/alex_core.py` and `tests/test_alex_keyword_matching.py`. Check how a negated feeling and a contrasting affirmative clause reach stored memory through the current host. Continue through this branch's distinct candidates. The branch inventory follows.
+Beyond-October, `audit/standard-first-2026-11-19` at `6cccfd7a5b2b74f3c29829ed723c0e85128ee322`. Next candidate: `4d16628cf86bd231dfcf6a8d121050eef31883e0`, Bella Faux Pas notebook, seated typewriter and production notes. Trace the walker and Writers’ Room entry points into the current offline writer and check note composition and return navigation. The branch inventory follows.
 - `11-12-merge` — `d70952e52c81f89178f4ab557206fcde109bf970`
 - `2i-beta-polish` — `df737caaeff206e4128932532663776af74ec0e8`
 - `audit/standard-first-2026-11-19` — `6cccfd7a5b2b74f3c29829ed723c0e85128ee322`
