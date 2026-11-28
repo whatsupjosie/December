@@ -1,6 +1,6 @@
 # December source sweep
 
-Baseline assembly 06c69eb, parts 94ef55b, main 38787ec. Current verified installation bb2cecd7f775159206cd20f5f48c954426659338. No repository has reached full accounting yet.
+Baseline assembly 06c69eb, parts 94ef55b, main 38787ec. Current verified installation c7eb68736a895534541d9f965f5553f8f92d672f. No repository has reached full accounting yet.
 
 Sir Purfluous recovery archive follow-up (PARTS.md item 10): the `sir_purfluous_bot(1).zip` member `sir_purfluous_bot/director.py` supplied the slow, underplay and stress transformations. December's existing `modules/sir_purfluous_runtime.py` applies these to explicit quoted-line demonstrations after existing intents. The offline BotManager path returned the actor's line with the rehearsal beat. All 17 focused responder checks passed. The full original director remains in the parts archive. Other archive behaviors and the repository-wide archive audit remain open.
 
@@ -154,9 +154,17 @@ Both refs resolve to `df737caaeff206e4128932532663776af74ec0e8`. The five distin
 - `3b828b9`, `ca02c01`, `bae4696`, `9913093`, `fa6d716`: verified disk-open 2i with and without its format core, bound-file saves, local recovery, cancellation and menu availability. December’s `2i/writers-room-v22.html` and `2i/2i-assets/reach.js` retain the newer save paths. The donor-only CI workflow was removed upstream and is absent here. Eighteen local Node checks passed across offline saves, capture lifecycle and file transitions.
 - `c1186d8`, `231f9b9`, `96b0985`, `e8a2b2b`, `51a34ca`, `45d5721`, `f47b11b`, `53af0a3`, `cbc5295`: verified menus, phone drawers, unseen-message indication, top Save, notebook line numbers and blank paragraphs, word count, ruled pages and presentation controls through the native HTML, format-menu and studio-desk assets. The donor's polish ledger is preserved under `handoffs/2I_POLISH_LEDGER_2026-11-16.md`. The hosted layout, drawer and disk-menu suites passed 31 checks. The notebook and single-page suites passed 23. The missing-format-core, writer polish and desktop/narrow tray run passed 47. No new parts required.
 
+## Beyond-October touch consoles and 2i manuscript controls
+
+Donor `audit/standard-first-2026-11-19` at `6cccfd7a5b2b74f3c29829ed723c0e85128ee322`, consecutive candidates `ec1b5c5` through `4ca3287` inclusive. All paths changed across the range are present. The key image, typewriter manifest, sound module, input adapter and three dated reconciliation reports match the donor at the end of the range. December retains its newer launcher, editor and save paths.
+
+- Console connection verified with a disposable signed-in account on run_reach.py. The /audio-console music button dispatched audio.event and the status monitor returned music muted. On /director-console, Preview 1 selected wide_shot, Program 2 selected medium_shot, and Cut returned Program wide_shot and Preview medium_shot. The director lever dispatched audio.stop_all. Assembly c7eb68736a895534541d9f965f5553f8f92d672f corrects the misleading console-lock label and map legend. No console locking function was added.
+- /typewriter-console accepted a touch Q and wrote q. In 2i, the existing iframe and typewriter-input adapter drive the manuscript through studio-desk.js. Destination checks covered touch edits, save/reload, caret and event-source protection. The editor and reach.js retain native field undo, protected line and chapter metadata handling, Write/Collab routing, fallback replace, cancellation and notices.
+- 231 Node checks and 113 Python/browser checks passed, plus the separate signed-in launcher probe above. No additional parts copy. Beyond-October is still open.
+
 ## Resume point
 
-Beyond-October, `audit/standard-first-2026-11-19` at `6cccfd7a5b2b74f3c29829ed723c0e85128ee322`. Next candidate: `ec1b5c59a296084be16e90a802b774aac770429f`, touch console hotspots and the standalone typewriter bench. Trace the studio console routes, hotspot manifests, touch renderer, artwork and sound through the active December launcher. The branch inventory follows.
+Beyond-October, `audit/standard-first-2026-11-19` at `6cccfd7a5b2b74f3c29829ed723c0e85128ee322`. Next candidate: `f0227baedfea87433e01cd702091cae78320669e`, Foresight file-tray typewriter presentation. Exercise an opened file in its tray and verify that edits reach the file save adapter. The branch inventory follows.
 - `11-12-merge` — `d70952e52c81f89178f4ab557206fcde109bf970`
 - `2i-beta-polish` — `df737caaeff206e4128932532663776af74ec0e8`
 - `audit/standard-first-2026-11-19` — `6cccfd7a5b2b74f3c29829ed723c0e85128ee322`
