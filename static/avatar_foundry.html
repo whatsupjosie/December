@@ -255,7 +255,46 @@ async function saveAvatar() {
   } catch(e) { console.error('foundry: save failed', e); }
 }
 
-loadPresets().then(loadMe);
+const foundryReady = loadPresets().then(loadMe);
+</script>
+<script src="/static/js/dressing_switch.js"></script>
+<script>
+// Switch to the boudoir (Primp) and back. The choices on this page go into a
+// draft in this browser tab and are put back when you return. Leaving does not
+// save to the server; Save Avatar still does that.
+const FOUNDRY_DRAFT_KEY = 'foundry:draft-after-switch';
+async function keepFoundryDraft() {
+  await foundryReady;   // never keep the blank defaults over a profile still loading
+  const draft = {
+    preset: _state.preset, glow_color: _state.glow_color,
+    display_name: document.getElementById('displayName').value,
+    energy_level: parseFloat(document.getElementById('energy').value),
+    hologram_mode: document.getElementById('hMode').value,
+    visible: document.getElementById('visToggle').classList.contains('on'),
+  };
+  try { sessionStorage.setItem(FOUNDRY_DRAFT_KEY, JSON.stringify(draft)); }
+  catch (e) { return confirm('Your Foundry choices could not be kept for when you come back. Leave without them?'); }
+  return true;
+}
+function restoreFoundryDraft() {
+  let d;
+  try { d = JSON.parse(sessionStorage.getItem(FOUNDRY_DRAFT_KEY) || 'null'); } catch (e) { d = null; }
+  sessionStorage.removeItem(FOUNDRY_DRAFT_KEY);
+  if (!d || typeof d !== 'object') return;
+  if (typeof d.preset === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(d.preset)) _state.preset = d.preset;
+  if (typeof d.display_name === 'string') document.getElementById('displayName').value = d.display_name.slice(0, 40);
+  if (Number.isFinite(d.energy_level) && d.energy_level >= 0 && d.energy_level <= 2) {
+    document.getElementById('energy').value = d.energy_level;
+    document.getElementById('energyVal').textContent = d.energy_level.toFixed(1);
+  }
+  if (['energy', 'ghost', 'solid'].includes(d.hologram_mode)) document.getElementById('hMode').value = d.hologram_mode;
+  if (typeof d.visible === 'boolean') { document.getElementById('visToggle').classList.toggle('on', d.visible); _state.visible = d.visible; }
+  renderPresets();
+  if (typeof d.glow_color === 'string' && /^#[0-9a-fA-F]{6}$/.test(d.glow_color)) applyGlow(d.glow_color); else updatePreview();
+}
+foundryReady.then(restoreFoundryDraft);
+window.PubCastDressingSwitch && window.PubCastDressingSwitch.mount({icon: 'brush', label: 'Boudoir', href: '/static/primp.html',
+  title: 'Go to the boudoir (Primp makeup). Your Foundry choices come back with you.', beforeLeave: keepFoundryDraft});
 </script>
 </body>
 </html>

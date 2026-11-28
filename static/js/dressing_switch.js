@@ -38,32 +38,40 @@
   // The page keeps a strip clear on the right (body.dsw-reserve), so the tab
   // never sits over a control. The tab stays vertically centred at every size,
   // clear of the bottom corners where other floating buttons live.
+  // Josie's art (static/img/dressing_switch/, cut from brush_and_mannequin_original.png).
+  const ART = {brush: '/static/img/dressing_switch/brush.png', mannequin: '/static/img/dressing_switch/mannequin.png'};
+
   const STYLE = `
 body.dsw-reserve{padding-right:88px}
 .dsw-tab{position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:2147483000;
   display:flex;flex-direction:column;align-items:center;gap:6px;width:82px;padding:12px 6px 12px 8px;
-  border:1px solid var(--dsw-line);border-right:0;border-radius:12px 0 0 12px;
+  border:2px solid var(--dsw-line);border-right:0;border-radius:12px 0 0 12px;
   background:var(--dsw-bg);color:var(--dsw-ink);font:600 12px/1.2 system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
   text-align:center;cursor:pointer;box-shadow:-4px 0 18px rgba(0,0,0,.45)}
 .dsw-tab svg{width:42px;height:42px;color:var(--dsw-icon)}
+.dsw-tab .dsw-art{height:64px;width:auto;display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
 .dsw-tab:hover{background:var(--dsw-hover)}
 .dsw-tab:focus-visible{outline:2px solid var(--dsw-icon);outline-offset:2px}
 .dsw-tab[aria-busy=true]{opacity:.6;cursor:progress}
-@media (max-width:600px){body.dsw-reserve{padding-right:60px}.dsw-tab{width:56px;padding:10px 4px 10px 5px;font-size:10px}.dsw-tab svg{width:32px;height:32px}}`;
+@media (max-width:600px){body.dsw-reserve{padding-right:60px}.dsw-tab{width:56px;padding:10px 4px 10px 5px;font-size:10px}.dsw-tab svg{width:32px;height:32px}.dsw-tab .dsw-art{height:44px}}`;
 
   function mount(options) {
     const o = Object.assign({icon: 'brush', label: '', title: '', href: '', theme: {}, beforeLeave: null}, options);
-    if (!ICONS[o.icon] || !o.href || !o.label) throw new Error('dressing switch: icon, label and href are required');
+    if (!(ICONS[o.icon] || ART[o.icon]) || !o.href || !o.label) throw new Error('dressing switch: icon, label and href are required');
     if (!document.getElementById('dsw-style')) {
       const style = document.createElement('style'); style.id = 'dsw-style'; style.textContent = STYLE;
       document.head.append(style);
     }
-    const t = Object.assign({bg: '#1c171d', ink: '#f2e9ea', icon: '#e8b7b1', line: '#6c5364', hover: '#2b222b'}, o.theme);
+    // Pink and black (Josie, 2026-11-27), the same on both pages.
+    const t = Object.assign({bg: '#0a0809', ink: '#f4a7c6', icon: '#f4a7c6', line: '#f4a7c6', hover: '#1f1419'}, o.theme);
     const tab = document.createElement('button');
     tab.type = 'button'; tab.className = 'dsw-tab'; tab.id = 'dressing-switch';
     tab.title = o.title || o.label; tab.setAttribute('aria-label', o.title || o.label);
     for (const [k, v] of Object.entries(t)) tab.style.setProperty('--dsw-' + k, v);
-    tab.innerHTML = ICONS[o.icon];
+    if (ART[o.icon]) {
+      const img = document.createElement('img'); img.src = ART[o.icon]; img.alt = ''; img.className = 'dsw-art';
+      img.decoding = 'async'; img.draggable = false; tab.append(img);
+    } else tab.innerHTML = ICONS[o.icon];
     const text = document.createElement('span'); text.textContent = o.label; tab.append(text);
     tab.addEventListener('click', async () => {
       if (tab.getAttribute('aria-busy') === 'true') return;
@@ -78,5 +86,5 @@ body.dsw-reserve{padding-right:88px}
     return tab;
   }
 
-  window.PubCastDressingSwitch = Object.freeze({mount, ICONS});
+  window.PubCastDressingSwitch = Object.freeze({mount, ICONS, ART});
 })();
