@@ -1,6 +1,6 @@
 # December source sweep
 
-Baseline assembly 06c69eb, parts 94ef55b, main 38787ec. Current verified installation c7eb68736a895534541d9f965f5553f8f92d672f. No repository has reached full accounting yet.
+Baseline assembly 06c69eb, parts 94ef55b, main 38787ec. Current verified assembly d4ba6f030900678c041be6cc8bf1143b7f6c78a2 (test-only change after c7eb687). No repository has reached full accounting yet.
 
 Sir Purfluous recovery archive follow-up (PARTS.md item 10): the `sir_purfluous_bot(1).zip` member `sir_purfluous_bot/director.py` supplied the slow, underplay and stress transformations. December's existing `modules/sir_purfluous_runtime.py` applies these to explicit quoted-line demonstrations after existing intents. The offline BotManager path returned the actor's line with the rehearsal beat. All 17 focused responder checks passed. The full original director remains in the parts archive. Other archive behaviors and the repository-wide archive audit remain open.
 
@@ -162,9 +162,17 @@ Donor `audit/standard-first-2026-11-19` at `6cccfd7a5b2b74f3c29829ed723c0e85128e
 - /typewriter-console accepted a touch Q and wrote q. In 2i, the existing iframe and typewriter-input adapter drive the manuscript through studio-desk.js. Destination checks covered touch edits, save/reload, caret and event-source protection. The editor and reach.js retain native field undo, protected line and chapter metadata handling, Write/Collab routing, fallback replace, cancellation and notices.
 - 231 Node checks and 113 Python/browser checks passed, plus the separate signed-in launcher probe above. No additional parts copy. Beyond-October is still open.
 
+## Beyond-October Foresight file trays, storage routing and recovery
+
+The next 43 commits on `audit/standard-first-2026-11-19`, from `f0227ba` through `062eb49d7fcd5fde9ee0d312c710efde0f98cabb`, are accounted for in main-assembly. All 20 changed paths exist. No additional parts source required.
+
+- `f0227ba..6cbad78` including the first commit: the signed-in Counter's File menu imports a local file, foresight_programs.js opens /writers-room with the file ID, and studio-desk.js offers the file presentation selector and embedded keyboard. New repeatable launcher test `tests/test_foresight_tray_typewriter_browser.py` at `d4ba6f030900678c041be6cc8bf1143b7f6c78a2` clicked the File menu, opened rehearsal.txt, selected Typewriter and pressed A. Ctrl+S saved the edit to the mounted file. The test read back the working draft and the original Cue bytes and reloaded the tray to verify the edit. The earlier Alt+I probe timed out in headless Chromium; the File menu passed, and shortcut operation remains unverified.
+- `d0b23d4..95316d1`: December's main.py retains server lifecycle and the console route. writers-room-v22.html, reach.js and file-workspace.js fence pre-mount editing, navigation, background saves and ready notifications, preserve original-file recovery, and route Save to the mounted file. 44 Node checks passed on these connections and the 2i wiring. 17 destination file-workspace tests passed including desktop/narrow trays and stale-writer handling.
+- `25f46e4..062eb49`: static/foresight_files.js retains queued saves and exit-journal recovery. The probe submitted 40 flushes and observed one record call in the instrumented store. Nine adversarial save/probe tests passed, including browser checks of the underlying IndexedDB records, stale-window close and host-unavailable recovery. No endurance or production run.
+
 ## Resume point
 
-Beyond-October, `audit/standard-first-2026-11-19` at `6cccfd7a5b2b74f3c29829ed723c0e85128ee322`. Next candidate: `f0227baedfea87433e01cd702091cae78320669e`, Foresight file-tray typewriter presentation. Exercise an opened file in its tray and verify that edits reach the file save adapter. The branch inventory follows.
+Beyond-October, `audit/standard-first-2026-11-19` at `6cccfd7a5b2b74f3c29829ed723c0e85128ee322`. Next candidate: `d5af1f2cf532c32b9d9e2ea3731375cbd9583e8a`, recovery/failure messages, storage-full feedback, rich-save checks and read-only workbench preflight. The branch inventory follows.
 - `11-12-merge` — `d70952e52c81f89178f4ab557206fcde109bf970`
 - `2i-beta-polish` — `df737caaeff206e4128932532663776af74ec0e8`
 - `audit/standard-first-2026-11-19` — `6cccfd7a5b2b74f3c29829ed723c0e85128ee322`
