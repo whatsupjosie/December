@@ -519,3 +519,24 @@ def test_native_edit_burst_commits_one_current_revision(page):
       return {writes:saved.revision-start, text:saved.draft};
     }""")
     assert result == {"writes": 1, "text": "draft 39"}
+
+
+def test_new_document_explains_save_conflict_and_keeps_current_file(page):
+    page.evaluate("openFile('scene.txt', 'First take')")
+    text = editor(page)
+    text.wait_for()
+    page.wait_for_function("document.querySelector('#host iframe')?.contentWindow.foresightFileSession")
+    page.evaluate("""async () => {
+        const id = c.data.fileId;
+        const current = await ForesightFiles.record(id);
+        await ForesightFiles.record(id, {...current, draft:'Other window edit'}, current.revision || 0);
+    }""")
+    text.fill("Unsaved local edit")
+    tray = page.frame_locator("#host iframe")
+    tray.locator("#menuToggle").click()
+    page.once("dialog", lambda dialog: dialog.dismiss())
+    with page.expect_event("dialog", timeout=5000) as warning:
+        tray.locator("#hmNewDoc").click()
+    assert "another window" in warning.value.message
+    assert text.input_value() == "Unsaved local edit"
+    assert page.evaluate("async () => (await ForesightFiles.record(c.data.fileId)).draft") == "Other window edit"

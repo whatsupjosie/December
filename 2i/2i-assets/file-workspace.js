@@ -149,7 +149,10 @@ try{
     }finally{switching=false;}
   }
   openDocument=async()=>{const input=document.createElement('input');input.type='file';input.onchange=()=>{if(input.files[0])openFile(input.files[0]).catch(e=>alert(e.message))};input.click()};
-  newDocument=async()=>openFile(new File([''],'Untitled.txt',{type:'text/plain'}));
+  newDocument=async()=>{
+    try{await openFile(new File([''],'Untitled.txt',{type:'text/plain'}));}
+    catch(error){alert(error.message);return false;}
+  };
   document.addEventListener('drop',event=>{event.preventDefault();event.stopImmediatePropagation();const file=event.dataTransfer?.files?.[0];if(file)openFile(file).catch(e=>alert(e.message))},true);
 
   $('saveBtn').onclick=()=>saveDocument().catch(e=>{$('saveIndicator').textContent=e.message});
